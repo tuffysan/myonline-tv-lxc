@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.4 — Nginx activation and end-to-end install verification
+
+- Fixed successful installs that still showed the default "Welcome to nginx!" page.
+- Installer now removes `/etc/nginx/sites-enabled/default` explicitly.
+- Installer now force-updates the `myonlinetv` site symlink with `ln -sfn`.
+- Nginx configuration is validated with `nginx -t` before activation.
+- Nginx is explicitly restarted after the MyOnline TV site is enabled.
+- Installer verifies that Nginx is active after restart.
+- Final installation checks now validate both:
+  - backend `/health` and `/ready` on port 5080;
+  - public reverse-proxy `/health` and `/ready` through Nginx on port 80.
+- Installer fails if the Nginx default welcome page is still being served.
+- Added locale setup for `en_US.UTF-8` to remove Perl locale warnings.
+- Keeps the v0.3.3 release artifact path fix and v0.3.2 architecture-safe Debian template selection.
+
 ## 0.3.3 — Release artifact path fix
 
 - Fixed stable install/update failure after SHA-256 verification.

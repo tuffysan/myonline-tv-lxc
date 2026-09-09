@@ -181,44 +181,50 @@ UNIT
 pct push "$CTID" /tmp/myonlinetv.service /etc/systemd/system/myonlinetv.service
 rm -f /tmp/myonlinetv.service
 
+echo "Configuring locale..."
+pct exec "$CTID" -- bash -lc '
+set -e
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -y
+apt-get install -y locales
+sed -i "s/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/" /etc/locale.gen
+grep -q "^en_US.UTF-8 UTF-8" /etc/locale.gen || echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
+locale-gen en_US.UTF-8
+update-locale LANG=en_US.UTF-8
+'
+
 echo "[8/9] Configuring Nginx..."
-cat >/tmp/myonlinetv.nginx <<'NGINX'
+pct exec "$CTID" -- bash -lc 'cat > /etc/nginx/sites-available/myonlinetv <<'"'"'EOF'"'"'
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
     server_name _;
-    client_max_body_size 4g;
-    proxy_read_timeout 3600s;
-    proxy_send_timeout 3600s;
+
+    client_max_body_size 0;
+
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
     location / {
         proxy_pass http://127.0.0.1:5080;
-        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
         proxy_buffering off;
-        proxy_request_buffering off;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
-NGINX
-pct push "$CTID" /tmp/myonlinetv.nginx /etc/nginx/sites-available/myonlinetv
-rm -f /tmp/myonlinetv.nginx
+EOF
 
-pct exec "$CTID" -- bash -lc "
-set -e
-printf '%s\n' '${VERSION}' >/var/lib/myonlinetv/version
-cat >/var/lib/myonlinetv/release.json <<'META'
-$(cat "${REPO_DIR}/release.json")
-META
-chown -R www-data:www-data /var/lib/myonlinetv /opt/myonlinetv
-chmod 700 /var/lib/myonlinetv
 rm -f /etc/nginx/sites-enabled/default
-ln -sf /etc/nginx/sites-available/myonlinetv /etc/nginx/sites-enabled/myonlinetv
+ln -sfn /etc/nginx/sites-available/myonlinetv /etc/nginx/sites-enabled/myonlinetv
+
 nginx -t
-systemctl daemon-reload
-systemctl enable --now myonlinetv nginx
-"
+systemctl enable nginx
+systemctl restart nginx
+systemctl is-active --quiet nginx
+'
 
 echo "[9/9] Health and readiness checks..."
 sleep 2
@@ -227,6 +233,30 @@ pct exec "$CTID" -- curl -fsS http://127.0.0.1:5080/ready >/dev/null
 
 IP="$(pct exec "$CTID" -- hostname -I | awk '{print $1}')"
 echo
+
+echo "Checking MyOnline TV backend on port 5080..."
+pct exec "$CTID" -- bash -lc '
+set -e
+curl -fsS --retry 10 --retry-delay 1 --retry-connrefused http://127.0.0.1:5080/health >/tmp/myonlinetv-health.out
+curl -fsS --retry 10 --retry-delay 1 --retry-connrefused http://127.0.0.1:5080/ready >/tmp/myonlinetv-ready.out
+'
+
+echo "Checking Nginx reverse proxy on port 80..."
+pct exec "$CTID" -- bash -lc '
+set -e
+curl -fsS --retry 10 --retry-delay 1 --retry-connrefused http://127.0.0.1/health >/tmp/myonlinetv-nginx-health.out
+curl -fsS --retry 10 --retry-delay 1 --retry-connrefused http://127.0.0.1/ready >/tmp/myonlinetv-nginx-ready.out
+
+if curl -fsS http://127.0.0.1/ | grep -qi "Welcome to nginx"; then
+    echo "ERROR: Nginx default page is still being served instead of MyOnline TV."
+    echo "Enabled sites:"
+    ls -la /etc/nginx/sites-enabled/ || true
+    echo "Effective default_server entries:"
+    nginx -T 2>/dev/null | grep -n "default_server" || true
+    exit 1
+fi
+'
+
 echo "============================================================"
 echo " MyOnline TV Web v${VERSION} installed"
 echo " URL: http://${IP}/"
