@@ -70,19 +70,23 @@ function selectProfile(id){currentProfile=id;localStorage.setItem('myonline-prof
 
 async function home(){
   const cont=await api('/api/continue');
+  const recents=getLiveRecents().slice(0,8);
+  const playableCont=cont.filter(x=>x.providerId&&x.mediaType&&x.mediaId);
   content.innerHTML=`<div class=hero><div><span class=kicker>MYONLINE TV WEB</span><h2>Everything. One interface.</h2>
   <p class=muted>Self-hosted on Proxmox. IPTV, EPG, movies, series, secure provider storage, favourites, downloads and browser playback.</p></div></div>
   <div class=stats>
     <div class=stat><b>${providers.length}</b><span>Providers</span></div>
-    <div class=stat><b>${fav.size}</b><span>Favourites</span></div>
-    <div class=stat><b>${cont.length}</b><span>Continue watching</span></div>
+    <div class=stat><b>${fav.size}</b><span>Favourite channels</span></div>
+    <div class=stat><b>${playableCont.length}</b><span>Continue watching</span></div>
+    <div class=stat><b>${recents.length}</b><span>Recent channels</span></div>
   </div>
-  ${cont.length?`<h2>Continue watching</h2><div class=continueRow>${cont.slice(0,12).map(x=>`<button class=continueCard onclick='playMedia(${JSON.stringify(x.url)},${JSON.stringify(x.title)},${JSON.stringify(x.id)})'><span>▶</span><b>${esc(x.title)}</b><small>Resume around ${Math.floor((x.positionSeconds||0)/60)} min</small></button>`).join('')}</div><div id=mediaPlayer></div>`:''}
+  ${playableCont.length?`<h2>Continue watching</h2><div class=continueRow>${playableCont.slice(0,12).map(x=>`<button class=continueCard onclick='resumeContinue(${JSON.stringify(x)})'>${x.poster?`<img loading=lazy src="${escAttr(x.poster)}">`:'<span>▶</span>'}<b>${esc(x.title)}</b><small>Resume around ${Math.floor((x.positionSeconds||0)/60)} min</small></button>`).join('')}</div><div id=mediaPlayer></div>`:''}
+  ${recents.length?`<h2>Recently watched channels</h2><div class=continueRow>${recents.map(x=>`<button class=continueCard onclick='playRecentChannel(${JSON.stringify(x)})'>${x.logo?`<img loading=lazy src="${escAttr(x.logo)}">`:'<span>▣</span>'}<b>${esc(x.name)}</b><small>${esc(x.group||'Live TV')}</small></button>`).join('')}</div>`:''}
   <h2>Quick access</h2><div class=grid>
     <button class="card actionCard" onclick="show('live')"><h3>Live TV</h3><p>Channels and groups</p></button>
     <button class="card actionCard" onclick="show('guide')"><h3>TV Guide</h3><p>Timeline EPG</p></button>
-    <button class="card actionCard" onclick="show('movies')"><h3>Movies</h3><p>Xtream VOD library</p></button>
-    <button class="card actionCard" onclick="show('series')"><h3>Series</h3><p>Seasons and episodes</p></button>
+    <button class="card actionCard" onclick="show('movies')"><h3>Movies</h3><p>Fast paged Xtream VOD library</p></button>
+    <button class="card actionCard" onclick="show('series')"><h3>Series</h3><p>Fast paged series library</p></button>
   </div>
   <h2>Official streaming services</h2>
   <div class=serviceRow>
@@ -92,6 +96,27 @@ async function home(){
     <a class=service href="https://www.primevideo.com" target=_blank>Prime Video</a>
     <a class=service href="https://www.svtplay.se" target=_blank>SVT Play</a>
   </div>`;
+}
+
+async function playRecentChannel(row){
+  currentProvider=row.providerId;
+  if(!providers.some(p=>p.id===currentProvider))providers=await api('/api/providers');
+  content.innerHTML='<div id=playerWrap></div>';
+  currentView='home';
+  await playLive(row.key,row.name);
+}
+
+async function resumeContinue(item){
+  try{
+    currentProvider=item.providerId;
+    let tokenInfo;
+    if(item.mediaType==='movie'){
+      tokenInfo=await api(`/api/vod/${encodeURIComponent(item.providerId)}/${encodeURIComponent(item.mediaId)}/token`,{method:'POST'});
+    }else if(item.mediaType==='episode'){
+      tokenInfo=await api(`/api/series/${encodeURIComponent(item.providerId)}/episode/${encodeURIComponent(item.mediaId)}/token?ext=${encodeURIComponent(item.extension||'mp4')}`,{method:'POST'});
+    }else throw new Error('This Continue Watching entry cannot be resumed.');
+    await playServerMedia(tokenInfo.playToken,item.title,item,false,item.positionSeconds||0);
+  }catch(e){alert(friendlyError(e))}
 }
 
 async function ensureProvider(type){
@@ -305,7 +330,7 @@ function friendlyError(e){
 let activeMediaSession=null;
 let mediaFallbackTried=false;
 
-async function playServerMedia(token,name,mediaId=null,forceTranscode=false){
+async function playServerMedia(token,name,mediaMeta=null,forceTranscode=false,startSeconds=0){
   if(!forceTranscode)mediaFallbackTried=false;
   destroyPlayer();
   const wrap=$('#playerWrap')||$('#mediaPlayer');
@@ -314,7 +339,11 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false){
   wrap.scrollIntoView({behavior:'smooth',block:'start'});
 
   try{
-    const info=await api('/api/media/start/'+encodeURIComponent(token)+(forceTranscode?'?transcode=true':''),{method:'POST'});
+    const params=new URLSearchParams();
+    if(forceTranscode)params.set('transcode','true');
+    if(startSeconds>1)params.set('startSeconds',String(Math.floor(startSeconds)));
+    const suffix=params.toString()?'?'+params.toString():'';
+    const info=await api('/api/media/start/'+encodeURIComponent(token)+suffix,{method:'POST'});
     activeMediaSession=info.sessionId;
     activeLiveSession=info.sessionId;
 
@@ -331,17 +360,33 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false){
     const video=$('#video');
     if(!video)return;
     const playbackUrl=state.playbackUrl||info.playbackUrl;
+    const basePosition=Math.max(0,Number(startSeconds)||0);
 
     const installResumeTracking=()=>{
-      if(!mediaId)return;
+      if(!mediaMeta||typeof mediaMeta!=='object')return;
       let last=-1;
       const save=()=>{
-        const sec=Math.floor(video.currentTime||0);
+        const sec=Math.floor(basePosition+(video.currentTime||0));
         if(sec===last)return;
         last=sec;
-        jpost('/api/continue',{id:String(mediaId),title:name,url:'',positionSeconds:sec,updated:new Date().toISOString()}).catch(()=>{});
+        jpost('/api/continue',{
+          id:String(mediaMeta.id||mediaMeta.mediaId||'media'),
+          title:String(mediaMeta.title||name),
+          url:null,
+          positionSeconds:sec,
+          updated:new Date().toISOString(),
+          providerId:mediaMeta.providerId||currentProvider,
+          mediaType:mediaMeta.mediaType||null,
+          mediaId:String(mediaMeta.mediaId||''),
+          extension:mediaMeta.extension||null,
+          poster:mediaMeta.poster||null
+        }).catch(()=>{});
       };
-      video.addEventListener('timeupdate',()=>{if(Math.floor(video.currentTime)%15===0)save()});
+      let lastBucket=-1;
+      video.addEventListener('timeupdate',()=>{
+        const bucket=Math.floor((video.currentTime||0)/15);
+        if(bucket!==lastBucket){lastBucket=bucket;save()}
+      });
       video.addEventListener('pause',save);
       video.addEventListener('ended',save);
     };
@@ -356,7 +401,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false){
         if(!forceTranscode&&!mediaFallbackTried){
           mediaFallbackTried=true;
           const st=$('#mediaPlaybackStatus');if(st)st.textContent='Codec not browser-compatible · retrying with H.264/AAC…';
-          await playServerMedia(token,name,mediaId,true);
+          await playServerMedia(token,name,mediaMeta,true,startSeconds);
           return;
         }
         const st=$('#mediaPlaybackStatus');if(st){st.textContent='Playback error: '+(d.details||d.type||'HLS error');st.className='livePlaybackStatus error'}
@@ -367,7 +412,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false){
       await video.play().catch(()=>{});
     }else throw new Error('This browser does not support HLS playback.');
 
-    const st=$('#mediaPlaybackStatus');if(st){st.textContent=forceTranscode?'Playing · compatibility mode':'Playing';st.className='livePlaybackStatus ready'}
+    const st=$('#mediaPlaybackStatus');if(st){st.textContent=(startSeconds>1?'Resumed · ':'')+(forceTranscode?'compatibility mode':'Playing');st.className='livePlaybackStatus ready'}
   }catch(e){
     const st=$('#mediaPlaybackStatus');if(st){st.textContent=friendlyError(e);st.className='livePlaybackStatus error'}
   }
@@ -447,31 +492,42 @@ function showProgramDetails(channelKey,channelNameText,payload){
   playLive(channelKey,channelNameText);
 }
 
+const MEDIA_PAGE_SIZE=100;
+let mediaItems=[],mediaTotal=0,mediaHasMore=false,mediaSkip=0,mediaSearchTimer=null;
+let seriesItems=[],seriesTotal=0,seriesHasMore=false,seriesSkip=0,seriesSearchTimer=null;
+
 async function movies(){
   if(!await ensureProvider('xtream')){content.innerHTML='<div class=card>Movies require an Xtream-compatible provider.</div>';return}
   content.innerHTML='<div class=card>Loading movies…</div>';
   try{
     const cats=await api(`/api/vod/${currentProvider}/categories`);
-    content.innerHTML=`<div class=toolbar>${providerSelect('xtream')}<select id=category><option value="">All categories</option>${cats.map(c=>`<option value="${escAttr(c.id)}">${esc(c.name)}</option>`).join('')}</select><input id=mediaq placeholder="Search movies"></div><div id=mediaPlayer></div><div id=mediaGrid class=posterGrid></div>`;
+    content.innerHTML=`<div class=toolbar>${providerSelect('xtream')}<select id=category><option value="">All categories</option>${cats.map(c=>`<option value="${escAttr(c.id)}">${esc(c.name)}</option>`).join('')}</select><input id=mediaq placeholder="Search movies"></div><div id=mediaPlayer></div><div id=mediaSummary class=muted></div><div id=mediaGrid class=posterGrid></div><div class=loadMoreWrap><button id=mediaMore class=btn style="display:none">Load more</button></div>`;
     $('#provider').onchange=async e=>{currentProvider=e.target.value;await movies()};
-    $('#category').onchange=loadMovies;$('#mediaq').oninput=filterMedia;
-    await loadMovies();
+    $('#category').onchange=()=>loadMovies(true);
+    $('#mediaq').oninput=()=>{clearTimeout(mediaSearchTimer);mediaSearchTimer=setTimeout(()=>loadMovies(true),300)};
+    $('#mediaMore').onclick=()=>loadMovies(false);
+    await loadMovies(true);
   }catch(e){content.innerHTML=errorCard(e)}
 }
-let mediaItems=[];
-async function loadMovies(){
-  const grid=$('#mediaGrid');if(grid)grid.innerHTML='<div class=card>Loading movies…</div>';
+async function loadMovies(reset=true){
+  const grid=$('#mediaGrid');if(!grid)return;
+  if(reset){mediaItems=[];mediaSkip=0;grid.innerHTML='<div class=card>Loading movies…</div>'}
+  else $('#mediaMore').disabled=true;
   try{
-    mediaItems=await api(`/api/vod/${currentProvider}/items?categoryId=${encodeURIComponent($('#category')?.value||'')}`);
-    filterMedia();
-  }catch(e){if(grid)grid.innerHTML=errorCard(e)}
+    const category=$('#category')?.value||'',q=$('#mediaq')?.value||'';
+    const page=await api(`/api/vod/${currentProvider}/items?categoryId=${encodeURIComponent(category)}&q=${encodeURIComponent(q)}&skip=${mediaSkip}&take=${MEDIA_PAGE_SIZE}`);
+    mediaTotal=page.total||0;mediaHasMore=!!page.hasMore;
+    mediaItems=reset?(page.items||[]):mediaItems.concat(page.items||[]);
+    mediaSkip=mediaItems.length;
+    renderMovies();
+  }catch(e){grid.innerHTML=errorCard(e)}
 }
-function filterMedia(){
-  const q=($('#mediaq')?.value||'').toLowerCase();
-  const rows=mediaItems.filter(x=>!q||x.name.toLowerCase().includes(q)).slice(0,1000);
-  $('#mediaGrid').innerHTML=rows.map(m=>`<article class=posterCard>${m.poster?`<img loading=lazy src="${escAttr(m.poster)}">`:'<div class=posterPlaceholder>▶</div>'}<div class=posterBody><b>${esc(m.name)}</b><small>${esc(m.year||'')} ${m.rating?'· '+esc(m.rating):''}</small><div class=row><button class=btn onclick='playMovie(${JSON.stringify(m.id)},${JSON.stringify(m.name)})'>Play</button><button class=btn onclick='movieDetails(${JSON.stringify(m.id)})'>Info</button><button class=btn onclick='downloadMovie(${JSON.stringify(m.id)},${JSON.stringify(m.name)})'>↓</button></div></div></article>`).join('');
+function renderMovies(){
+  const grid=$('#mediaGrid');if(!grid)return;
+  $('#mediaSummary').textContent=`Showing ${mediaItems.length} of ${mediaTotal} movies`;
+  grid.innerHTML=mediaItems.length?mediaItems.map(m=>`<article class=posterCard>${m.poster?`<img loading=lazy src="${escAttr(m.poster)}">`:'<div class=posterPlaceholder>▶</div>'}<div class=posterBody><b>${esc(m.name)}</b><small>${esc(m.year||'')} ${m.rating?'· '+esc(m.rating):''}</small><div class=row><button class=btn onclick='playMovie(${JSON.stringify(m.id)},${JSON.stringify(m.name)})'>Play</button><button class=btn onclick='movieDetails(${JSON.stringify(m.id)})'>Info</button><button class=btn onclick='downloadMovie(${JSON.stringify(m.id)},${JSON.stringify(m.name)})'>↓</button></div></div></article>`).join(''):'<div class=card>No movies found.</div>';
+  const more=$('#mediaMore');if(more){more.style.display=mediaHasMore?'inline-flex':'none';more.disabled=false}
 }
-
 function movieDetails(id){
   const m=mediaItems.find(x=>String(x.id)===String(id));if(!m)return;$('#movieDetail')?.remove();
   const grid=$('#mediaGrid');grid.insertAdjacentHTML('beforebegin',`<div id=movieDetail class=mediaDetail>${m.poster?`<img src="${escAttr(m.poster)}">`:''}<div><button class=btn onclick="$('#movieDetail').remove()">← Back</button><h2>${esc(m.name)}</h2><p class=muted>${esc([m.year,m.genre,m.rating&&('★ '+m.rating)].filter(Boolean).join(' · '))}</p><p>${esc(m.plot||'No description available.')}</p><div class=row><button class=btn onclick='playMovie(${JSON.stringify(m.id)},${JSON.stringify(m.name)})'>▶ Play</button><button class=btn onclick='downloadMovie(${JSON.stringify(m.id)},${JSON.stringify(m.name)})'>↓ Download</button></div></div></div>`);$('#movieDetail').scrollIntoView({behavior:'smooth'});
@@ -482,48 +538,67 @@ async function series(){
   content.innerHTML='<div class=card>Loading series…</div>';
   try{
     const cats=await api(`/api/series/${currentProvider}/categories`);
-    content.innerHTML=`<div class=toolbar>${providerSelect('xtream')}<select id=category><option value="">All categories</option>${cats.map(c=>`<option value="${escAttr(c.id)}">${esc(c.name)}</option>`).join('')}</select><input id=seriesq placeholder="Search series"></div><div id=mediaPlayer></div><div id=seriesContent></div>`;
+    content.innerHTML=`<div class=toolbar>${providerSelect('xtream')}<select id=category><option value="">All categories</option>${cats.map(c=>`<option value="${escAttr(c.id)}">${esc(c.name)}</option>`).join('')}</select><input id=seriesq placeholder="Search series"></div><div id=mediaPlayer></div><div id=seriesSummary class=muted></div><div id=seriesContent></div><div class=loadMoreWrap><button id=seriesMore class=btn style="display:none">Load more</button></div>`;
     $('#provider').onchange=async e=>{currentProvider=e.target.value;await series()};
-    $('#category').onchange=loadSeries;$('#seriesq').oninput=filterSeries;
-    await loadSeries();
+    $('#category').onchange=()=>loadSeries(true);
+    $('#seriesq').oninput=()=>{clearTimeout(seriesSearchTimer);seriesSearchTimer=setTimeout(()=>loadSeries(true),300)};
+    $('#seriesMore').onclick=()=>loadSeries(false);
+    await loadSeries(true);
   }catch(e){content.innerHTML=errorCard(e)}
 }
-let seriesItems=[];
-async function loadSeries(){
-  const box=$('#seriesContent');if(box)box.innerHTML='<div class=card>Loading series…</div>';
+async function loadSeries(reset=true){
+  const box=$('#seriesContent');if(!box)return;
+  if(reset){seriesItems=[];seriesSkip=0;box.innerHTML='<div class=card>Loading series…</div>'}
+  else $('#seriesMore').disabled=true;
   try{
-    seriesItems=await api(`/api/series/${currentProvider}/items?categoryId=${encodeURIComponent($('#category')?.value||'')}`);
-    filterSeries();
-  }catch(e){if(box)box.innerHTML=errorCard(e)}
+    const category=$('#category')?.value||'',q=$('#seriesq')?.value||'';
+    const page=await api(`/api/series/${currentProvider}/items?categoryId=${encodeURIComponent(category)}&q=${encodeURIComponent(q)}&skip=${seriesSkip}&take=${MEDIA_PAGE_SIZE}`);
+    seriesTotal=page.total||0;seriesHasMore=!!page.hasMore;
+    seriesItems=reset?(page.items||[]):seriesItems.concat(page.items||[]);
+    seriesSkip=seriesItems.length;
+    renderSeries();
+  }catch(e){box.innerHTML=errorCard(e)}
 }
-function filterSeries(){
-  const q=($('#seriesq')?.value||'').toLowerCase(),rows=seriesItems.filter(x=>!q||x.name.toLowerCase().includes(q)).slice(0,1000);
-  $('#seriesContent').innerHTML=`<div class=posterGrid>${rows.map(s=>`<button class="posterCard seriesButton" onclick="openSeries('${escAttr(s.id)}')">${s.poster?`<img loading=lazy src="${escAttr(s.poster)}">`:'<div class=posterPlaceholder>▦</div>'}<div class=posterBody><b>${esc(s.name)}</b><small>${esc(s.year||'')} ${s.rating?'· ★ '+esc(s.rating):''}</small><small>${esc(s.genre||'')}</small></div></button>`).join('')}</div>`;
+function renderSeries(){
+  $('#seriesSummary').textContent=`Showing ${seriesItems.length} of ${seriesTotal} series`;
+  $('#seriesContent').innerHTML=seriesItems.length?`<div class=posterGrid>${seriesItems.map(s=>`<button class="posterCard seriesButton" onclick="openSeries('${escAttr(s.id)}')">${s.poster?`<img loading=lazy src="${escAttr(s.poster)}">`:'<div class=posterPlaceholder>▦</div>'}<div class=posterBody><b>${esc(s.name)}</b><small>${esc(s.year||'')} ${s.rating?'· ★ '+esc(s.rating):''}</small><small>${esc(s.genre||'')}</small></div></button>`).join('')}</div>`:'<div class=card>No series found.</div>';
+  const more=$('#seriesMore');if(more){more.style.display=seriesHasMore?'inline-flex':'none';more.disabled=false}
 }
 async function openSeries(id){
   $('#seriesContent').innerHTML='<div class=card>Loading episodes…</div>';
   try{
+    const seriesMeta=seriesItems.find(x=>String(x.id)===String(id))||{};
     const s=await api(`/api/series/${currentProvider}/${encodeURIComponent(id)}`);
     const by={};s.episodes.forEach(e=>(by[e.season]??=[]).push(e));
-    $('#seriesContent').innerHTML=`<div class=seriesHero>${s.cover?`<img src="${escAttr(s.cover)}">`:''}<div><button class=btn onclick=filterSeries()>← Back</button><h2>${esc(s.name)}</h2><p>${esc(s.plot||'')}</p></div></div>
-    ${Object.keys(by).sort((a,b)=>Number(a)-Number(b)).map(season=>`<section><h3>Season ${esc(season)}</h3><div class=episodeList>${by[season].map(e=>`<div class=episode><span><b>E${esc(e.episode)}</b> ${esc(e.title||'Episode')}</span><div class=row><button class=btn onclick='playEpisode(${JSON.stringify(e.id)},${JSON.stringify(e.extension||'mp4')},${JSON.stringify(e.title||'Episode')},${JSON.stringify('episode:'+s.name+':'+season+':'+e.episode)})'>Play</button><button class=btn onclick='downloadEpisode(${JSON.stringify(e.id)},${JSON.stringify(e.extension||'mp4')},${JSON.stringify((s.name||'Series')+' - S'+season+'E'+e.episode)})'>↓</button></div></div>`).join('')}</div></section>`).join('')}`;
+    const cover=s.cover||seriesMeta.poster||'';
+    $('#seriesContent').innerHTML=`<div class=seriesHero>${cover?`<img src="${escAttr(cover)}">`:''}<div><button class=btn onclick=renderSeries()>← Back</button><h2>${esc(s.name)}</h2><p>${esc(s.plot||'')}</p></div></div>
+    ${Object.keys(by).sort((a,b)=>Number(a)-Number(b)).map(season=>`<section><h3>Season ${esc(season)}</h3><div class=episodeList>${by[season].map(e=>`<div class=episode><span><b>E${esc(e.episode)}</b> ${esc(e.title||'Episode')}</span><div class=row><button class=btn onclick='playEpisode(${JSON.stringify(e.id)},${JSON.stringify(e.extension||'mp4')},${JSON.stringify(e.title||'Episode')},${JSON.stringify({id:'episode:'+currentProvider+':'+e.id,title:(s.name||'Series')+' · S'+season+'E'+e.episode,providerId:currentProvider,mediaType:'episode',mediaId:String(e.id),extension:e.extension||'mp4',poster:cover})})'>Play</button><button class=btn onclick='downloadEpisode(${JSON.stringify(e.id)},${JSON.stringify(e.extension||'mp4')},${JSON.stringify((s.name||'Series')+' - S'+season+'E'+e.episode)})'>↓</button></div></div>`).join('')}</div></section>`).join('')}`;
   }catch(e){$('#seriesContent').innerHTML=errorCard(e)}
 }
 
-async function movieToken(id){
-  return await api(`/api/vod/${currentProvider}/${encodeURIComponent(id)}/token`,{method:'POST'});
+async function movieToken(id,providerId=currentProvider){
+  return await api(`/api/vod/${encodeURIComponent(providerId)}/${encodeURIComponent(id)}/token`,{method:'POST'});
 }
 async function playMovie(id,name){
-  try{const t=await movieToken(id);await playServerMedia(t.playToken,name,'movie:'+id)}catch(e){alert(e.message)}
+  try{
+    const m=mediaItems.find(x=>String(x.id)===String(id))||{};
+    const t=await movieToken(id);
+    const meta={id:'movie:'+currentProvider+':'+id,title:name,providerId:currentProvider,mediaType:'movie',mediaId:String(id),extension:m.extension||'',poster:m.poster||''};
+    await playServerMedia(t.playToken,name,meta);
+  }catch(e){alert(e.message)}
 }
 async function downloadMovie(id,name){
   try{const t=await movieToken(id);await startMediaDownload(t.downloadToken,name)}catch(e){alert(e.message)}
 }
-async function episodeToken(id,ext){
-  return await api(`/api/series/${currentProvider}/episode/${encodeURIComponent(id)}/token?ext=${encodeURIComponent(ext||'mp4')}`,{method:'POST'});
+async function episodeToken(id,ext,providerId=currentProvider){
+  return await api(`/api/series/${encodeURIComponent(providerId)}/episode/${encodeURIComponent(id)}/token?ext=${encodeURIComponent(ext||'mp4')}`,{method:'POST'});
 }
-async function playEpisode(id,ext,name,mediaId){
-  try{const t=await episodeToken(id,ext);await playServerMedia(t.playToken,name,mediaId)}catch(e){alert(e.message)}
+async function playEpisode(id,ext,name,mediaMeta){
+  try{
+    const t=await episodeToken(id,ext);
+    const meta=(mediaMeta&&typeof mediaMeta==='object')?mediaMeta:{id:'episode:'+currentProvider+':'+id,title:name,providerId:currentProvider,mediaType:'episode',mediaId:String(id),extension:ext||'mp4',poster:''};
+    await playServerMedia(t.playToken,name,meta);
+  }catch(e){alert(e.message)}
 }
 async function downloadEpisode(id,ext,name){
   try{const t=await episodeToken(id,ext);await startMediaDownload(t.downloadToken,name)}catch(e){alert(e.message)}
