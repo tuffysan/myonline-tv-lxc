@@ -82,7 +82,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.4.2");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.4.3");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
@@ -258,7 +258,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "0.4.2",
+    version = "0.4.3",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -296,14 +296,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = File.Exists(adminFile);
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "0.4.2", checks })
-        : Results.Json(new { status = "not-ready", version = "0.4.2", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "0.4.3", checks })
+        : Results.Json(new { status = "not-ready", version = "0.4.3", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "0.4.2",
+    version = "0.4.3",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = File.Exists(adminFile),
@@ -612,9 +612,7 @@ app.MapGet("/api/vod/{providerId}/items", async (string providerId, string? cate
                 rating = JsonString(x, "rating"),
                 plot = JsonString(x, "plot"),
                 genre = JsonString(x, "genre"),
-                poster = ProxyArtwork(JsonString(x, "stream_icon")),
-                playUrl = ProxyUrl(source),
-                downloadToken = RegisterProxy(source, "download")
+                poster = ProxyArtwork(JsonString(x, "stream_icon"))
             });
         }
         return Results.Ok(rows);
@@ -703,8 +701,7 @@ app.MapGet("/api/series/{providerId}/{seriesId}", async (string providerId, stri
                         season = seasonProp.Name,
                         episode = JsonString(ep, "episode_num"),
                         title = JsonString(ep, "title"),
-                        playUrl = ProxyUrl(source),
-                        downloadToken = RegisterProxy(source, "download")
+                        extension = JsonString(ep, "container_extension")
                     });
                 }
             }
@@ -718,6 +715,47 @@ app.MapGet("/api/series/{providerId}/{seriesId}", async (string providerId, stri
         });
     }
     catch (Exception ex) { return Results.Problem(ex.Message); }
+}).RequireAuthorization();
+
+app.MapPost("/api/vod/{providerId}/{streamId}/token", async (string providerId, string streamId) =>
+{
+    var resolved = ResolveXtream(providerId);
+    if (resolved is null) return Results.NotFound();
+    try
+    {
+        using var doc = await XtreamJson(resolved.Value.Connection, "get_vod_info",
+            TimeSpan.FromSeconds(12), ("vod_id", streamId));
+        var root = doc.RootElement;
+        var info = root.TryGetProperty("movie_data", out var md) && md.ValueKind == JsonValueKind.Object ? md : root;
+        var ext = JsonString(info, "container_extension");
+        if (string.IsNullOrWhiteSpace(ext) && root.TryGetProperty("movie_data", out var movieData))
+            ext = JsonString(movieData, "container_extension");
+        var source = BuildXtreamMovieUrl(resolved.Value.Connection, streamId, ext);
+        return Results.Ok(new
+        {
+            playUrl = ProxyUrl(source),
+            downloadToken = RegisterProxy(source, "download")
+        });
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Could not create VOD playback token for {StreamId}.", streamId);
+        // Most Xtream providers do not require get_vod_info to build playback URL.
+        var source = BuildXtreamMovieUrl(resolved.Value.Connection, streamId, "mp4");
+        return Results.Ok(new { playUrl = ProxyUrl(source), downloadToken = RegisterProxy(source, "download") });
+    }
+}).RequireAuthorization();
+
+app.MapPost("/api/series/{providerId}/episode/{episodeId}/token", (string providerId, string episodeId, string? ext) =>
+{
+    var resolved = ResolveXtream(providerId);
+    if (resolved is null) return Results.NotFound();
+    var source = BuildXtreamSeriesUrl(resolved.Value.Connection, episodeId, ext ?? "mp4");
+    return Results.Ok(new
+    {
+        playUrl = ProxyUrl(source),
+        downloadToken = RegisterProxy(source, "download")
+    });
 }).RequireAuthorization();
 
 app.MapGet("/api/profiles", () => Results.Ok(LoadProfiles())).RequireAuthorization();
@@ -1049,7 +1087,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "0.4.2",
+        version = "0.4.3",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -1283,7 +1321,7 @@ async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, TimeSpa
     var url = BuildXtreamPlayerApiUrl(c, action, extra);
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.4.2");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.4.3");
     using var cts = new CancellationTokenSource(timeout);
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -1422,7 +1460,7 @@ async Task<List<LiveChannel>> LoadM3uChannels(string url)
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/x-mpegURL,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.4.2");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.4.3");
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -1441,7 +1479,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.4.2");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.4.3");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }
