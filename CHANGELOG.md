@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.9 — Installer helper loading and hostname variable fix
+
+- Fixed fresh-install failure at `[8/9] Configuring Nginx...` with `write_nginx_config: command not found`.
+- `scripts/install-local.sh` now explicitly resolves the repository root and sources `scripts/github-common.sh` before calling shared migration/helper functions.
+- Fixed the container hostname default being inherited from the Proxmox host through the standard shell `HOSTNAME` environment variable.
+- Installer now uses a dedicated `CT_HOSTNAME` variable with default `MyOnlineTV`.
+- New installations therefore create the LXC with hostname `MyOnlineTV` instead of accidentally inheriting `proxmox`.
+- Existing v0.3.8 reverse-proxy migration, forwarded-header handling, health checks, and upgrade migration logic are retained.
+
 ## 0.3.8 — Upgrade migrations, reverse-proxy fix and hostname
 
 - Fixed upgrades that installed the v0.3.7 application binary but left the old v0.3.6 Nginx configuration in place.

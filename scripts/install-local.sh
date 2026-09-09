@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+source "$REPO_ROOT/scripts/github-common.sh"
+
 
 REPO_DIR="${1:?Usage: install-local.sh <repo-dir>}"
 VERSION="$(tr -d '[:space:]' < "${REPO_DIR}/VERSION")"
 ARTIFACT="${MYONLINE_ARTIFACT:-}"
 
 CTID="${CTID:-145}"
-HOSTNAME="${HOSTNAME:-MyOnlineTV}"
+CT_HOSTNAME="${CT_HOSTNAME:-MyOnlineTV}"
 STORAGE="${STORAGE:-local-lvm}"
 BRIDGE="${BRIDGE:-vmbr0}"
 MEMORY="${MEMORY:-2048}"
@@ -18,7 +22,7 @@ ROOT_PASSWORD="${ROOT_PASSWORD:-}"
 echo "============================================================"
 echo " MyOnline TV Web v${VERSION} - Proxmox LXC Installer"
 echo "============================================================"
-echo " CTID: ${CTID}  Hostname: ${HOSTNAME}"
+echo " CTID: ${CTID}  Hostname: ${CT_HOSTNAME}"
 echo " CPU: ${CORES}  RAM: ${MEMORY} MB  Disk: ${DISK} GB"
 echo " Mode: $([[ -n "$ARTIFACT" ]] && echo 'prebuilt release' || echo 'source build')"
 echo "============================================================"
@@ -91,7 +95,7 @@ if ! pveam list local | grep -qF "$(basename "$TEMPLATE")"; then
 fi
 
 echo "[2/9] Creating CT ${CTID}..."
-CREATE=(pct create "$CTID" "$LOCAL_TEMPLATE" --hostname "$HOSTNAME" --cores "$CORES" --memory "$MEMORY" --swap 512 --rootfs "$STORAGE:$DISK" --net0 "name=eth0,bridge=$BRIDGE,$IP_CONFIG" --unprivileged 1 --features nesting=1 --onboot 1 --start 1)
+CREATE=(pct create "$CTID" "$LOCAL_TEMPLATE" --hostname "$CT_HOSTNAME" --cores "$CORES" --memory "$MEMORY" --swap 512 --rootfs "$STORAGE:$DISK" --net0 "name=eth0,bridge=$BRIDGE,$IP_CONFIG" --unprivileged 1 --features nesting=1 --onboot 1 --start 1)
 [[ -n "$ROOT_PASSWORD" ]] && CREATE+=(--password "$ROOT_PASSWORD")
 "${CREATE[@]}"
 
@@ -224,7 +228,7 @@ update-locale LANG=en_US.UTF-8
 
 echo "[8/9] Configuring Nginx..."
 write_nginx_config "$CTID"
-set_container_hostname "$CTID" "$HOSTNAME"
+set_container_hostname "$CTID" "$CT_HOSTNAME"
 
 echo "[9/9] Health and readiness checks..."
 sleep 2

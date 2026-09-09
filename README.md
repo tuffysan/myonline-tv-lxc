@@ -1,4 +1,4 @@
-# MyOnline TV Web v0.3.8 — Proxmox LXC
+# MyOnline TV Web v0.3.9 — Proxmox LXC
 
 MyOnline TV Web is a self-hosted entertainment appliance for Proxmox VE.
 
@@ -34,7 +34,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/tuffysan/myonline-tv-lxc
 
 ## Architecture-safe LXC template selection
 
-v0.3.8 detects the Proxmox host architecture before creating the container:
+v0.3.9 detects the Proxmox host architecture before creating the container:
 
 ```text
 x86_64        -> amd64
@@ -56,7 +56,7 @@ debian-13-standard_13.6-1_arm64.tar.zst
 A second verification is performed after `pct create`; a mismatched container is removed automatically instead of being started.
 
 
-## v0.3.8 installation verification
+## v0.3.9 installation verification
 
 The installer now verifies the full request path, not only the ASP.NET backend:
 
@@ -67,7 +67,7 @@ Browser/Nginx :80 -> MyOnline TV :5080
 Before reporting a successful installation it checks `/health` and `/ready` through both port `5080` and Nginx port `80`. It also fails if the standard Nginx welcome page is still active.
 
 
-## v0.3.8 persistent-data permissions
+## v0.3.9 persistent-data permissions
 
 `myonlinetv.service` runs as `www-data`. Before starting the service, the installer now prepares persistent storage with:
 
@@ -81,7 +81,7 @@ chmod 700 /var/lib/myonlinetv/backups
 This allows first-run creation of `secrets.key` and application state.
 
 
-## v0.3.8 behind HTTPS reverse proxies
+## v0.3.9 behind HTTPS reverse proxies
 
 MyOnline TV is designed to sit behind an external HTTPS reverse proxy such as Nginx Proxy Manager:
 
@@ -102,12 +102,12 @@ Forward Port: 80
 
 `X-Forwarded-Proto` is preserved by the internal Nginx and processed by ASP.NET Core, so same-origin checks correctly see `https://your-domain` rather than the internal HTTP hop.
 
-Kestrel is bound to loopback only in v0.3.8, so port 5080 should not be exposed directly.
+Kestrel is bound to loopback only in v0.3.9, so port 5080 should not be exposed directly.
 
 
-## v0.3.8 upgrade migrations
+## v0.3.9 upgrade migrations
 
-Starting with v0.3.8, upgrades migrate system configuration as well as application binaries. The updater reapplies and validates the current Nginx reverse-proxy configuration, restarts the services, and checks both the backend and port-80 proxy path.
+Starting with v0.3.9, upgrades migrate system configuration as well as application binaries. The updater reapplies and validates the current Nginx reverse-proxy configuration, restarts the services, and checks both the backend and port-80 proxy path.
 
 Existing containers are also renamed to:
 
@@ -125,13 +125,30 @@ Forward Host/IP: <MyOnline-TV-LXC-IP>
 Forward Port: 80
 ```
 
+
+## v0.3.9 installer fixes
+
+Fresh installs now explicitly load the shared installer helper functions before the Nginx stage. The container hostname uses `CT_HOSTNAME` instead of the shell's built-in `HOSTNAME` environment variable.
+
+Default:
+
+```text
+CT_HOSTNAME=MyOnlineTV
+```
+
+Optional override:
+
+```bash
+CT_HOSTNAME=MyTV CTID=145 bash -c "$(curl -fsSL https://raw.githubusercontent.com/tuffysan/myonline-tv-lxc/main/install-lxc.sh)"
+```
+
 ## Update
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/tuffysan/myonline-tv-lxc/main/update-from-github.sh)"
 ```
 
-Before activating a new version, v0.3.8 creates:
+Before activating a new version, v0.3.9 creates:
 
 ```text
 /var/lib/myonlinetv/backups/pre-update-<old>-to-<new>-<timestamp>.tar.gz
@@ -161,7 +178,7 @@ Downloads are deliberately excluded from automatic data rollback.
 CTID=145 ./health-check.sh
 ```
 
-v0.3.8 exposes:
+v0.3.9 exposes:
 
 ```text
 GET /health
@@ -189,8 +206,8 @@ The web UI now includes **System** showing:
 Every `v*` tag builds:
 
 ```text
-myonline-tv-web-v0.3.8-linux-x64.tar.gz
-myonline-tv-lxc-v0.3.8-source.tar.gz
+myonline-tv-web-v0.3.9-linux-x64.tar.gz
+myonline-tv-lxc-v0.3.9-source.tar.gz
 SHA256SUMS-RELEASE.txt
 release.json
 ```
