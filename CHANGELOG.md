@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.8 — Upgrade migrations, reverse-proxy fix and hostname
+
+- Fixed upgrades that installed the v0.3.7 application binary but left the old v0.3.6 Nginx configuration in place.
+- Upgrade now reapplies the current MyOnline TV Nginx configuration and validates it before reporting success.
+- Added reusable system-configuration migration helpers for Nginx and container hostname.
+- Internal Nginx now preserves an upstream `X-Forwarded-Proto` value and falls back to its own scheme for direct LAN access.
+- `X-Forwarded-Host` is forwarded to ASP.NET Core.
+- Upgrade verifies both backend health on `127.0.0.1:5080` and public Nginx health on port 80.
+- Container hostname is now `MyOnlineTV` instead of `proxmox` for both new installations and upgrades of existing containers.
+- `/etc/hostname` and the local `127.0.1.1` host mapping are synchronized with the Proxmox LXC hostname.
+- Keeps all fixes from v0.3.7 and earlier releases.
+
 ## 0.3.7 — HTTPS reverse-proxy / forwarded-header fix
 
 - Fixed `Cross-origin state-changing requests are not allowed` when MyOnline TV is published through an HTTPS reverse proxy such as Nginx Proxy Manager.

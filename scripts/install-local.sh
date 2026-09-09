@@ -6,7 +6,7 @@ VERSION="$(tr -d '[:space:]' < "${REPO_DIR}/VERSION")"
 ARTIFACT="${MYONLINE_ARTIFACT:-}"
 
 CTID="${CTID:-145}"
-HOSTNAME="${HOSTNAME:-myonlinetv}"
+HOSTNAME="${HOSTNAME:-MyOnlineTV}"
 STORAGE="${STORAGE:-local-lvm}"
 BRIDGE="${BRIDGE:-vmbr0}"
 MEMORY="${MEMORY:-2048}"
@@ -223,41 +223,8 @@ update-locale LANG=en_US.UTF-8
 '
 
 echo "[8/9] Configuring Nginx..."
-pct exec "$CTID" -- bash -lc 'cat > /etc/nginx/sites-available/myonlinetv <<'"'"'EOF'"'"'
-server {
-    listen 80 default_server;
-    listen [::]:80 default_server;
-    server_name _;
-
-    client_max_body_size 0;
-
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    # Preserve the original external scheme from an upstream reverse proxy
-    # (for example Nginx Proxy Manager terminating HTTPS). For direct LAN
-    # HTTP access this header may be empty, in which case ASP.NET keeps http.
-    proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
-    proxy_set_header X-Forwarded-Host $host;
-
-    location / {
-        proxy_pass http://127.0.0.1:5080;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_buffering off;
-    }
-}
-EOF
-
-rm -f /etc/nginx/sites-enabled/default
-ln -sfn /etc/nginx/sites-available/myonlinetv /etc/nginx/sites-enabled/myonlinetv
-
-nginx -t
-systemctl enable nginx
-systemctl restart nginx
-systemctl is-active --quiet nginx
-'
+write_nginx_config "$CTID"
+set_container_hostname "$CTID" "$HOSTNAME"
 
 echo "[9/9] Health and readiness checks..."
 sleep 2

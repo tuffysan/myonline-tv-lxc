@@ -61,3 +61,65 @@ download_release_artifact() {
   )
   printf '%s\n' "${target}/${name}"
 }
+
+
+write_nginx_config() {
+  local ctid="$1"
+  pct exec "$ctid" -- bash -lc 'cat > /etc/nginx/sites-available/myonlinetv <<'"'"'EOF'"'"'
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+
+    client_max_body_size 0;
+
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+    # Preserve the original external scheme/host from an upstream reverse proxy.
+    # If there is no upstream X-Forwarded-Proto (direct LAN HTTP), fall back to http.
+    set $my_forwarded_proto $http_x_forwarded_proto;
+    if ($my_forwarded_proto = "") {
+        set $my_forwarded_proto $scheme;
+    }
+
+    proxy_set_header X-Forwarded-Proto $my_forwarded_proto;
+    proxy_set_header X-Forwarded-Host $host;
+
+    location / {
+        proxy_pass http://127.0.0.1:5080;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_buffering off;
+    }
+}
+EOF
+
+rm -f /etc/nginx/sites-enabled/default
+ln -sfn /etc/nginx/sites-available/myonlinetv /etc/nginx/sites-enabled/myonlinetv
+nginx -t
+systemctl enable nginx >/dev/null 2>&1 || true
+systemctl restart nginx
+systemctl is-active --quiet nginx
+'
+}
+
+set_container_hostname() {
+  local ctid="$1"
+  local hostname_value="${2:-MyOnlineTV}"
+
+  pct set "$ctid" --hostname "$hostname_value"
+
+  pct exec "$ctid" -- bash -lc "
+set -e
+printf '%s\n' '$hostname_value' > /etc/hostname
+if grep -qE '^127\.0\.1\.1[[:space:]]+' /etc/hosts; then
+  sed -i -E 's/^127\.0\.1\.1[[:space:]]+.*/127.0.1.1 ${hostname_value}/' /etc/hosts
+else
+  printf '127.0.1.1 %s\n' '$hostname_value' >> /etc/hosts
+fi
+hostname '$hostname_value' 2>/dev/null || true
+"
+}
