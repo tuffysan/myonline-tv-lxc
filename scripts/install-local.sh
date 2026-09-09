@@ -32,16 +32,90 @@ fi
 
 echo "[1/9] Preparing Debian template..."
 pveam update >/dev/null
-TEMPLATE="$(pveam available --section system | awk '/debian-13-standard/ {print $2}' | tail -1)"
-[[ -n "$TEMPLATE" ]] || TEMPLATE="$(pveam available --section system | awk '/debian-12-standard/ {print $2}' | tail -1)"
-[[ -n "$TEMPLATE" ]] || { echo "No Debian 12/13 template found."; exit 1; }
+
+HOST_ARCH="$(uname -m)"
+case "$HOST_ARCH" in
+  x86_64)
+    TEMPLATE_ARCH="amd64"
+    ;;
+  aarch64|arm64)
+    TEMPLATE_ARCH="arm64"
+    ;;
+  *)
+    echo "Unsupported Proxmox host architecture: ${HOST_ARCH}"
+    exit 1
+    ;;
+esac
+
+echo "Host architecture     : ${HOST_ARCH}"
+echo "Template architecture : ${TEMPLATE_ARCH}"
+
+TEMPLATE="$(
+  pveam available --section system |
+  awk -v arch="$TEMPLATE_ARCH" '
+    /debian-13-standard/ && $2 ~ ("_" arch "\\.tar\\.zst$") { print $2 }
+  ' |
+  tail -1
+)"
+
+if [[ -z "$TEMPLATE" ]]; then
+  TEMPLATE="$(
+    pveam available --section system |
+    awk -v arch="$TEMPLATE_ARCH" '
+      /debian-12-standard/ && $2 ~ ("_" arch "\\.tar\\.zst$") { print $2 }
+    ' |
+    tail -1
+  )"
+fi
+
+[[ -n "$TEMPLATE" ]] || {
+  echo "No Debian 12/13 LXC template found for architecture: ${TEMPLATE_ARCH}"
+  exit 1
+}
+
+case "$TEMPLATE" in
+  *"_${TEMPLATE_ARCH}.tar.zst")
+    ;;
+  *)
+    echo "Refusing to use template with unexpected architecture:"
+    echo "  ${TEMPLATE}"
+    exit 1
+    ;;
+esac
+
+echo "Selected template     : ${TEMPLATE}"
+
 LOCAL_TEMPLATE="local:vztmpl/$(basename "$TEMPLATE")"
-if ! pveam list local | grep -q "$(basename "$TEMPLATE")"; then pveam download local "$TEMPLATE"; fi
+if ! pveam list local | grep -qF "$(basename "$TEMPLATE")"; then
+  pveam download local "$TEMPLATE"
+fi
 
 echo "[2/9] Creating CT ${CTID}..."
 CREATE=(pct create "$CTID" "$LOCAL_TEMPLATE" --hostname "$HOSTNAME" --cores "$CORES" --memory "$MEMORY" --swap 512 --rootfs "$STORAGE:$DISK" --net0 "name=eth0,bridge=$BRIDGE,$IP_CONFIG" --unprivileged 1 --features nesting=1 --onboot 1 --start 1)
 [[ -n "$ROOT_PASSWORD" ]] && CREATE+=(--password "$ROOT_PASSWORD")
 "${CREATE[@]}"
+
+CREATED_ARCH="$(pct config "$CTID" | awk -F': ' '/^arch:/ {print $2}')"
+if [[ -n "$CREATED_ARCH" ]]; then
+  case "$TEMPLATE_ARCH" in
+    amd64)
+      [[ "$CREATED_ARCH" == "amd64" ]] || {
+        echo "Container architecture mismatch: expected amd64, got ${CREATED_ARCH}"
+        echo "Destroying invalid CT ${CTID}."
+        pct destroy "$CTID" --purge || true
+        exit 1
+      }
+      ;;
+    arm64)
+      [[ "$CREATED_ARCH" == "arm64" ]] || {
+        echo "Container architecture mismatch: expected arm64, got ${CREATED_ARCH}"
+        echo "Destroying invalid CT ${CTID}."
+        pct destroy "$CTID" --purge || true
+        exit 1
+      }
+      ;;
+  esac
+fi
 
 echo "[3/9] Waiting for container..."
 for i in {1..60}; do pct exec "$CTID" -- true >/dev/null 2>&1 && break; sleep 2; done

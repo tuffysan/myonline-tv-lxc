@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.2 — Proxmox architecture selection fix
+
+- Fixed LXC startup failure caused by selecting an ARM64 Debian template on an x86_64 Proxmox host.
+- Installer now detects host architecture with `uname -m`.
+- `x86_64` maps explicitly to `amd64`.
+- `aarch64`/`arm64` maps explicitly to `arm64`.
+- Debian template selection now filters by both Debian version and CPU architecture.
+- Installer refuses mismatched templates before container creation.
+- Added post-create architecture verification using `pct config`.
+- If the created CT architecture does not match the expected architecture, the invalid CT is destroyed automatically.
+- Added clearer installer output showing host architecture, template architecture, and selected template.
+- Keeps all v0.3.1 GitHub Release fixes and v0.3.0 appliance functionality.
+
 ## 0.3.1 — GitHub Release workflow fix
 
 - Fixed GitHub Release packaging failure: `tar: .: file changed as we read it`.
