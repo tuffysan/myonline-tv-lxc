@@ -181,6 +181,15 @@ UNIT
 pct push "$CTID" /tmp/myonlinetv.service /etc/systemd/system/myonlinetv.service
 rm -f /tmp/myonlinetv.service
 
+echo "Starting MyOnline TV service..."
+pct exec "$CTID" -- bash -lc '
+set -e
+systemctl daemon-reload
+systemctl enable myonlinetv
+systemctl restart myonlinetv
+systemctl is-active --quiet myonlinetv
+'
+
 echo "Configuring locale..."
 pct exec "$CTID" -- bash -lc '
 set -e
@@ -237,7 +246,20 @@ echo
 echo "Checking MyOnline TV backend on port 5080..."
 pct exec "$CTID" -- bash -lc '
 set -e
-curl -fsS --retry 10 --retry-delay 1 --retry-connrefused http://127.0.0.1:5080/health >/tmp/myonlinetv-health.out
+if ! curl -fsS --retry 10 --retry-delay 1 --retry-connrefused http://127.0.0.1:5080/health >/tmp/myonlinetv-health.out; then
+    echo "ERROR: MyOnline TV backend did not become healthy on port 5080."
+    echo
+    echo "=== systemctl status myonlinetv ==="
+    systemctl status myonlinetv --no-pager || true
+    echo
+    echo "=== journalctl -u myonlinetv ==="
+    journalctl -u myonlinetv -n 100 --no-pager || true
+    echo
+    echo "=== listening sockets ==="
+    ss -lntp || true
+    exit 1
+fi
+
 curl -fsS --retry 10 --retry-delay 1 --retry-connrefused http://127.0.0.1:5080/ready >/tmp/myonlinetv-ready.out
 '
 

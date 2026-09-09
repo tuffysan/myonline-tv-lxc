@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.5 — Service startup regression fix
+
+- Fixed v0.3.4 installer regression where `myonlinetv.service` was created but not started before health checks.
+- Installer now explicitly runs:
+  - `systemctl daemon-reload`
+  - `systemctl enable myonlinetv`
+  - `systemctl restart myonlinetv`
+  - `systemctl is-active --quiet myonlinetv`
+- MyOnline TV service startup is now a dedicated installer step before locale and Nginx configuration.
+- Backend health-check failures now print:
+  - `systemctl status myonlinetv`
+  - recent `journalctl -u myonlinetv`
+  - listening sockets from `ss -lntp`
+- Keeps the v0.3.4 Nginx activation/end-to-end checks, v0.3.3 artifact-path fix, and v0.3.2 architecture-safe template selection.
+
 ## 0.3.4 — Nginx activation and end-to-end install verification
 
 - Fixed successful installs that still showed the default "Welcome to nginx!" page.
