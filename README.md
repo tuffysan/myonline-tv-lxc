@@ -1,4 +1,4 @@
-# MyOnline TV Web v0.3.5 — Proxmox LXC
+# MyOnline TV Web v0.3.6 — Proxmox LXC
 
 MyOnline TV Web is a self-hosted entertainment appliance for Proxmox VE.
 
@@ -34,7 +34,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/tuffysan/myonline-tv-lxc
 
 ## Architecture-safe LXC template selection
 
-v0.3.5 detects the Proxmox host architecture before creating the container:
+v0.3.6 detects the Proxmox host architecture before creating the container:
 
 ```text
 x86_64        -> amd64
@@ -56,7 +56,7 @@ debian-13-standard_13.6-1_arm64.tar.zst
 A second verification is performed after `pct create`; a mismatched container is removed automatically instead of being started.
 
 
-## v0.3.5 installation verification
+## v0.3.6 installation verification
 
 The installer now verifies the full request path, not only the ASP.NET backend:
 
@@ -66,13 +66,27 @@ Browser/Nginx :80 -> MyOnline TV :5080
 
 Before reporting a successful installation it checks `/health` and `/ready` through both port `5080` and Nginx port `80`. It also fails if the standard Nginx welcome page is still active.
 
+
+## v0.3.6 persistent-data permissions
+
+`myonlinetv.service` runs as `www-data`. Before starting the service, the installer now prepares persistent storage with:
+
+```bash
+chown -R www-data:www-data /var/lib/myonlinetv
+chmod 700 /var/lib/myonlinetv
+chmod 700 /var/lib/myonlinetv/downloads
+chmod 700 /var/lib/myonlinetv/backups
+```
+
+This allows first-run creation of `secrets.key` and application state.
+
 ## Update
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/tuffysan/myonline-tv-lxc/main/update-from-github.sh)"
 ```
 
-Before activating a new version, v0.3.5 creates:
+Before activating a new version, v0.3.6 creates:
 
 ```text
 /var/lib/myonlinetv/backups/pre-update-<old>-to-<new>-<timestamp>.tar.gz
@@ -102,7 +116,7 @@ Downloads are deliberately excluded from automatic data rollback.
 CTID=145 ./health-check.sh
 ```
 
-v0.3.5 exposes:
+v0.3.6 exposes:
 
 ```text
 GET /health
@@ -130,8 +144,8 @@ The web UI now includes **System** showing:
 Every `v*` tag builds:
 
 ```text
-myonline-tv-web-v0.3.5-linux-x64.tar.gz
-myonline-tv-lxc-v0.3.5-source.tar.gz
+myonline-tv-web-v0.3.6-linux-x64.tar.gz
+myonline-tv-lxc-v0.3.6-source.tar.gz
 SHA256SUMS-RELEASE.txt
 release.json
 ```

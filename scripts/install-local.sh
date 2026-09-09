@@ -181,13 +181,33 @@ UNIT
 pct push "$CTID" /tmp/myonlinetv.service /etc/systemd/system/myonlinetv.service
 rm -f /tmp/myonlinetv.service
 
+echo "Preparing MyOnline TV data permissions..."
+pct exec "$CTID" -- bash -lc '
+set -e
+mkdir -p /var/lib/myonlinetv /var/lib/myonlinetv/downloads /var/lib/myonlinetv/backups
+chown -R www-data:www-data /var/lib/myonlinetv
+chmod 700 /var/lib/myonlinetv
+chmod 700 /var/lib/myonlinetv/downloads
+chmod 700 /var/lib/myonlinetv/backups
+'
+
 echo "Starting MyOnline TV service..."
 pct exec "$CTID" -- bash -lc '
 set -e
 systemctl daemon-reload
 systemctl enable myonlinetv
 systemctl restart myonlinetv
-systemctl is-active --quiet myonlinetv
+
+if ! systemctl is-active --quiet myonlinetv; then
+    echo "ERROR: myonlinetv.service failed to start."
+    echo
+    echo "=== systemctl status myonlinetv ==="
+    systemctl status myonlinetv --no-pager || true
+    echo
+    echo "=== journalctl -u myonlinetv ==="
+    journalctl -u myonlinetv -n 100 --no-pager || true
+    exit 1
+fi
 '
 
 echo "Configuring locale..."
@@ -237,8 +257,6 @@ systemctl is-active --quiet nginx
 
 echo "[9/9] Health and readiness checks..."
 sleep 2
-pct exec "$CTID" -- curl -fsS http://127.0.0.1:5080/health >/dev/null
-pct exec "$CTID" -- curl -fsS http://127.0.0.1:5080/ready >/dev/null
 
 IP="$(pct exec "$CTID" -- hostname -I | awk '{print $1}')"
 echo

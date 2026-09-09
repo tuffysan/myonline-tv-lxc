@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.6 — Data permissions and health-check flow fix
+
+- Fixed backend startup failures caused by `/var/lib/myonlinetv` being owned by `root:root` while `myonlinetv.service` runs as `www-data`.
+- Installer now prepares `/var/lib/myonlinetv`, `downloads`, and `backups` before service startup.
+- Persistent data ownership is set recursively to `www-data:www-data`.
+- Data directories are set to mode `700`.
+- Removed premature direct port-5080 curl checks that could abort before diagnostic output.
+- Service startup failures now print `systemctl status` and recent `journalctl` output immediately.
+- Final checks still verify the ASP.NET backend on port 5080 and Nginx on port 80.
+- Keeps fixes from v0.3.5, v0.3.4, v0.3.3 and v0.3.2.
+
 ## 0.3.5 — Service startup regression fix
 
 - Fixed v0.3.4 installer regression where `myonlinetv.service` was created but not started before health checks.
