@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.10 — Same-origin normalization, loopback binding and upgrade execution fix
+
+- Reworked same-origin protection for authenticated state-changing API requests.
+- Origin validation now compares normalized URI scheme, host, and effective port instead of raw origin strings.
+- Default `https:443` and `http:80` ports no longer cause false cross-origin rejections.
+- Rejected same-origin requests now log safe diagnostic fields: origin/request scheme, host, port, and forwarded host/protocol.
+- Kestrel now binds to `127.0.0.1:5080` instead of `0.0.0.0:5080`.
+- Fresh installations now write `/var/lib/myonlinetv/version` and `release.json`.
+- Fixed `update-from-github.sh` using `exec`, which made all following migration code unreachable.
+- System configuration migrations now live in `scripts/update-local.sh`, where they run for both release and local/source update paths.
+- Update verification reapplies Nginx configuration, hostname, restarts services, and validates both port 5080 and port 80.
+- Keeps all fixes from v0.3.9 and earlier releases.
+
 ## 0.3.9 — Installer helper loading and hostname variable fix
 
 - Fixed fresh-install failure at `[8/9] Configuring Nginx...` with `write_nginx_config: command not found`.

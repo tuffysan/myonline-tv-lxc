@@ -2,6 +2,7 @@
 set -euo pipefail
 
 REPO_DIR="${1:?Usage: update-local.sh <repo-dir>}"
+source "${REPO_DIR}/scripts/github-common.sh"
 TARGET_VERSION="$(tr -d '[:space:]' < "${REPO_DIR}/VERSION")"
 ARTIFACT="${MYONLINE_ARTIFACT:-}"
 CTID="${CTID:-145}"
@@ -79,7 +80,7 @@ systemctl daemon-reload
 systemctl start myonlinetv
 "
 
-echo "[6/7] Health check..."
+echo "[6/8] Health check..."
 sleep 2
 HEALTH=1
 pct exec "$CTID" -- curl -fsS http://127.0.0.1:5080/health >/dev/null || HEALTH=0
@@ -101,6 +102,28 @@ systemctl start myonlinetv
   exit 1
 fi
 
-echo "[7/7] Update verified."
+
+echo "[7/8] Applying system configuration migrations..."
+set_container_hostname "$CTID" "MyOnlineTV"
+write_nginx_config "$CTID"
+
+pct exec "$CTID" -- bash -lc '
+set -e
+systemctl daemon-reload
+systemctl restart myonlinetv
+systemctl is-active --quiet myonlinetv
+systemctl is-active --quiet nginx
+'
+
+echo "[8/8] Verifying backend and reverse proxy..."
+pct exec "$CTID" -- bash -lc '
+set -e
+grep -q "X-Forwarded-Proto \$my_forwarded_proto" /etc/nginx/sites-enabled/myonlinetv
+grep -q "X-Forwarded-Host \$host" /etc/nginx/sites-enabled/myonlinetv
+curl -fsS --retry 10 --retry-delay 1 --retry-connrefused http://127.0.0.1:5080/health >/dev/null
+curl -fsS --retry 10 --retry-delay 1 --retry-connrefused http://127.0.0.1/health >/dev/null
+'
+
+echo "Update verified."
 echo "Updated v${CURRENT_VERSION} -> v${TARGET_VERSION}"
 echo "Pre-update data backup: ${BACKUP}"

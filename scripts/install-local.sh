@@ -185,6 +185,16 @@ UNIT
 pct push "$CTID" /tmp/myonlinetv.service /etc/systemd/system/myonlinetv.service
 rm -f /tmp/myonlinetv.service
 
+echo "Writing installation metadata..."
+pct exec "$CTID" -- bash -lc "
+set -e
+mkdir -p /var/lib/myonlinetv
+printf '%s\n' '${VERSION}' >/var/lib/myonlinetv/version
+cat >/var/lib/myonlinetv/release.json <<'META'
+$(cat "${REPO_DIR}/release.json")
+META
+"
+
 echo "Preparing MyOnline TV data permissions..."
 pct exec "$CTID" -- bash -lc '
 set -e

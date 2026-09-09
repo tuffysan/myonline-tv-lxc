@@ -20,7 +20,7 @@ From a PC with Git installed:
 git init
 git branch -M main
 git add .
-git commit -m "MyOnline TV Web v0.3.9"
+git commit -m "MyOnline TV Web v0.3.10"
 git remote add origin https://github.com/tuffysan/myonline-tv-lxc.git
 git push -u origin main
 ```
@@ -28,8 +28,8 @@ git push -u origin main
 ## 3. Create the first stable release
 
 ```bash
-git tag v0.3.9
-git push origin v0.3.9
+git tag v0.3.10
+git push origin v0.3.10
 ```
 
 The GitHub Actions release workflow validates the tag and creates a GitHub Release.
@@ -59,7 +59,7 @@ MYONLINE_CHANNEL=main bash -c "$(curl -fsSL https://raw.githubusercontent.com/tu
 To install a specific tag:
 
 ```bash
-MYONLINE_REF=v0.3.9 bash -c "$(curl -fsSL https://raw.githubusercontent.com/tuffysan/myonline-tv-lxc/main/install-lxc.sh)"
+MYONLINE_REF=v0.3.10 bash -c "$(curl -fsSL https://raw.githubusercontent.com/tuffysan/myonline-tv-lxc/main/install-lxc.sh)"
 ```
 
 ## Override container settings

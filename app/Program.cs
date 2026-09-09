@@ -14,7 +14,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.WebHost.UseUrls("http://0.0.0.0:5080");
+builder.WebHost.UseUrls("http://127.0.0.1:5080");
 
 builder.Services
     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -80,7 +80,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.3.9");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.3.10");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
@@ -159,25 +159,70 @@ app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Basic same-origin protection for cookie-authenticated state-changing API requests.
+// Same-origin protection for cookie-authenticated state-changing API requests.
+// Compare normalized URI components instead of raw strings so default ports
+// such as https:443/http:80 do not cause false rejections behind reverse proxies.
 app.Use(async (ctx, next) =>
 {
     if (ctx.Request.Path.StartsWithSegments("/api") &&
         ctx.Request.Method is not ("GET" or "HEAD" or "OPTIONS") &&
         ctx.User.Identity?.IsAuthenticated == true)
     {
-        var origin = ctx.Request.Headers.Origin.ToString();
-        if (!string.IsNullOrWhiteSpace(origin))
+        var originText = ctx.Request.Headers.Origin.ToString();
+
+        if (!string.IsNullOrWhiteSpace(originText))
         {
-            var expected = $"{ctx.Request.Scheme}://{ctx.Request.Host}";
-            if (!origin.Equals(expected, StringComparison.OrdinalIgnoreCase))
+            static int EffectivePort(string scheme, int? explicitPort)
             {
+                if (explicitPort.HasValue)
+                    return explicitPort.Value;
+
+                return scheme.Equals("https", StringComparison.OrdinalIgnoreCase) ? 443 : 80;
+            }
+
+            var validOrigin = Uri.TryCreate(originText, UriKind.Absolute, out var originUri);
+            var requestScheme = ctx.Request.Scheme;
+            var requestHost = ctx.Request.Host.Host;
+            var requestPort = EffectivePort(requestScheme, ctx.Request.Host.Port);
+
+            var originPort = validOrigin
+                ? (originUri!.IsDefaultPort
+                    ? EffectivePort(originUri.Scheme, null)
+                    : originUri.Port)
+                : -1;
+
+            var sameOrigin =
+                validOrigin &&
+                originUri!.Scheme.Equals(requestScheme, StringComparison.OrdinalIgnoreCase) &&
+                originUri.Host.Equals(requestHost, StringComparison.OrdinalIgnoreCase) &&
+                originPort == requestPort;
+
+            if (!sameOrigin)
+            {
+                app.Logger.LogWarning(
+                    "Same-origin request rejected. Method={Method} Path={Path} Origin={Origin} " +
+                    "OriginScheme={OriginScheme} OriginHost={OriginHost} OriginPort={OriginPort} " +
+                    "RequestScheme={RequestScheme} RequestHost={RequestHost} RequestPort={RequestPort} " +
+                    "XForwardedProto={XForwardedProto} XForwardedHost={XForwardedHost}",
+                    ctx.Request.Method,
+                    ctx.Request.Path,
+                    originText,
+                    validOrigin ? originUri!.Scheme : "(invalid)",
+                    validOrigin ? originUri!.Host : "(invalid)",
+                    originPort,
+                    requestScheme,
+                    requestHost,
+                    requestPort,
+                    ctx.Request.Headers["X-Forwarded-Proto"].ToString(),
+                    ctx.Request.Headers["X-Forwarded-Host"].ToString());
+
                 ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
                 await ctx.Response.WriteAsync("Cross-origin state-changing requests are not allowed.");
                 return;
             }
         }
     }
+
     await next();
 });
 
@@ -185,7 +230,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "0.3.9",
+    version = "0.3.10",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -223,14 +268,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = File.Exists(adminFile);
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "0.3.9", checks })
-        : Results.Json(new { status = "not-ready", version = "0.3.9", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "0.3.10", checks })
+        : Results.Json(new { status = "not-ready", version = "0.3.10", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "0.3.9",
+    version = "0.3.10",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = File.Exists(adminFile),
@@ -631,7 +676,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "0.3.9",
+        version = "0.3.10",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
