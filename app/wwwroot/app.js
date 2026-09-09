@@ -429,7 +429,7 @@ function renderGuide(start,hours){
   const by=new Map();epg.forEach(x=>{if(!by.has(x.channel))by.set(x.channel,[]);by.get(x.channel).push(x)});
   const rows=channels.filter(c=>!isChannelHidden(c)&&by.has(c.id)).slice(0,180);
   const ticks=[];for(let d=new Date(start);d<end;d=new Date(d.getTime()+3600000))ticks.push(d);
-  content.innerHTML=`<div class=toolbar>${providerSelect()}<button class="btn ${guideWindow==='now'?'activeBtn':''}" onclick="guideWindow='now';guide()">Now</button><button class="btn ${guideWindow==='tonight'?'activeBtn':''}" onclick="guideWindow='tonight';guide()">Tonight</button><button class="btn ${guideWindow==='tomorrow'?'activeBtn':''}" onclick="guideWindow='tomorrow';guide()">Tomorrow</button><button class=btn id=refreshGuide>Refresh</button></div><div id=playerWrap></div><div class=timelineWrap><div class=timelineHead><div class=channelHead>Channel</div><div class=timeAxis style="grid-template-columns:repeat(${ticks.length},1fr)">${ticks.map(x=>`<span>${x.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>`).join('')}</div></div><div class=timeline>${rows.map(c=>timelineRowV319(c,by.get(c.id)||[],start,end,span)).join('')}</div></div><div id=programDetails></div>`;
+  content.innerHTML=`<div class=toolbar>${providerSelect()}<button class="btn ${guideWindow==='now'?'activeBtn':''}" onclick="guideWindow='now';guide()">Now</button><button class="btn ${guideWindow==='tonight'?'activeBtn':''}" onclick="guideWindow='tonight';guide()">Tonight</button><button class="btn ${guideWindow==='tomorrow'?'activeBtn':''}" onclick="guideWindow='tomorrow';guide()">Tomorrow</button><button class=btn id=refreshGuide>Refresh</button></div><div id=playerWrap></div><div class=timelineWrap><div class=timelineHead><div class=channelHead>Channel</div><div class=timeAxis style="grid-template-columns:repeat(${ticks.length},1fr)">${ticks.map(x=>`<span>${x.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>`).join('')}</div></div><div class=timeline>${rows.map(c=>timelineRowV319(c,by.get(c.id)||[],start,end,span)).join('')}</div></div>`;
   $('#provider').onchange=async e=>{currentProvider=e.target.value;await guide()};$('#refreshGuide').onclick=guide;
 }
 function timelineRowV319(c,progs,start,end,span){
@@ -439,14 +439,12 @@ function timelineRowV319(c,progs,start,end,span){
     const a=Math.max(new Date(pr.start).getTime(),start.getTime()),b=Math.min(new Date(pr.stop).getTime(),end.getTime());if(b<=a)return '';
     const left=(a-start.getTime())/span*100,width=Math.max(.8,(b-a)/span*100),isNow=a<=Date.now()&&b>Date.now();
     const payload=encodeURIComponent(JSON.stringify(pr));
-    return `<button class="prog ${isNow?'currentProgram':''}" style="left:${left}%;width:${width}%" onclick="showProgramDetails('${escAttr(c.key)}','${escAttr(channelName(c))}','${payload}')"><b>${esc(pr.title)}</b><small>${new Date(pr.start).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</small></button>`;
+    return `<button class="prog ${isNow?'currentProgram':''}" style="left:${left}%;width:${width}%" onclick='playLive(${JSON.stringify(c.key)},${JSON.stringify(channelName(c))})' title="Play ${escAttr(pr.title)} live"><b>${esc(pr.title)}</b><small>${new Date(pr.start).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</small></button>`;
   }).join('');
   return `<div class=timelineRow><button class=timelineChannel onclick='playLive(${JSON.stringify(c.key)},${JSON.stringify(channelName(c))})'>${c.logo?`<img src="${escAttr(c.logo)}">`:''}<span>${esc(channelName(c))}</span><small>▶ Live</small></button><div class=programLane>${line}${blocks}</div></div>`;
 }
 function showProgramDetails(channelKey,channelNameText,payload){
-  const pr=JSON.parse(decodeURIComponent(payload)),box=$('#programDetails');if(!box)return;
-  box.innerHTML=`<div class="card programDetails"><button class=closeProgram onclick="this.parentElement.remove()">×</button><span class=kicker>${new Date(pr.start).toLocaleString()} – ${new Date(pr.stop).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span><h2>${esc(pr.title)}</h2><p>${esc(pr.desc||'No description available.')}</p><button class=btn onclick='playLive(${JSON.stringify(channelKey)},${JSON.stringify(channelNameText)})'>▶ Watch live</button></div>`;
-  box.scrollIntoView({behavior:'smooth',block:'nearest'});
+  playLive(channelKey,channelNameText);
 }
 
 async function movies(){

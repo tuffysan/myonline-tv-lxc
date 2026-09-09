@@ -1,6 +1,13 @@
 # Changelog
 
-## v0.4.5
+## v0.4.6
+- Guide programmes now start Live TV immediately when clicked.
+- Removed the old flow that scrolled to a programme details card at the bottom of the Guide and required a second Watch Live click.
+- Playback uses the existing Guide player area above the timeline.
+- Channel-row Live buttons continue to work unchanged.
+- Keeps all v0.4.5 Movies/Series FFmpeg-HLS playback fixes and v0.4.4 release fixes.
+
+## v0.4.6
 - Fixes Movies and Series playback in browsers.
 - Identified raw MKV/TS/provider media as the playback problem: browsers cannot reliably play these containers/codecs through a simple HTTP proxy.
 - Movies and episodes now start server-side FFmpeg HLS playback, like the proven Live TV pipeline.
@@ -10,15 +17,15 @@
 - Download handling remains separate and unchanged.
 - Keeps v0.4.4 release/tag compatibility and all Live TV/catalogue fixes.
 
-## v0.4.5
+## v0.4.6
 - Includes the v0.4.3 Movies/Series lazy-token and catalogue scalability fixes.
 - Fixes GitHub Release packaging so artifact filenames are no longer hard-coded to one version.
-- Release workflow accepts preferred `v0.4.5` tags and legacy-compatible `v.0.4.5` tags.
-- Updater normalizes both tag formats to the canonical artifact name `myonline-tv-web-v0.4.5-linux-x64.tar.gz`.
+- Release workflow accepts preferred `v0.4.6` tags and legacy-compatible `v.0.4.6` tags.
+- Updater normalizes both tag formats to the canonical artifact name `myonline-tv-web-v0.4.6-linux-x64.tar.gz`.
 - Updater now gives a clear error when a GitHub Release exists without built artifacts.
 - README documents how to verify a successful release before updating Proxmox.
 
-## v0.4.5
+## v0.4.6
 - Fixes the Movies/Series catalogue scalability regression identified from v0.4.2 runtime logs.
 - Catalogue endpoints no longer create thousands of proxy/download tokens while loading every movie/episode.
 - Movie playback/download tokens are now created lazily only when Play/Download is clicked.
@@ -26,7 +33,7 @@
 - Keeps Xtream catalogue caching and the v0.4.1 Live TV fix.
 - Reduces memory/CPU pressure caused by very large IPTV VOD catalogues.
 
-## v0.4.5
+## v0.4.6
 - Movies/Series reliability hotfix.
 - Added 10-minute Xtream catalogue caches for VOD and Series categories/items.
 - Bounded catalogue requests so a slow provider does not leave the UI loading indefinitely.
@@ -34,41 +41,41 @@
 - Movies and Series now show load failures inside their grids instead of appearing stuck.
 - Preserves the v0.4.1 Live TV regression fix.
 
-## v0.4.5
+## v0.4.6
 - Critical Live TV regression fix.
 - Removed an accidental Continue Watching block from `playLive()` that referenced undefined `mediaId`, `video` and `url` variables and stopped Live TV before `/api/live/start` was called.
 - Moved Continue Watching tracking into `playMedia()` where those variables belong.
 - Keeps the v0.3.16 working FFmpeg/HLS Live TV start/status/playback flow.
 - Keeps v0.4.0 Guide, channel/group visibility, profiles and system features.
 
-## v0.4.5
+## v0.4.6
 - Viewer profiles with profile picker and Settings management.
 - System dashboard shows active streams, profiles and app memory.
 - Backup now includes channel preferences and profiles.
 - Restore provider/channel/profile/viewing data from a server backup.
 - Includes all Guide, channel management and Movies/Series improvements from v0.3.18–v0.3.20.
 
-## v0.4.5
+## v0.4.6
 - Poster-first Movies and Series presentation.
 - Movie details with plot, genre, year and rating when provided by Xtream.
 - Richer Series cards.
 - Continue Watching progress is saved during movie/episode playback.
 - Home page now has a Continue Watching rail.
 
-## v0.4.5
+## v0.4.6
 - Guide windows for Now, Tonight and Tomorrow.
 - Red current-time line and current-program highlighting.
 - Programme details with Watch live action.
 - Live player stays available above the guide while browsing EPG.
 
-## v0.4.5
+## v0.4.6
 - Start Live TV directly from channel rows and programme blocks in Guide.
 - Hide whole groups or individual channels.
 - Server-side channel/group preferences shared across devices.
 - Local channel aliases.
 - Settings page for managing and restoring hidden groups/channels.
 
-## v0.4.5
+## v0.4.6
 - Live TV UX release.
 - Added Now/Next EPG information to channel cards and player overlay.
 - Added LIVE overlay with channel logo and clock.
@@ -79,19 +86,19 @@
 - Added clearer Connecting / Preparing / Playing / Error playback states.
 - Kept the working v0.3.16 FFmpeg/HLS playback architecture unchanged.
 
-## v0.4.5
+## v0.4.6
 - Release re-spin of v0.3.15 so a clean GitHub Release can be created.
 - Same Live TV direct provider/channel playback flow as v0.3.15.
-- Version and release metadata updated to 0.4.5.
+- Version and release metadata updated to 0.4.6.
 
-## v0.4.5
+## v0.4.6
 - Fixed Live TV playback start by removing the temporary in-memory live proxy token hop.
 - `/api/live/start/{providerId}/{channelKey}` now resolves the channel directly from the server-side provider cache and starts FFmpeg from its protected source URL.
 - Fixed TV Guide playback to pass the channel key instead of the removed `playToken` field.
 - Keeps provider credentials and source stream URLs server-side.
 - Preserves asynchronous FFmpeg/HLS startup and compatibility-transcoding fallback from v0.3.14.
 
-## v0.4.5
+## v0.4.6
 
 - Fixed Live TV channel-list requests timing out at the internal Nginx reverse proxy.
 - Added a 10-minute per-provider channel cache; stale channel data is served immediately while refresh runs in the background.
