@@ -302,6 +302,77 @@ function friendlyError(e){
   }catch(_){return raw.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();}
 }
 
+let activeMediaSession=null;
+let mediaFallbackTried=false;
+
+async function playServerMedia(token,name,mediaId=null,forceTranscode=false){
+  if(!forceTranscode)mediaFallbackTried=false;
+  destroyPlayer();
+  const wrap=$('#playerWrap')||$('#mediaPlayer');
+  if(!wrap)return;
+  wrap.innerHTML=`<div class=playerCard><video id=video controls autoplay playsinline></video><div id=mediaPlaybackStatus class=livePlaybackStatus>Preparing video…</div><div class=nowPlaying>${esc(name)}</div></div>`;
+  wrap.scrollIntoView({behavior:'smooth',block:'start'});
+
+  try{
+    const info=await api('/api/media/start/'+encodeURIComponent(token)+(forceTranscode?'?transcode=true':''),{method:'POST'});
+    activeMediaSession=info.sessionId;
+    activeLiveSession=info.sessionId;
+
+    let state=null;
+    const deadline=Date.now()+30000;
+    while(Date.now()<deadline){
+      state=await api(info.statusUrl||('/api/live/status/'+encodeURIComponent(info.sessionId)));
+      if(state.status==='ready')break;
+      if(state.status==='failed')throw new Error(state.error||'FFmpeg could not prepare this video.');
+      await new Promise(r=>setTimeout(r,500));
+    }
+    if(!state||state.status!=='ready')throw new Error('Video startup timed out.');
+
+    const video=$('#video');
+    if(!video)return;
+    const playbackUrl=state.playbackUrl||info.playbackUrl;
+
+    const installResumeTracking=()=>{
+      if(!mediaId)return;
+      let last=-1;
+      const save=()=>{
+        const sec=Math.floor(video.currentTime||0);
+        if(sec===last)return;
+        last=sec;
+        jpost('/api/continue',{id:String(mediaId),title:name,url:'',positionSeconds:sec,updated:new Date().toISOString()}).catch(()=>{});
+      };
+      video.addEventListener('timeupdate',()=>{if(Math.floor(video.currentTime)%15===0)save()});
+      video.addEventListener('pause',save);
+      video.addEventListener('ended',save);
+    };
+
+    if(window.Hls&&Hls.isSupported()){
+      hls=new Hls({enableWorker:true,backBufferLength:60});
+      hls.loadSource(playbackUrl);hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED,()=>{installResumeTracking();video.play().catch(()=>{})});
+      hls.on(Hls.Events.ERROR,async(_,d)=>{
+        if(!d.fatal)return;
+        console.warn('Media HLS fatal',d);
+        if(!forceTranscode&&!mediaFallbackTried){
+          mediaFallbackTried=true;
+          const st=$('#mediaPlaybackStatus');if(st)st.textContent='Codec not browser-compatible · retrying with H.264/AAC…';
+          await playServerMedia(token,name,mediaId,true);
+          return;
+        }
+        const st=$('#mediaPlaybackStatus');if(st){st.textContent='Playback error: '+(d.details||d.type||'HLS error');st.className='livePlaybackStatus error'}
+      });
+    }else if(video.canPlayType('application/vnd.apple.mpegurl')){
+      video.src=playbackUrl;
+      installResumeTracking();
+      await video.play().catch(()=>{});
+    }else throw new Error('This browser does not support HLS playback.');
+
+    const st=$('#mediaPlaybackStatus');if(st){st.textContent=forceTranscode?'Playing · compatibility mode':'Playing';st.className='livePlaybackStatus ready'}
+  }catch(e){
+    const st=$('#mediaPlaybackStatus');if(st){st.textContent=friendlyError(e);st.className='livePlaybackStatus error'}
+  }
+}
+
 function playMedia(url,name,mediaId=null){
   destroyPlayer();
   const wrap=$('#playerWrap')||$('#mediaPlayer');
@@ -331,7 +402,7 @@ function playMedia(url,name,mediaId=null){
 function destroyPlayer(){
   if(hls){try{hls.destroy()}catch{}hls=null}
   if(activeLiveSession){
-    const id=activeLiveSession;activeLiveSession=null;
+    const id=activeLiveSession;activeLiveSession=null;activeMediaSession=null;
     fetch('/api/live/session/'+encodeURIComponent(id),{method:'DELETE',keepalive:true}).catch(()=>{});
   }
 }
@@ -445,7 +516,7 @@ async function movieToken(id){
   return await api(`/api/vod/${currentProvider}/${encodeURIComponent(id)}/token`,{method:'POST'});
 }
 async function playMovie(id,name){
-  try{const t=await movieToken(id);playMedia(t.playUrl,name,'movie:'+id)}catch(e){alert(e.message)}
+  try{const t=await movieToken(id);await playServerMedia(t.playToken,name,'movie:'+id)}catch(e){alert(e.message)}
 }
 async function downloadMovie(id,name){
   try{const t=await movieToken(id);await startMediaDownload(t.downloadToken,name)}catch(e){alert(e.message)}
@@ -454,7 +525,7 @@ async function episodeToken(id,ext){
   return await api(`/api/series/${currentProvider}/episode/${encodeURIComponent(id)}/token?ext=${encodeURIComponent(ext||'mp4')}`,{method:'POST'});
 }
 async function playEpisode(id,ext,name,mediaId){
-  try{const t=await episodeToken(id,ext);playMedia(t.playUrl,name,mediaId)}catch(e){alert(e.message)}
+  try{const t=await episodeToken(id,ext);await playServerMedia(t.playToken,name,mediaId)}catch(e){alert(e.message)}
 }
 async function downloadEpisode(id,ext,name){
   try{const t=await episodeToken(id,ext);await startMediaDownload(t.downloadToken,name)}catch(e){alert(e.message)}
