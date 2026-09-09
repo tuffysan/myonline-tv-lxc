@@ -140,8 +140,7 @@ async function playLive(channelKey,name,forceTranscode=false){
   wrap.innerHTML=`<div class=playerCard><video id=video controls autoplay playsinline></video><div class=nowPlaying>${esc(name)} · Starting Live TV…</div></div>`;
   wrap.scrollIntoView({behavior:'smooth',block:'start'});
   try{
-    const tokenInfo=await api('/api/live/token/'+encodeURIComponent(currentProvider)+'/'+encodeURIComponent(channelKey),{method:'POST'});
-    const info=await api('/api/live/start/'+encodeURIComponent(tokenInfo.token)+(forceTranscode?'?transcode=true':''),{method:'POST'});
+    const info=await api('/api/live/start/'+encodeURIComponent(currentProvider)+'/'+encodeURIComponent(channelKey)+(forceTranscode?'?transcode=true':''),{method:'POST'});
     activeLiveSession=info.sessionId;
 
     let state=null;
@@ -239,7 +238,7 @@ function timelineRow(c,progs,start,end,span){
     const left=(a-start)/span*100,width=Math.max(.8,(b-a)/span*100);
     return `<button class=prog style="left:${left}%;width:${width}%" title="${escAttr(p.desc||'')}"><b>${esc(p.title)}</b><small>${new Date(p.start).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</small></button>`;
   }).join('');
-  return `<div class=timelineRow><button class=timelineChannel onclick='playLive(${JSON.stringify(c.playToken)},${JSON.stringify(c.name)})'>${c.logo?`<img src="${escAttr(c.logo)}">`:''}<span>${esc(c.name)}</span></button><div class=programLane>${blocks}</div></div>`;
+  return `<div class=timelineRow><button class=timelineChannel onclick='playLive(${JSON.stringify(c.key)},${JSON.stringify(c.name)})'>${c.logo?`<img src="${escAttr(c.logo)}">`:''}<span>${esc(c.name)}</span></button><div class=programLane>${blocks}</div></div>`;
 }
 
 async function movies(){

@@ -80,7 +80,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.3.14");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.3.15");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
@@ -235,7 +235,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "0.3.14",
+    version = "0.3.15",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -273,14 +273,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = File.Exists(adminFile);
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "0.3.14", checks })
-        : Results.Json(new { status = "not-ready", version = "0.3.14", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "0.3.15", checks })
+        : Results.Json(new { status = "not-ready", version = "0.3.15", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "0.3.14",
+    version = "0.3.15",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = File.Exists(adminFile),
@@ -448,16 +448,6 @@ app.MapGet("/api/channels/{providerId}/{channelKey}/logo", async (string provide
         return Results.Bytes(bytes, mediaType);
     }
     catch { return Results.NotFound(); }
-}).RequireAuthorization();
-
-app.MapPost("/api/live/token/{providerId}/{channelKey}", async (string providerId, string channelKey) =>
-{
-    var p = LoadProviders().FirstOrDefault(x => x.Id == providerId);
-    if (p is null) return Results.NotFound();
-    var rows = await GetCachedChannels(p);
-    var channel = rows.FirstOrDefault(x => x.Key == channelKey);
-    if (channel is null) return Results.NotFound("Channel not found in provider cache.");
-    return Results.Ok(new { token = RegisterProxy(channel.SourceUrl, "live") });
 }).RequireAuthorization();
 
 app.MapGet("/api/providers/{providerId}/test", async (string providerId) =>
@@ -770,13 +760,31 @@ app.MapGet("/api/proxy/{token}", async (string token, HttpContext ctx) =>
 
 
 
-// Browser-compatible Live TV: FFmpeg starts asynchronously so reverse proxies never wait for stream startup.
-app.MapPost("/api/live/start/{token}", async (string token, bool? transcode) =>
+// Browser-compatible Live TV: resolve the channel directly from the provider cache.
+// Live playback no longer depends on a short-lived in-memory proxy token.
+app.MapPost("/api/live/start/{providerId}/{channelKey}", async (string providerId, string channelKey, bool? transcode) =>
 {
-    if (!proxyTokens.TryGetValue(token, out var target) || target.Kind != "live")
-        return Results.NotFound("Live stream token not found or expired.");
+    var provider = LoadProviders().FirstOrDefault(x => x.Id == providerId);
+    if (provider is null)
+        return Results.NotFound("Provider not found.");
 
-    if (!Uri.TryCreate(target.Url, UriKind.Absolute, out var sourceUri) || sourceUri.Scheme is not ("http" or "https"))
+    IReadOnlyList<LiveChannel> rows;
+    try
+    {
+        rows = await GetCachedChannels(provider);
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Could not resolve Live TV channel for provider {ProviderId}.", providerId);
+        return Results.Problem(title: "Could not resolve Live TV channel", detail: SafeProviderError(ex), statusCode: 502);
+    }
+
+    var channel = rows.FirstOrDefault(x => x.Key == channelKey);
+    if (channel is null)
+        return Results.NotFound("Channel not found in provider cache. Reload the channel list and try again.");
+
+    var sourceUrl = channel.SourceUrl;
+    if (!Uri.TryCreate(sourceUrl, UriKind.Absolute, out var sourceUri) || sourceUri.Scheme is not ("http" or "https"))
         return Results.BadRequest("Invalid provider stream URL.");
 
     var ffmpeg = FindExecutable("ffmpeg");
@@ -804,7 +812,7 @@ app.MapPost("/api/live/start/{token}", async (string token, bool? transcode) =>
     {
         "-hide_banner", "-loglevel", "warning", "-nostdin",
         "-rw_timeout", "15000000",
-        "-i", target.Url,
+        "-i", sourceUrl,
         "-map", "0:v:0?", "-map", "0:a:0?"
     };
     if (transcode == true)
@@ -840,7 +848,7 @@ app.MapPost("/api/live/start/{token}", async (string token, bool? transcode) =>
         return Results.Problem($"Could not start FFmpeg: {ex.Message}", statusCode: 500);
     }
 
-    var session = new LiveSession(sessionId, sessionDir, process, errorLog, target.Url, DateTimeOffset.UtcNow);
+    var session = new LiveSession(sessionId, sessionDir, process, errorLog, sourceUrl, DateTimeOffset.UtcNow);
     liveSessions[sessionId] = session;
 
     _ = Task.Run(async () =>
@@ -851,7 +859,7 @@ app.MapPost("/api/live/start/{token}", async (string token, bool? transcode) =>
             {
                 var line = await process.StandardError.ReadLineAsync();
                 if (line is null) break;
-                line = line.Replace(target.Url, "[provider-stream]", StringComparison.Ordinal);
+                line = line.Replace(sourceUrl, "[provider-stream]", StringComparison.Ordinal);
                 lock (errorLog)
                 {
                     errorLog.AppendLine(line);
@@ -940,7 +948,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "0.3.14",
+        version = "0.3.15",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -1150,7 +1158,7 @@ async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, TimeSpa
     var url = BuildXtreamPlayerApiUrl(c, action, extra);
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.3.14");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.3.15");
     using var cts = new CancellationTokenSource(timeout);
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -1260,7 +1268,7 @@ async Task<List<LiveChannel>> LoadM3uChannels(string url)
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/x-mpegURL,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.3.14");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.3.15");
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -1279,7 +1287,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.3.14");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.3.15");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }
