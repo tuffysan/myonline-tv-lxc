@@ -66,7 +66,61 @@ async function show(v){
 
 function renderProfileBadge(){const p=profiles.find(x=>x.id===currentProfile);const b=$('#userBadge');if(b&&p)b.innerHTML=`<button class=profileBadge onclick="profilePicker()">${esc(p.icon)} ${esc(p.name)} ▾</button>`}
 function profilePicker(){let box=$('#profilePicker');if(box){box.remove();return}box=document.createElement('div');box.id='profilePicker';box.className='profilePicker';box.innerHTML=profiles.map(p=>`<button onclick="selectProfile('${escAttr(p.id)}')">${esc(p.icon)} ${esc(p.name)}${p.isKids?' · Kids':''}</button>`).join('')+`<button onclick="show('settings')">⚙ Manage profiles</button>`;document.body.appendChild(box)}
-function selectProfile(id){currentProfile=id;localStorage.setItem('myonline-profile',id);$('#profilePicker')?.remove();renderProfileBadge();show('home')}
+function selectProfile(id){currentProfile=id;localStorage.setItem('myonline-profile',id);$('#profilePicker')?.remove();renderProfileBadge();
+// v0.4.11 TV / remote navigation
+let remoteFocusIndex=0;
+function remoteTargets(){
+  return [...document.querySelectorAll('button:not([disabled]),a[href],select,input,[tabindex="0"]')]
+    .filter(el=>el.offsetParent!==null);
+}
+function setRemoteFocus(index){
+  const a=remoteTargets(); if(!a.length)return;
+  remoteFocusIndex=(index+a.length)%a.length;
+  a[remoteFocusIndex].focus({preventScroll:true});
+  a[remoteFocusIndex].scrollIntoView({block:'nearest',inline:'nearest',behavior:'smooth'});
+}
+function moveRemote(dx,dy){
+  const a=remoteTargets(); if(!a.length)return;
+  let cur=document.activeElement,ci=a.indexOf(cur);
+  if(ci<0){setRemoteFocus(0);return}
+  const r=cur.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
+  let best=-1,score=Infinity;
+  a.forEach((el,i)=>{
+    if(i===ci)return;
+    const b=el.getBoundingClientRect(),x=b.left+b.width/2,y=b.top+b.height/2;
+    const vx=x-cx,vy=y-cy;
+    if(dx<0&&vx>=-4)return;if(dx>0&&vx<=4)return;if(dy<0&&vy>=-4)return;if(dy>0&&vy<=4)return;
+    const primary=dx?Math.abs(vx):Math.abs(vy),cross=dx?Math.abs(vy):Math.abs(vx);
+    const sc=primary+cross*2.2;
+    if(sc<score){score=sc;best=i}
+  });
+  if(best>=0)setRemoteFocus(best);
+}
+function remoteBack(){
+  if(document.fullscreenElement){document.exitFullscreen().catch(()=>{});return}
+  if(activeLiveSession){destroyPlayer();return}
+  if(currentView!=='home'){show('home');return}
+}
+document.addEventListener('keydown',e=>{
+  const tag=(document.activeElement?.tagName||'').toLowerCase();
+  const typing=tag==='input'||tag==='textarea';
+  if(typing&&e.key!=='Escape')return;
+  if(e.key==='ArrowUp'){e.preventDefault();moveRemote(0,-1)}
+  else if(e.key==='ArrowDown'){e.preventDefault();moveRemote(0,1)}
+  else if(e.key==='ArrowLeft'){
+    if(currentView==='live'&&activeLiveSession){e.preventDefault();stepLiveChannel(-1)}
+    else {e.preventDefault();moveRemote(-1,0)}
+  }
+  else if(e.key==='ArrowRight'){
+    if(currentView==='live'&&activeLiveSession){e.preventDefault();stepLiveChannel(1)}
+    else {e.preventDefault();moveRemote(1,0)}
+  }
+  else if(e.key==='Enter'&&document.activeElement===document.body){e.preventDefault();setRemoteFocus(0)}
+  else if(e.key==='Escape'||e.key==='Backspace'){e.preventDefault();remoteBack()}
+  else if((e.key==='f'||e.key==='F')&&!typing){e.preventDefault();toggleLiveFullscreen()}
+});
+
+show('home')}
 
 async function home(){
   const cont=await api('/api/continue');
@@ -82,6 +136,8 @@ async function home(){
   </div>
   ${playableCont.length?`<h2>Continue watching</h2><div class=continueRow>${playableCont.slice(0,12).map(x=>`<button class=continueCard onclick='resumeContinue(${JSON.stringify(x)})'>${x.poster?`<img loading=lazy src="${escAttr(x.poster)}">`:'<span>▶</span>'}<b>${esc(x.title)}</b><small>Resume around ${Math.floor((x.positionSeconds||0)/60)} min</small></button>`).join('')}</div><div id=mediaPlayer></div>`:''}
   ${recents.length?`<h2>Recently watched channels</h2><div class=continueRow>${recents.map(x=>`<button class=continueCard onclick='playRecentChannel(${JSON.stringify(x)})'>${x.logo?`<img loading=lazy src="${escAttr(x.logo)}">`:'<span>▣</span>'}<b>${esc(x.name)}</b><small>${esc(x.group||'Live TV')}</small></button>`).join('')}</div>`:''}
+  ${mediaFavs().length?`<h2>Favourites</h2><div class=continueRow>${mediaFavs().slice(0,12).map(x=>`<button class=continueCard onclick='${x.mediaType==="series"?"show('series')":`playSavedMedia(${JSON.stringify(x)})`}'>${x.poster?`<img loading=lazy src="${escAttr(x.poster)}">`:'<span>★</span>'}<b>${esc(x.title)}</b><small>${esc(x.mediaType)}</small></button>`).join('')}</div>`:''}
+  ${mediaHistory().filter(x=>x.mediaType!=='series').length?`<h2>Recently watched</h2><div class=continueRow>${mediaHistory().filter(x=>x.mediaType!=='series').slice(0,12).map(x=>`<button class=continueCard onclick='playSavedMedia(${JSON.stringify(x)})'>${x.poster?`<img loading=lazy src="${escAttr(x.poster)}">`:'<span>↻</span>'}<b>${esc(x.title)}</b><small>${esc(x.mediaType)}</small></button>`).join('')}</div>`:''}
   <h2>Quick access</h2><div class=grid>
     <button class="card actionCard" onclick="show('live')"><h3>Live TV</h3><p>Channels and groups</p></button>
     <button class="card actionCard" onclick="show('guide')"><h3>TV Guide</h3><p>Timeline EPG</p></button>
@@ -151,6 +207,35 @@ let liveSelectedIndex=0;
 let liveVisibleRows=[];
 let liveCurrentChannel=null;
 
+
+const MEDIA_FAV_KEY='myonline-media-favourites-v1';
+const MEDIA_HISTORY_KEY='myonline-media-history-v1';
+function mediaFavs(){try{return JSON.parse(localStorage.getItem(MEDIA_FAV_KEY)||'[]')}catch{return []}}
+function saveMediaFavs(x){localStorage.setItem(MEDIA_FAV_KEY,JSON.stringify(x.slice(0,250)))}
+function mediaFavId(x){return [x.providerId,x.mediaType,x.mediaId].join(':')}
+function isMediaFav(x){const id=mediaFavId(x);return mediaFavs().some(f=>mediaFavId(f)===id)}
+function toggleMediaFav(x){
+  let a=mediaFavs(),id=mediaFavId(x),i=a.findIndex(f=>mediaFavId(f)===id);
+  if(i>=0)a.splice(i,1);else a.unshift({...x,added:new Date().toISOString()});
+  saveMediaFavs(a); return i<0;
+}
+function mediaHistory(){try{return JSON.parse(localStorage.getItem(MEDIA_HISTORY_KEY)||'[]')}catch{return []}}
+function rememberMedia(x){
+  if(!x||!x.mediaId)return;
+  let a=mediaHistory(),id=mediaFavId(x);
+  a=a.filter(f=>mediaFavId(f)!==id);
+  a.unshift({...x,watched:new Date().toISOString()});
+  localStorage.setItem(MEDIA_HISTORY_KEY,JSON.stringify(a.slice(0,100)));
+}
+async function playSavedMedia(x){
+  currentProvider=x.providerId;
+  try{
+    const t=x.mediaType==='movie'
+      ? await api(`/api/vod/${encodeURIComponent(x.providerId)}/${encodeURIComponent(x.mediaId)}/token`,{method:'POST'})
+      : await api(`/api/series/${encodeURIComponent(x.providerId)}/episode/${encodeURIComponent(x.mediaId)}/token?ext=${encodeURIComponent(x.extension||'mp4')}`,{method:'POST'});
+    await playServerMedia(t.playToken,x.title,x);
+  }catch(e){alert(friendlyError(e))}
+}
 function getLiveRecents(){
   try{return JSON.parse(localStorage.getItem(LIVE_RECENTS_KEY)||'[]')}catch{return []}
 }
@@ -332,6 +417,7 @@ let mediaFallbackTried=false;
 
 async function playServerMedia(token,name,mediaMeta=null,forceTranscode=false,startSeconds=0){
   if(!forceTranscode)mediaFallbackTried=false;
+  if(mediaMeta&&typeof mediaMeta==='object')rememberMedia(mediaMeta);
   destroyPlayer();
   const wrap=$('#playerWrap')||$('#mediaPlayer');
   if(!wrap)return;
@@ -514,9 +600,15 @@ async function loadMovies(){
 function filterMedia(){
   const q=($('#mediaq')?.value||'').toLowerCase();
   const rows=mediaItems.filter(x=>!q||x.name.toLowerCase().includes(q)).slice(0,1000);
-  $('#mediaGrid').innerHTML=rows.map(m=>`<article class=posterCard>${m.poster?`<img loading=lazy src="${escAttr(m.poster)}">`:'<div class=posterPlaceholder>▶</div>'}<div class=posterBody><b>${esc(m.name)}</b><small>${esc(m.year||'')} ${m.rating?'· '+esc(m.rating):''}</small><div class=row><button class=btn onclick='playMovie(${JSON.stringify(m.id)},${JSON.stringify(m.name)})'>Play</button><button class=btn onclick='movieDetails(${JSON.stringify(m.id)})'>Info</button><button class=btn onclick='downloadMovie(${JSON.stringify(m.id)},${JSON.stringify(m.name)})'>↓</button></div></div></article>`).join('');
+  $('#mediaGrid').innerHTML=rows.map(m=>`<article class=posterCard>${m.poster?`<img loading=lazy src="${escAttr(m.poster)}">`:'<div class=posterPlaceholder>▶</div>'}<div class=posterBody><b>${esc(m.name)}</b><small>${esc(m.year||'')} ${m.rating?'· '+esc(m.rating):''}</small><div class=row><button class=btn onclick='playMovie(${JSON.stringify(m.id)},${JSON.stringify(m.name)})'>Play</button><button class=btn onclick='movieDetails(${JSON.stringify(m.id)})'>Info</button><button class=btn onclick='toggleMovieFavourite(${JSON.stringify(m.id)});renderMovies()'>${isMovieFavourite(m.id)?'★':'☆'}</button><button class=btn onclick='downloadMovie(${JSON.stringify(m.id)},${JSON.stringify(m.name)})'>↓</button></div></div></article>`).join('');
 }
 
+function movieMeta(id){
+  const m=mediaItems.find(x=>String(x.id)===String(id))||{};
+  return {id:'movie:'+currentProvider+':'+id,title:m.name||'Movie',providerId:currentProvider,mediaType:'movie',mediaId:String(id),extension:m.extension||'',poster:m.poster||''};
+}
+function isMovieFavourite(id){return isMediaFav(movieMeta(id))}
+function toggleMovieFavourite(id){toggleMediaFav(movieMeta(id))}
 function movieDetails(id){
   const m=mediaItems.find(x=>String(x.id)===String(id));if(!m)return;$('#movieDetail')?.remove();
   const grid=$('#mediaGrid');grid.insertAdjacentHTML('beforebegin',`<div id=movieDetail class=mediaDetail>${m.poster?`<img src="${escAttr(m.poster)}">`:''}<div><button class=btn onclick="$('#movieDetail').remove()">← Back</button><h2>${esc(m.name)}</h2><p class=muted>${esc([m.year,m.genre,m.rating&&('★ '+m.rating)].filter(Boolean).join(' · '))}</p><p>${esc(m.plot||'No description available.')}</p><div class=row><button class=btn onclick='playMovie(${JSON.stringify(m.id)},${JSON.stringify(m.name)})'>▶ Play</button><button class=btn onclick='downloadMovie(${JSON.stringify(m.id)},${JSON.stringify(m.name)})'>↓ Download</button></div></div></div>`);$('#movieDetail').scrollIntoView({behavior:'smooth'});
@@ -543,8 +635,14 @@ async function loadSeries(){
 }
 function filterSeries(){
   const q=($('#seriesq')?.value||'').toLowerCase(),rows=seriesItems.filter(x=>!q||x.name.toLowerCase().includes(q)).slice(0,1000);
-  $('#seriesContent').innerHTML=`<div class=posterGrid>${rows.map(s=>`<button class="posterCard seriesButton" onclick="openSeries('${escAttr(s.id)}')">${s.poster?`<img loading=lazy src="${escAttr(s.poster)}">`:'<div class=posterPlaceholder>▦</div>'}<div class=posterBody><b>${esc(s.name)}</b><small>${esc(s.year||'')} ${s.rating?'· ★ '+esc(s.rating):''}</small><small>${esc(s.genre||'')}</small></div></button>`).join('')}</div>`;
+  $('#seriesContent').innerHTML=`<div class=posterGrid>${rows.map(s=>`<button class="posterCard seriesButton" onclick="openSeries('${escAttr(s.id)}')">${s.poster?`<img loading=lazy src="${escAttr(s.poster)}">`:'<div class=posterPlaceholder>▦</div>'}<div class=posterBody><b>${esc(s.name)}</b><small>${esc(s.year||'')} ${s.rating?'· ★ '+esc(s.rating):''}</small><small>${esc(s.genre||'')}</small><span class=mediaFavStar onclick='event.stopPropagation();toggleSeriesFavourite(${JSON.stringify(s.id)});renderSeries()'>${isSeriesFavourite(s.id)?'★':'☆'}</span></div></button>`).join('')}</div>`;
 }
+function seriesMeta(id){
+  const s=seriesItems.find(x=>String(x.id)===String(id))||{};
+  return {id:'series:'+currentProvider+':'+id,title:s.name||'Series',providerId:currentProvider,mediaType:'series',mediaId:String(id),poster:s.poster||''};
+}
+function isSeriesFavourite(id){return isMediaFav(seriesMeta(id))}
+function toggleSeriesFavourite(id){toggleMediaFav(seriesMeta(id))}
 async function openSeries(id){
   $('#seriesContent').innerHTML='<div class=card>Loading episodes…</div>';
   try{

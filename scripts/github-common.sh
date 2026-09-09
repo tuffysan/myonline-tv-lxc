@@ -1,3 +1,12 @@
+
+release_asset_error() {
+  local ref="$1"
+  local name="$2"
+  echo "ERROR: GitHub release ${ref} exists, but required asset '${name}' is missing." >&2
+  echo "Open GitHub -> Actions -> Release and verify the workflow completed successfully." >&2
+  echo "A valid release must contain the prebuilt linux-x64 archive, source archive, SHA256SUMS-RELEASE.txt and release.json." >&2
+}
+
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -53,12 +62,12 @@ download_release_artifact() {
 
   local base="https://github.com/${repo}/releases/download/${ref}"
   echo "Downloading prebuilt ${name}..." >&2
-  if ! curl -fL --retry 3 "${base}/${name}" -o "${target}/${name}"; then
+  if ! curl -fL --retry 3 "${base}/${name}" -o "${target}/${name}" || { release_asset_error "${ref}" "${name}"; return 1; }; then
     echo "ERROR: Release ${ref} exists but prebuilt artifact ${name} was not found." >&2
     echo "Check GitHub Actions -> Release and confirm the build completed successfully." >&2
     return 1
   fi
-  if ! curl -fL --retry 3 "${base}/${sums}" -o "${target}/${sums}"; then
+  if ! curl -fL --retry 3 "${base}/${sums}" -o "${target}/${sums}" || { release_asset_error "${ref}" "${sums}"; return 1; }; then
     echo "ERROR: Release checksum file ${sums} was not found for ${ref}." >&2
     return 1
   fi

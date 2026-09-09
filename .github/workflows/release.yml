@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -13,24 +14,43 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout tagged commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Validate tag matches VERSION
+      - name: Read VERSION
+        id: version
         shell: bash
         run: |
+          set -euo pipefail
           VERSION="$(tr -d '[:space:]' < VERSION)"
+          test -n "${VERSION}"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "VERSION=${VERSION}"
+
+      - name: Validate tag matches VERSION
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${GITHUB_REF_NAME}"
           CANONICAL="v${VERSION}"
           LEGACY="v.${VERSION}"
-          if [[ "${GITHUB_REF_NAME}" != "${CANONICAL}" && "${GITHUB_REF_NAME}" != "${LEGACY}" ]]; then
-            echo "Tag ${GITHUB_REF_NAME} does not match VERSION ${VERSION}."
-            echo "Use ${CANONICAL} (preferred) or ${LEGACY} (legacy-compatible)."
+
+          if [[ "${TAG}" != "${CANONICAL}" && "${TAG}" != "${LEGACY}" ]]; then
+            echo "::error::Tag '${TAG}' does not match VERSION '${VERSION}'."
+            echo "::error::Use '${CANONICAL}' (preferred) or '${LEGACY}' (legacy-compatible)."
             exit 1
           fi
-          echo "Release tag accepted: ${GITHUB_REF_NAME}"
+
+          echo "Accepted release tag: ${TAG}"
 
       - name: Validate scripts and frontend
         shell: bash
         run: |
+          set -euo pipefail
           find . -name '*.sh' -print0 | xargs -0 -n1 bash -n
           node --check app/wwwroot/app.js
 
@@ -39,18 +59,23 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Restore
+        run: dotnet restore app/MyOnlineTV.Web.csproj
+
       - name: Build
-        run: dotnet build app/MyOnlineTV.Web.csproj -c Release
+        run: dotnet build app/MyOnlineTV.Web.csproj -c Release --no-restore
 
       - name: Publish linux-x64
         shell: bash
         run: |
+          set -euo pipefail
           rm -rf dist
           mkdir -p dist/publish
           dotnet publish app/MyOnlineTV.Web.csproj \
             -c Release \
             -r linux-x64 \
             --self-contained false \
+            --no-restore \
             -o dist/publish
 
       - name: Create release artifacts
@@ -58,14 +83,12 @@ jobs:
         run: |
           set -euo pipefail
 
-          VERSION="$(tr -d '[:space:]' < VERSION)"
+          VERSION="${{ steps.version.outputs.version }}"
           APP="myonline-tv-web-v${VERSION}-linux-x64.tar.gz"
           SRC="myonline-tv-lxc-v${VERSION}-source.tar.gz"
 
           rm -f "${APP}" "${SRC}" SHA256SUMS-RELEASE.txt
 
-          # Build archives outside the repository tree.
-          # This avoids GNU tar seeing its own output file change while reading ".".
           tar -C dist/publish -czf "/tmp/${APP}" .
 
           tar \
@@ -80,30 +103,54 @@ jobs:
           mv "/tmp/${APP}" .
           mv "/tmp/${SRC}" .
 
-          sha256sum "${APP}" "${SRC}" > SHA256SUMS-RELEASE.txt
+          sha256sum "${APP}" "${SRC}" release.json > SHA256SUMS-RELEASE.txt
+
+          echo "Created:"
+          ls -lh "${APP}" "${SRC}" SHA256SUMS-RELEASE.txt release.json
 
       - name: Verify release artifacts
         shell: bash
         run: |
           set -euo pipefail
-          VERSION="$(tr -d '[:space:]' < VERSION)"
-          test -s "myonline-tv-web-v${VERSION}-linux-x64.tar.gz"
-          test -s "myonline-tv-lxc-v${VERSION}-source.tar.gz"
+
+          VERSION="${{ steps.version.outputs.version }}"
+          APP="myonline-tv-web-v${VERSION}-linux-x64.tar.gz"
+          SRC="myonline-tv-lxc-v${VERSION}-source.tar.gz"
+
+          test -s "${APP}"
+          test -s "${SRC}"
           test -s "SHA256SUMS-RELEASE.txt"
           test -s "release.json"
 
-          grep "  myonline-tv-web-v${VERSION}-linux-x64.tar.gz$" SHA256SUMS-RELEASE.txt
-          grep "  myonline-tv-lxc-v${VERSION}-source.tar.gz$" SHA256SUMS-RELEASE.txt
+          grep "  ${APP}$" SHA256SUMS-RELEASE.txt
+          grep "  ${SRC}$" SHA256SUMS-RELEASE.txt
+          grep "  release.json$" SHA256SUMS-RELEASE.txt
 
-          tar -tzf "myonline-tv-web-v${VERSION}-linux-x64.tar.gz" >/dev/null
-          tar -tzf "myonline-tv-lxc-v${VERSION}-source.tar.gz" >/dev/null
+          tar -tzf "${APP}" >/dev/null
+          tar -tzf "${SRC}" >/dev/null
 
-      - name: Create GitHub Release
+          VERSION_IN_JSON="$(python3 -c 'import json; print(json.load(open("release.json"))["version"])')"
+          test "${VERSION_IN_JSON}" = "${VERSION}"
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          fail_on_unmatched_files: true
           files: |
-            myonline-tv-web-v*-linux-x64.tar.gz
-            myonline-tv-lxc-v*-source.tar.gz
+            myonline-tv-web-v${{ steps.version.outputs.version }}-linux-x64.tar.gz
+            myonline-tv-lxc-v${{ steps.version.outputs.version }}-source.tar.gz
+            SHA256SUMS-RELEASE.txt
+            release.json
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: myonline-tv-v${{ steps.version.outputs.version }}
+          if-no-files-found: error
+          path: |
+            myonline-tv-web-v${{ steps.version.outputs.version }}-linux-x64.tar.gz
+            myonline-tv-lxc-v${{ steps.version.outputs.version }}-source.tar.gz
             SHA256SUMS-RELEASE.txt
             release.json
