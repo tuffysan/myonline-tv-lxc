@@ -1,13 +1,18 @@
 # Changelog
 
-## v0.3.15
+## v0.3.16
+- Release re-spin of v0.3.15 so a clean GitHub Release can be created.
+- Same Live TV direct provider/channel playback flow as v0.3.15.
+- Version and release metadata updated to 0.3.16.
+
+## v0.3.16
 - Fixed Live TV playback start by removing the temporary in-memory live proxy token hop.
 - `/api/live/start/{providerId}/{channelKey}` now resolves the channel directly from the server-side provider cache and starts FFmpeg from its protected source URL.
 - Fixed TV Guide playback to pass the channel key instead of the removed `playToken` field.
 - Keeps provider credentials and source stream URLs server-side.
 - Preserves asynchronous FFmpeg/HLS startup and compatibility-transcoding fallback from v0.3.14.
 
-## v0.3.15
+## v0.3.16
 
 - Fixed Live TV channel-list requests timing out at the internal Nginx reverse proxy.
 - Added a 10-minute per-provider channel cache; stale channel data is served immediately while refresh runs in the background.
