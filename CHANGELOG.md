@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.7 — HTTPS reverse-proxy / forwarded-header fix
+
+- Fixed `Cross-origin state-changing requests are not allowed` when MyOnline TV is published through an HTTPS reverse proxy such as Nginx Proxy Manager.
+- ASP.NET Core now processes `X-Forwarded-For`, `X-Forwarded-Proto`, and `X-Forwarded-Host` before authentication and same-origin checks.
+- Forwarded headers are trusted only from the local loopback proxy (the Nginx instance in the MyOnline TV LXC).
+- The internal Nginx now preserves the upstream `X-Forwarded-Proto` value so an external HTTPS request remains `https` from the application's point of view.
+- The internal Nginx also forwards `X-Forwarded-Host`.
+- Kestrel now binds only to `127.0.0.1:5080` instead of `0.0.0.0:5080`, so the ASP.NET port is no longer directly exposed on the LAN.
+- Added an installer check that exercises forwarded HTTPS headers through the local Nginx path.
+- Keeps the v0.3.6 data-permission and health-flow fixes and all earlier installer/release fixes.
+
 ## 0.3.6 — Data permissions and health-check flow fix
 
 - Fixed backend startup failures caused by `/var/lib/myonlinetv` being owned by `root:root` while `myonlinetv.service` runs as `www-data`.

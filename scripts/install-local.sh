@@ -235,7 +235,11 @@ server {
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
+    # Preserve the original external scheme from an upstream reverse proxy
+    # (for example Nginx Proxy Manager terminating HTTPS). For direct LAN
+    # HTTP access this header may be empty, in which case ASP.NET keeps http.
+    proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+    proxy_set_header X-Forwarded-Host $host;
 
     location / {
         proxy_pass http://127.0.0.1:5080;
@@ -295,6 +299,16 @@ if curl -fsS http://127.0.0.1/ | grep -qi "Welcome to nginx"; then
     nginx -T 2>/dev/null | grep -n "default_server" || true
     exit 1
 fi
+'
+
+
+echo "Checking forwarded HTTPS headers through Nginx..."
+pct exec "$CTID" -- bash -lc '
+set -e
+curl -fsS \
+  -H "Host: tv.example.invalid" \
+  -H "X-Forwarded-Proto: https" \
+  http://127.0.0.1/health >/tmp/myonlinetv-forwarded-health.out
 '
 
 echo "============================================================"
