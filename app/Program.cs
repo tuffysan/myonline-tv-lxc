@@ -82,13 +82,17 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.4.0");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.4.2");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
 var downloads = new ConcurrentDictionary<string, DownloadJob>();
 var liveSessions = new ConcurrentDictionary<string, LiveSession>();
 var channelCache = new ConcurrentDictionary<string, ChannelCacheEntry>();
+var vodCategoryCache = new ConcurrentDictionary<string, TimedJsonCache>();
+var vodItemCache = new ConcurrentDictionary<string, TimedJsonCache>();
+var seriesCategoryCache = new ConcurrentDictionary<string, TimedJsonCache>();
+var seriesItemCache = new ConcurrentDictionary<string, TimedJsonCache>();
 var channelLocks = new ConcurrentDictionary<string, SemaphoreSlim>();
 var liveHlsRoot = Path.Combine(dataDir, "live-hls");
 Directory.CreateDirectory(liveHlsRoot);
@@ -254,7 +258,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "0.4.0",
+    version = "0.4.2",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -292,14 +296,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = File.Exists(adminFile);
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "0.4.0", checks })
-        : Results.Json(new { status = "not-ready", version = "0.4.0", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "0.4.2", checks })
+        : Results.Json(new { status = "not-ready", version = "0.4.2", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "0.4.0",
+    version = "0.4.2",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = File.Exists(adminFile),
@@ -400,6 +404,9 @@ app.MapPost("/api/providers", (ProviderInput input) =>
     if (idx >= 0) list[idx] = stored; else list.Add(stored);
     Save(providersFile, list);
     channelCache.TryRemove(id, out _);
+    foreach (var key in vodItemCache.Keys.Where(k => k.StartsWith(id + ":", StringComparison.Ordinal))) vodItemCache.TryRemove(key, out _);
+    foreach (var key in seriesItemCache.Keys.Where(k => k.StartsWith(id + ":", StringComparison.Ordinal))) seriesItemCache.TryRemove(key, out _);
+    vodCategoryCache.TryRemove(id, out _); seriesCategoryCache.TryRemove(id, out _);
 
     return Results.Ok(new { stored.Id, stored.Name, stored.Type });
 }).RequireAuthorization();
@@ -553,7 +560,11 @@ app.MapGet("/api/epg/{providerId}", async (string providerId, int? hours, DateTi
         .Take(30000);
         return Results.Ok(programs);
     }
-    catch (Exception ex) { return Results.Problem(ex.Message); }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Xtream catalogue request failed.");
+        return Results.Problem(detail: SafeProviderError(ex), statusCode: StatusCodes.Status502BadGateway);
+    }
 }).RequireAuthorization();
 
 app.MapGet("/api/vod/{providerId}/categories", async (string providerId) =>
@@ -562,14 +573,19 @@ app.MapGet("/api/vod/{providerId}/categories", async (string providerId) =>
     if (resolved is null) return Results.NotFound();
     try
     {
-        using var doc = await XtreamJson(resolved.Value.Connection, "get_vod_categories", TimeSpan.FromSeconds(30));
+        using var doc = await CachedXtreamJson(vodCategoryCache, providerId, resolved.Value.Connection,
+            "get_vod_categories", TimeSpan.FromSeconds(12));
         return Results.Ok(doc.RootElement.EnumerateArray().Select(x => new
         {
             id = JsonString(x, "category_id"),
             name = JsonString(x, "category_name")
         }).ToList());
     }
-    catch (Exception ex) { return Results.Problem(ex.Message); }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Xtream catalogue request failed.");
+        return Results.Problem(detail: SafeProviderError(ex), statusCode: StatusCodes.Status502BadGateway);
+    }
 }).RequireAuthorization();
 
 app.MapGet("/api/vod/{providerId}/items", async (string providerId, string? categoryId) =>
@@ -579,7 +595,9 @@ app.MapGet("/api/vod/{providerId}/items", async (string providerId, string? cate
     try
     {
         (string Key, string Value)? extra = string.IsNullOrWhiteSpace(categoryId) ? null : ("category_id", categoryId!);
-        using var doc = await XtreamJson(resolved.Value.Connection, "get_vod_streams", TimeSpan.FromSeconds(30), extra);
+        var cacheKey = providerId + ":" + (categoryId ?? "");
+        using var doc = await CachedXtreamJson(vodItemCache, cacheKey, resolved.Value.Connection,
+            "get_vod_streams", TimeSpan.FromSeconds(20), extra);
         var rows = new List<object>();
         foreach (var x in doc.RootElement.EnumerateArray().Take(5000))
         {
@@ -601,7 +619,11 @@ app.MapGet("/api/vod/{providerId}/items", async (string providerId, string? cate
         }
         return Results.Ok(rows);
     }
-    catch (Exception ex) { return Results.Problem(ex.Message); }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Xtream catalogue request failed.");
+        return Results.Problem(detail: SafeProviderError(ex), statusCode: StatusCodes.Status502BadGateway);
+    }
 }).RequireAuthorization();
 
 app.MapGet("/api/series/{providerId}/categories", async (string providerId) =>
@@ -610,14 +632,19 @@ app.MapGet("/api/series/{providerId}/categories", async (string providerId) =>
     if (resolved is null) return Results.NotFound();
     try
     {
-        using var doc = await XtreamJson(resolved.Value.Connection, "get_series_categories", TimeSpan.FromSeconds(30));
+        using var doc = await CachedXtreamJson(seriesCategoryCache, providerId, resolved.Value.Connection,
+            "get_series_categories", TimeSpan.FromSeconds(12));
         return Results.Ok(doc.RootElement.EnumerateArray().Select(x => new
         {
             id = JsonString(x, "category_id"),
             name = JsonString(x, "category_name")
         }).ToList());
     }
-    catch (Exception ex) { return Results.Problem(ex.Message); }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Xtream catalogue request failed.");
+        return Results.Problem(detail: SafeProviderError(ex), statusCode: StatusCodes.Status502BadGateway);
+    }
 }).RequireAuthorization();
 
 app.MapGet("/api/series/{providerId}/items", async (string providerId, string? categoryId) =>
@@ -627,7 +654,9 @@ app.MapGet("/api/series/{providerId}/items", async (string providerId, string? c
     try
     {
         (string Key, string Value)? extra = string.IsNullOrWhiteSpace(categoryId) ? null : ("category_id", categoryId!);
-        using var doc = await XtreamJson(resolved.Value.Connection, "get_series", TimeSpan.FromSeconds(30), extra);
+        var cacheKey = providerId + ":" + (categoryId ?? "");
+        using var doc = await CachedXtreamJson(seriesItemCache, cacheKey, resolved.Value.Connection,
+            "get_series", TimeSpan.FromSeconds(20), extra);
         var rows = doc.RootElement.EnumerateArray().Take(5000).Select(x => new
         {
             id = JsonString(x, "series_id"),
@@ -640,7 +669,11 @@ app.MapGet("/api/series/{providerId}/items", async (string providerId, string? c
         }).ToList();
         return Results.Ok(rows);
     }
-    catch (Exception ex) { return Results.Problem(ex.Message); }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Xtream catalogue request failed.");
+        return Results.Problem(detail: SafeProviderError(ex), statusCode: StatusCodes.Status502BadGateway);
+    }
 }).RequireAuthorization();
 
 app.MapGet("/api/series/{providerId}/{seriesId}", async (string providerId, string seriesId) =>
@@ -649,7 +682,8 @@ app.MapGet("/api/series/{providerId}/{seriesId}", async (string providerId, stri
     if (resolved is null) return Results.NotFound();
     try
     {
-        using var doc = await XtreamJson(resolved.Value.Connection, "get_series_info", TimeSpan.FromSeconds(30), ("series_id", seriesId));
+        using var doc = await XtreamJson(resolved.Value.Connection, "get_series_info",
+            TimeSpan.FromSeconds(20), ("series_id", seriesId));
         var root = doc.RootElement;
         var info = root.TryGetProperty("info", out var i) ? i : default;
         var episodes = new List<object>();
@@ -1015,7 +1049,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "0.4.0",
+        version = "0.4.2",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -1249,13 +1283,42 @@ async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, TimeSpa
     var url = BuildXtreamPlayerApiUrl(c, action, extra);
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.4.0");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.4.2");
     using var cts = new CancellationTokenSource(timeout);
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
         throw new HttpRequestException($"Provider returned HTTP {(int)response.StatusCode} {response.ReasonPhrase}".Trim());
-    await using var stream = await response.Content.ReadAsStreamAsync(cts.Token);
-    return await JsonDocument.ParseAsync(stream, cancellationToken: cts.Token);
+    var text = await response.Content.ReadAsStringAsync(cts.Token);
+    if (string.IsNullOrWhiteSpace(text))
+        throw new InvalidOperationException($"Provider returned an empty response for {action}.");
+    try
+    {
+        return JsonDocument.Parse(text);
+    }
+    catch (JsonException ex)
+    {
+        var preview = Regex.Replace(text, @"\\s+", " ").Trim();
+        if (preview.Length > 180) preview = preview[..180];
+        throw new InvalidOperationException($"Provider returned invalid JSON for {action}: {preview}", ex);
+    }
+}
+
+async Task<JsonDocument> CachedXtreamJson(
+    ConcurrentDictionary<string, TimedJsonCache> cache,
+    string key,
+    ProviderConnection connection,
+    string action,
+    TimeSpan timeout,
+    (string Key, string Value)? extra = null)
+{
+    if (cache.TryGetValue(key, out var hit) &&
+        DateTimeOffset.UtcNow - hit.Loaded < TimeSpan.FromMinutes(10))
+        return JsonDocument.Parse(hit.Json);
+
+    using var doc = await XtreamJson(connection, action, timeout, extra);
+    var json = doc.RootElement.GetRawText();
+    cache[key] = new TimedJsonCache(json, DateTimeOffset.UtcNow);
+    return JsonDocument.Parse(json);
 }
 
 async Task<List<LiveChannel>> GetCachedChannels(ProviderStored p)
@@ -1359,7 +1422,7 @@ async Task<List<LiveChannel>> LoadM3uChannels(string url)
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/x-mpegURL,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.4.0");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.4.2");
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -1378,7 +1441,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.4.0");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.4.2");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }
@@ -1698,3 +1761,5 @@ sealed class SecretBox
         return Encoding.UTF8.GetString(plain);
     }
 }
+
+record TimedJsonCache(string Json, DateTimeOffset Loaded);

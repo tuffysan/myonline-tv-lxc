@@ -248,7 +248,6 @@ async function playLive(channelKey,name,forceTranscode=false){
   wrap.innerHTML=`<div class="playerCard livePlayer"><video id=video controls autoplay playsinline></video>${liveOverlay(selected)}
     <div class="liveControls"><button class=btn onclick="stepLiveChannel(-1)">← Previous</button><button class=btn onclick="stepLiveChannel(1)">Next →</button><button class=btn onclick="toggleLiveFullscreen()">⛶ Fullscreen</button></div>
     <div id=livePlaybackStatus class=livePlaybackStatus>Connecting to channel…</div><div class=nowPlaying>${esc(name)}</div></div>`;
-  if(mediaId){let last=-1;const save=()=>{const sec=Math.floor(video.currentTime||0);if(sec===last)return;last=sec;jpost('/api/continue',{id:String(mediaId),title:name,url,positionSeconds:sec,updated:new Date().toISOString()}).catch(()=>{})};video.addEventListener('timeupdate',()=>{if(Math.floor(video.currentTime)%15===0)save()});video.addEventListener('pause',save);video.addEventListener('ended',save)}
   wrap.scrollIntoView({behavior:'smooth',block:'start'});
   try{
     const info=await api('/api/live/start/'+encodeURIComponent(currentProvider)+'/'+encodeURIComponent(channelKey)+(forceTranscode?'?transcode=true':''),{method:'POST'});
@@ -309,6 +308,18 @@ function playMedia(url,name,mediaId=null){
   if(!wrap)return;
   wrap.innerHTML=`<div class=playerCard><video id=video controls autoplay playsinline></video><div class=nowPlaying>${esc(name)}</div></div>`;
   const video=$('#video');
+  if(mediaId){
+    let last=-1;
+    const save=()=>{
+      const sec=Math.floor(video.currentTime||0);
+      if(sec===last)return;
+      last=sec;
+      jpost('/api/continue',{id:String(mediaId),title:name,url,positionSeconds:sec,updated:new Date().toISOString()}).catch(()=>{});
+    };
+    video.addEventListener('timeupdate',()=>{if(Math.floor(video.currentTime)%15===0)save()});
+    video.addEventListener('pause',save);
+    video.addEventListener('ended',save);
+  }
   if(window.Hls&&Hls.isSupported()){
     hls=new Hls({enableWorker:true,lowLatencyMode:true});
     hls.loadSource(url);hls.attachMedia(video);
@@ -380,7 +391,11 @@ async function movies(){
 }
 let mediaItems=[];
 async function loadMovies(){
-  mediaItems=await api(`/api/vod/${currentProvider}/items?categoryId=${encodeURIComponent($('#category')?.value||'')}`);filterMedia();
+  const grid=$('#mediaGrid');if(grid)grid.innerHTML='<div class=card>Loading movies…</div>';
+  try{
+    mediaItems=await api(`/api/vod/${currentProvider}/items?categoryId=${encodeURIComponent($('#category')?.value||'')}`);
+    filterMedia();
+  }catch(e){if(grid)grid.innerHTML=errorCard(e)}
 }
 function filterMedia(){
   const q=($('#mediaq')?.value||'').toLowerCase();
@@ -405,7 +420,13 @@ async function series(){
   }catch(e){content.innerHTML=errorCard(e)}
 }
 let seriesItems=[];
-async function loadSeries(){seriesItems=await api(`/api/series/${currentProvider}/items?categoryId=${encodeURIComponent($('#category')?.value||'')}`);filterSeries()}
+async function loadSeries(){
+  const box=$('#seriesContent');if(box)box.innerHTML='<div class=card>Loading series…</div>';
+  try{
+    seriesItems=await api(`/api/series/${currentProvider}/items?categoryId=${encodeURIComponent($('#category')?.value||'')}`);
+    filterSeries();
+  }catch(e){if(box)box.innerHTML=errorCard(e)}
+}
 function filterSeries(){
   const q=($('#seriesq')?.value||'').toLowerCase(),rows=seriesItems.filter(x=>!q||x.name.toLowerCase().includes(q)).slice(0,1000);
   $('#seriesContent').innerHTML=`<div class=posterGrid>${rows.map(s=>`<button class="posterCard seriesButton" onclick="openSeries('${escAttr(s.id)}')">${s.poster?`<img loading=lazy src="${escAttr(s.poster)}">`:'<div class=posterPlaceholder>▦</div>'}<div class=posterBody><b>${esc(s.name)}</b><small>${esc(s.year||'')} ${s.rating?'· ★ '+esc(s.rating):''}</small><small>${esc(s.genre||'')}</small></div></button>`).join('')}</div>`;
