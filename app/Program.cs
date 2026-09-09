@@ -66,6 +66,8 @@ Directory.CreateDirectory(dataDir);
 var providersFile = Path.Combine(dataDir, "providers.json");
 var favouritesFile = Path.Combine(dataDir, "favourites.json");
 var continueFile = Path.Combine(dataDir, "continue-watching.json");
+var channelPreferencesFile = Path.Combine(dataDir, "channel-preferences.json");
+var profilesFile = Path.Combine(dataDir, "profiles.json");
 var adminFile = Path.Combine(dataDir, "admin.json");
 var secretKeyFile = Path.Combine(dataDir, "secrets.key");
 var downloadsDir = Path.Combine(dataDir, "downloads");
@@ -80,7 +82,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.3.17");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.4.0");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
@@ -143,6 +145,23 @@ ProviderConnection Connection(ProviderStored p)
 
 HashSet<string> LoadFavourites() => Load<HashSet<string>>(favouritesFile) ?? new(StringComparer.OrdinalIgnoreCase);
 List<ContinueItem> LoadContinue() => Load<List<ContinueItem>>(continueFile) ?? new();
+List<ViewerProfile> LoadProfiles()
+{
+    var rows = Load<List<ViewerProfile>>(profilesFile);
+    if (rows is { Count: > 0 }) return rows;
+    var defaults = new List<ViewerProfile> { new("default", "Main", false, "👤") };
+    Save(profilesFile, defaults);
+    return defaults;
+}
+Dictionary<string, ChannelPreferences> LoadChannelPreferences() => Load<Dictionary<string, ChannelPreferences>>(channelPreferencesFile) ?? new(StringComparer.OrdinalIgnoreCase);
+ChannelPreferences PreferencesFor(string providerId)
+{
+    var all = LoadChannelPreferences();
+    return all.TryGetValue(providerId, out var pref)
+        ? pref
+        : new ChannelPreferences(new(StringComparer.OrdinalIgnoreCase), new(StringComparer.OrdinalIgnoreCase), new(StringComparer.OrdinalIgnoreCase));
+}
+
 
 string RegisterProxy(string url, string kind = "media")
 {
@@ -235,7 +254,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "0.3.17",
+    version = "0.4.0",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -273,14 +292,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = File.Exists(adminFile);
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "0.3.17", checks })
-        : Results.Json(new { status = "not-ready", version = "0.3.17", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "0.4.0", checks })
+        : Results.Json(new { status = "not-ready", version = "0.4.0", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "0.3.17",
+    version = "0.4.0",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = File.Exists(adminFile),
@@ -502,7 +521,7 @@ app.MapGet("/api/providers/{providerId}/test", async (string providerId) =>
     }
 }).RequireAuthorization();
 
-app.MapGet("/api/epg/{providerId}", async (string providerId, int? hours) =>
+app.MapGet("/api/epg/{providerId}", async (string providerId, int? hours, DateTimeOffset? start) =>
 {
     var p = LoadProviders().FirstOrDefault(x => x.Id == providerId);
     if (p is null) return Results.NotFound();
@@ -516,10 +535,10 @@ app.MapGet("/api/epg/{providerId}", async (string providerId, int? hours) =>
     {
         using var stream = await http.GetStreamAsync(epgUrl);
         var doc = XDocument.Load(stream);
-        var now = DateTimeOffset.Now;
+        var anchorTime = start ?? DateTimeOffset.Now;
         var span = Math.Clamp(hours ?? 6, 2, 24);
-        var startWindow = now.AddHours(-1);
-        var endWindow = now.AddHours(span);
+        var startWindow = anchorTime.AddMinutes(-30);
+        var endWindow = anchorTime.AddHours(span);
         var programs = doc.Descendants("programme").Select(x => new
         {
             channel = (string?)x.Attribute("channel") ?? "",
@@ -573,6 +592,8 @@ app.MapGet("/api/vod/{providerId}/items", async (string providerId, string? cate
                 name = JsonString(x, "name"),
                 year = JsonString(x, "year"),
                 rating = JsonString(x, "rating"),
+                plot = JsonString(x, "plot"),
+                genre = JsonString(x, "genre"),
                 poster = ProxyArtwork(JsonString(x, "stream_icon")),
                 playUrl = ProxyUrl(source),
                 downloadToken = RegisterProxy(source, "download")
@@ -613,6 +634,8 @@ app.MapGet("/api/series/{providerId}/items", async (string providerId, string? c
             name = JsonString(x, "name"),
             year = JsonString(x, "year"),
             rating = JsonString(x, "rating"),
+            plot = JsonString(x, "plot"),
+            genre = JsonString(x, "genre"),
             poster = ProxyArtwork(JsonString(x, "cover"))
         }).ToList();
         return Results.Ok(rows);
@@ -661,6 +684,50 @@ app.MapGet("/api/series/{providerId}/{seriesId}", async (string providerId, stri
         });
     }
     catch (Exception ex) { return Results.Problem(ex.Message); }
+}).RequireAuthorization();
+
+app.MapGet("/api/profiles", () => Results.Ok(LoadProfiles())).RequireAuthorization();
+app.MapPost("/api/profiles", (ViewerProfileInput req) =>
+{
+    var rows = LoadProfiles();
+    var id = string.IsNullOrWhiteSpace(req.Id) ? Guid.NewGuid().ToString("N") : req.Id;
+    var name = (req.Name ?? "Profile").Trim();
+    if (name.Length == 0) name = "Profile";
+    if (name.Length > 40) name = name[..40];
+    var icon = string.IsNullOrWhiteSpace(req.Icon) ? "👤" : req.Icon!;
+    var row = new ViewerProfile(id, name, req.IsKids, icon);
+    rows.RemoveAll(x => x.Id == id); rows.Add(row); Save(profilesFile, rows.Take(12).ToList()); return Results.Ok(row);
+}).RequireAuthorization();
+app.MapDelete("/api/profiles/{id}", (string id) =>
+{
+    var rows = LoadProfiles();
+    if (rows.Count <= 1) return Results.BadRequest("At least one profile is required.");
+    rows.RemoveAll(x => x.Id == id); Save(profilesFile, rows); return Results.NoContent();
+}).RequireAuthorization();
+
+app.MapGet("/api/channel-preferences/{providerId}", (string providerId) => Results.Ok(PreferencesFor(providerId))).RequireAuthorization();
+app.MapPost("/api/channel-preferences/{providerId}/group", (string providerId, GroupVisibilityRequest req) =>
+{
+    var all = LoadChannelPreferences();
+    var pref = all.TryGetValue(providerId, out var existing) ? existing : new ChannelPreferences(new(StringComparer.OrdinalIgnoreCase), new(StringComparer.OrdinalIgnoreCase), new(StringComparer.OrdinalIgnoreCase));
+    if (req.Hidden) pref.HiddenGroups.Add(req.Group); else pref.HiddenGroups.Remove(req.Group);
+    all[providerId] = pref; Save(channelPreferencesFile, all); return Results.Ok(pref);
+}).RequireAuthorization();
+app.MapPost("/api/channel-preferences/{providerId}/channel", (string providerId, ChannelPreferenceRequest req) =>
+{
+    var all = LoadChannelPreferences();
+    var pref = all.TryGetValue(providerId, out var existing) ? existing : new ChannelPreferences(new(StringComparer.OrdinalIgnoreCase), new(StringComparer.OrdinalIgnoreCase), new(StringComparer.OrdinalIgnoreCase));
+    if (req.Hidden) pref.HiddenChannels.Add(req.ChannelKey); else pref.HiddenChannels.Remove(req.ChannelKey);
+    if (req.Alias is not null)
+    {
+        var alias = req.Alias.Trim();
+        if (alias.Length == 0) pref.Aliases.Remove(req.ChannelKey); else pref.Aliases[req.ChannelKey] = alias[..Math.Min(alias.Length, 120)];
+    }
+    all[providerId] = pref; Save(channelPreferencesFile, all); return Results.Ok(pref);
+}).RequireAuthorization();
+app.MapPost("/api/channel-preferences/{providerId}/reset", (string providerId) =>
+{
+    var all = LoadChannelPreferences(); all.Remove(providerId); Save(channelPreferencesFile, all); return Results.NoContent();
 }).RequireAuthorization();
 
 app.MapGet("/api/favourites", () => Results.Ok(LoadFavourites())).RequireAuthorization();
@@ -948,7 +1015,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "0.3.17",
+        version = "0.4.0",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -959,6 +1026,11 @@ app.MapGet("/api/system", () =>
         providers = LoadProviders().Count,
         downloads = downloadCount,
         backups = backupCount,
+        activeLiveStreams = liveSessions.Count,
+        channelCaches = channelCache.Count,
+        processWorkingSetBytes = Environment.WorkingSet,
+        processorCount = Environment.ProcessorCount,
+        profiles = LoadProfiles().Count,
         disk = new
         {
             totalBytes = drive.TotalSize,
@@ -1021,7 +1093,7 @@ app.MapPost("/api/system/backup", () =>
         foreach (var name in new[]
         {
             "admin.json", "secrets.key", "providers.json", "favourites.json",
-            "continue-watching.json", "version", "release.json"
+            "continue-watching.json", "channel-preferences.json", "profiles.json", "version", "release.json"
         })
         {
             var source = Path.Combine(dataDir, name);
@@ -1052,6 +1124,25 @@ app.MapGet("/api/system/backups", () =>
             created = x.CreationTimeUtc
         });
     return Results.Ok(rows);
+}).RequireAuthorization();
+
+app.MapPost("/api/system/restore/{fileName}", (string fileName) =>
+{
+    var safe = Path.GetFileName(fileName);
+    var file = Path.Combine(backupsDir, safe);
+    if (!File.Exists(file) || !safe.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)) return Results.NotFound();
+    using var archive = ZipFile.OpenRead(file);
+    var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "providers.json", "favourites.json", "continue-watching.json", "channel-preferences.json", "profiles.json"
+    };
+    foreach (var entry in archive.Entries.Where(e => allowed.Contains(e.FullName)))
+    {
+        var target = Path.Combine(dataDir, Path.GetFileName(entry.FullName));
+        entry.ExtractToFile(target, true);
+    }
+    channelCache.Clear();
+    return Results.Ok(new { restored = safe, restartRecommended = true });
 }).RequireAuthorization();
 
 app.MapFallbackToFile("index.html");
@@ -1158,7 +1249,7 @@ async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, TimeSpa
     var url = BuildXtreamPlayerApiUrl(c, action, extra);
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.3.17");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.4.0");
     using var cts = new CancellationTokenSource(timeout);
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -1268,7 +1359,7 @@ async Task<List<LiveChannel>> LoadM3uChannels(string url)
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/x-mpegURL,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.3.17");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.4.0");
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -1287,7 +1378,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.3.17");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.4.0");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }
@@ -1516,6 +1607,11 @@ record ProviderProbe(bool Ok, int? StatusCode, string Message, string ContentTyp
 record LiveChannel(string Key, string Id, string Name, string Group, string Number, string LogoUrl, string SourceUrl);
 record ChannelCacheEntry(List<LiveChannel> Channels, DateTimeOffset Loaded);
 record ContinueItem(string Id, string Title, string Url, double PositionSeconds, DateTimeOffset Updated);
+record ChannelPreferences(HashSet<string> HiddenGroups, HashSet<string> HiddenChannels, Dictionary<string,string> Aliases);
+record ViewerProfile(string Id, string Name, bool IsKids, string Icon);
+record ViewerProfileInput(string? Id, string? Name, bool IsKids, string? Icon);
+record GroupVisibilityRequest(string Group, bool Hidden);
+record ChannelPreferenceRequest(string ChannelKey, bool Hidden, string? Alias);
 record SetupRequest(string? Username, string Password);
 record LoginRequest(string Username, string Password);
 record MediaDownloadRequest(string Token, string? Title);

@@ -1,6 +1,33 @@
 # Changelog
 
-## v0.3.17
+## v0.4.0
+- Viewer profiles with profile picker and Settings management.
+- System dashboard shows active streams, profiles and app memory.
+- Backup now includes channel preferences and profiles.
+- Restore provider/channel/profile/viewing data from a server backup.
+- Includes all Guide, channel management and Movies/Series improvements from v0.3.18–v0.3.20.
+
+## v0.4.0
+- Poster-first Movies and Series presentation.
+- Movie details with plot, genre, year and rating when provided by Xtream.
+- Richer Series cards.
+- Continue Watching progress is saved during movie/episode playback.
+- Home page now has a Continue Watching rail.
+
+## v0.4.0
+- Guide windows for Now, Tonight and Tomorrow.
+- Red current-time line and current-program highlighting.
+- Programme details with Watch live action.
+- Live player stays available above the guide while browsing EPG.
+
+## v0.4.0
+- Start Live TV directly from channel rows and programme blocks in Guide.
+- Hide whole groups or individual channels.
+- Server-side channel/group preferences shared across devices.
+- Local channel aliases.
+- Settings page for managing and restoring hidden groups/channels.
+
+## v0.4.0
 - Live TV UX release.
 - Added Now/Next EPG information to channel cards and player overlay.
 - Added LIVE overlay with channel logo and clock.
@@ -11,19 +38,19 @@
 - Added clearer Connecting / Preparing / Playing / Error playback states.
 - Kept the working v0.3.16 FFmpeg/HLS playback architecture unchanged.
 
-## v0.3.17
+## v0.4.0
 - Release re-spin of v0.3.15 so a clean GitHub Release can be created.
 - Same Live TV direct provider/channel playback flow as v0.3.15.
-- Version and release metadata updated to 0.3.17.
+- Version and release metadata updated to 0.4.0.
 
-## v0.3.17
+## v0.4.0
 - Fixed Live TV playback start by removing the temporary in-memory live proxy token hop.
 - `/api/live/start/{providerId}/{channelKey}` now resolves the channel directly from the server-side provider cache and starts FFmpeg from its protected source URL.
 - Fixed TV Guide playback to pass the channel key instead of the removed `playToken` field.
 - Keeps provider credentials and source stream URLs server-side.
 - Preserves asynchronous FFmpeg/HLS startup and compatibility-transcoding fallback from v0.3.14.
 
-## v0.3.17
+## v0.4.0
 
 - Fixed Live TV channel-list requests timing out at the internal Nginx reverse proxy.
 - Added a 10-minute per-provider channel cache; stale channel data is served immediately while refresh runs in the background.
