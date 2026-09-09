@@ -80,12 +80,14 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.3.13");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.3.14");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
 var downloads = new ConcurrentDictionary<string, DownloadJob>();
 var liveSessions = new ConcurrentDictionary<string, LiveSession>();
+var channelCache = new ConcurrentDictionary<string, ChannelCacheEntry>();
+var channelLocks = new ConcurrentDictionary<string, SemaphoreSlim>();
 var liveHlsRoot = Path.Combine(dataDir, "live-hls");
 Directory.CreateDirectory(liveHlsRoot);
 
@@ -233,7 +235,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "0.3.13",
+    version = "0.3.14",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -271,14 +273,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = File.Exists(adminFile);
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "0.3.13", checks })
-        : Results.Json(new { status = "not-ready", version = "0.3.13", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "0.3.14", checks })
+        : Results.Json(new { status = "not-ready", version = "0.3.14", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "0.3.13",
+    version = "0.3.14",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = File.Exists(adminFile),
@@ -378,6 +380,7 @@ app.MapPost("/api/providers", (ProviderInput input) =>
     var idx = list.FindIndex(x => x.Id == id);
     if (idx >= 0) list[idx] = stored; else list.Add(stored);
     Save(providersFile, list);
+    channelCache.TryRemove(id, out _);
 
     return Results.Ok(new { stored.Id, stored.Name, stored.Type });
 }).RequireAuthorization();
@@ -386,7 +389,11 @@ app.MapDelete("/api/providers/{id}", (string id) =>
 {
     var list = LoadProviders();
     var changed = list.RemoveAll(x => x.Id == id) > 0;
-    if (changed) Save(providersFile, list);
+    if (changed)
+    {
+        Save(providersFile, list);
+        channelCache.TryRemove(id, out _);
+    }
     return changed ? Results.NoContent() : Results.NotFound();
 }).RequireAuthorization();
 
@@ -394,43 +401,22 @@ app.MapGet("/api/channels/{providerId}", async (string providerId) =>
 {
     var p = LoadProviders().FirstOrDefault(x => x.Id == providerId);
     if (p is null) return Results.NotFound();
+
     try
     {
-        var c = Connection(p);
-        if (p.Type == "xtream")
+        var rows = await GetCachedChannels(p);
+        return Results.Ok(rows.Select(ch => new
         {
-            try
-            {
-                var rows = await LoadXtreamLiveChannels(c);
-                return Results.Ok(rows);
-            }
-            catch (Exception apiEx)
-            {
-                app.Logger.LogWarning(apiEx,
-                    "Xtream live API failed for provider {ProviderId} host {Host}; trying M3U fallback.",
-                    p.Id, ProviderHost(p, c));
-
-                try
-                {
-                    var rows = await LoadM3uChannels(BuildXtreamM3uUrl(c));
-                    return Results.Ok(rows);
-                }
-                catch (Exception m3uEx)
-                {
-                    app.Logger.LogWarning(m3uEx,
-                        "Xtream M3U fallback failed for provider {ProviderId} host {Host}.",
-                        p.Id, ProviderHost(p, c));
-                    return Results.Problem(
-                        title: "IPTV provider rejected the Live TV request",
-                        detail: $"Xtream API: {SafeProviderError(apiEx)}; M3U fallback: {SafeProviderError(m3uEx)}",
-                        statusCode: StatusCodes.Status502BadGateway);
-                }
-            }
-        }
-
-        if (string.IsNullOrWhiteSpace(c.PlaylistUrl))
-            return Results.BadRequest("Provider has no playlist URL.");
-        return Results.Ok(await LoadM3uChannels(c.PlaylistUrl));
+            id = ch.Id,
+            key = ch.Key,
+            name = ch.Name,
+            group = ch.Group,
+            number = ch.Number,
+            logo = string.IsNullOrWhiteSpace(ch.LogoUrl)
+                ? ""
+                : $"/api/channels/{Uri.EscapeDataString(providerId)}/{Uri.EscapeDataString(ch.Key)}/logo",
+            playback = "server-hls"
+        }));
     }
     catch (Exception ex)
     {
@@ -440,6 +426,38 @@ app.MapGet("/api/channels/{providerId}", async (string providerId) =>
             detail: SafeProviderError(ex),
             statusCode: StatusCodes.Status502BadGateway);
     }
+}).RequireAuthorization();
+
+app.MapGet("/api/channels/{providerId}/{channelKey}/logo", async (string providerId, string channelKey, HttpContext ctx) =>
+{
+    if (!channelCache.TryGetValue(providerId, out var cached)) return Results.NotFound();
+    var channel = cached.Channels.FirstOrDefault(x => x.Key == channelKey);
+    if (channel is null || string.IsNullOrWhiteSpace(channel.LogoUrl)) return Results.NotFound();
+    if (!Uri.TryCreate(channel.LogoUrl, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
+        return Results.BadRequest();
+
+    try
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, uri);
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted);
+        cts.CancelAfter(TimeSpan.FromSeconds(8));
+        using var res = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+        if (!res.IsSuccessStatusCode) return Results.StatusCode((int)res.StatusCode);
+        var mediaType = res.Content.Headers.ContentType?.MediaType ?? "image/jpeg";
+        var bytes = await res.Content.ReadAsByteArrayAsync(cts.Token);
+        return Results.Bytes(bytes, mediaType);
+    }
+    catch { return Results.NotFound(); }
+}).RequireAuthorization();
+
+app.MapPost("/api/live/token/{providerId}/{channelKey}", async (string providerId, string channelKey) =>
+{
+    var p = LoadProviders().FirstOrDefault(x => x.Id == providerId);
+    if (p is null) return Results.NotFound();
+    var rows = await GetCachedChannels(p);
+    var channel = rows.FirstOrDefault(x => x.Key == channelKey);
+    if (channel is null) return Results.NotFound("Channel not found in provider cache.");
+    return Results.Ok(new { token = RegisterProxy(channel.SourceUrl, "live") });
 }).RequireAuthorization();
 
 app.MapGet("/api/providers/{providerId}/test", async (string providerId) =>
@@ -535,7 +553,7 @@ app.MapGet("/api/vod/{providerId}/categories", async (string providerId) =>
     if (resolved is null) return Results.NotFound();
     try
     {
-        using var doc = await XtreamJson(resolved.Value.Connection, "get_vod_categories");
+        using var doc = await XtreamJson(resolved.Value.Connection, "get_vod_categories", TimeSpan.FromSeconds(30));
         return Results.Ok(doc.RootElement.EnumerateArray().Select(x => new
         {
             id = JsonString(x, "category_id"),
@@ -552,7 +570,7 @@ app.MapGet("/api/vod/{providerId}/items", async (string providerId, string? cate
     try
     {
         (string Key, string Value)? extra = string.IsNullOrWhiteSpace(categoryId) ? null : ("category_id", categoryId!);
-        using var doc = await XtreamJson(resolved.Value.Connection, "get_vod_streams", extra);
+        using var doc = await XtreamJson(resolved.Value.Connection, "get_vod_streams", TimeSpan.FromSeconds(30), extra);
         var rows = new List<object>();
         foreach (var x in doc.RootElement.EnumerateArray().Take(5000))
         {
@@ -581,7 +599,7 @@ app.MapGet("/api/series/{providerId}/categories", async (string providerId) =>
     if (resolved is null) return Results.NotFound();
     try
     {
-        using var doc = await XtreamJson(resolved.Value.Connection, "get_series_categories");
+        using var doc = await XtreamJson(resolved.Value.Connection, "get_series_categories", TimeSpan.FromSeconds(30));
         return Results.Ok(doc.RootElement.EnumerateArray().Select(x => new
         {
             id = JsonString(x, "category_id"),
@@ -598,7 +616,7 @@ app.MapGet("/api/series/{providerId}/items", async (string providerId, string? c
     try
     {
         (string Key, string Value)? extra = string.IsNullOrWhiteSpace(categoryId) ? null : ("category_id", categoryId!);
-        using var doc = await XtreamJson(resolved.Value.Connection, "get_series", extra);
+        using var doc = await XtreamJson(resolved.Value.Connection, "get_series", TimeSpan.FromSeconds(30), extra);
         var rows = doc.RootElement.EnumerateArray().Take(5000).Select(x => new
         {
             id = JsonString(x, "series_id"),
@@ -618,7 +636,7 @@ app.MapGet("/api/series/{providerId}/{seriesId}", async (string providerId, stri
     if (resolved is null) return Results.NotFound();
     try
     {
-        using var doc = await XtreamJson(resolved.Value.Connection, "get_series_info", ("series_id", seriesId));
+        using var doc = await XtreamJson(resolved.Value.Connection, "get_series_info", TimeSpan.FromSeconds(30), ("series_id", seriesId));
         var root = doc.RootElement;
         var info = root.TryGetProperty("info", out var i) ? i : default;
         var episodes = new List<object>();
@@ -752,8 +770,8 @@ app.MapGet("/api/proxy/{token}", async (string token, HttpContext ctx) =>
 
 
 
-// Browser-compatible Live TV: remux provider streams to short HLS segments with FFmpeg.
-app.MapPost("/api/live/start/{token}", async (string token, bool? transcode, HttpContext ctx) =>
+// Browser-compatible Live TV: FFmpeg starts asynchronously so reverse proxies never wait for stream startup.
+app.MapPost("/api/live/start/{token}", async (string token, bool? transcode) =>
 {
     if (!proxyTokens.TryGetValue(token, out var target) || target.Kind != "live")
         return Results.NotFound("Live stream token not found or expired.");
@@ -765,7 +783,6 @@ app.MapPost("/api/live/start/{token}", async (string token, bool? transcode, Htt
     if (ffmpeg is null)
         return Results.Problem("FFmpeg is not installed in the MyOnline TV container.", statusCode: 503);
 
-    // One active browser Live TV session per appliance keeps CPU/network use predictable.
     foreach (var existing in liveSessions.Keys.ToArray())
         await StopLiveSession(existing);
 
@@ -792,7 +809,6 @@ app.MapPost("/api/live/start/{token}", async (string token, bool? transcode, Htt
     };
     if (transcode == true)
     {
-        // Compatibility fallback for source codecs that a browser cannot decode in HLS.
         ffmpegArgs.AddRange(new[]
         {
             "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency",
@@ -801,17 +817,13 @@ app.MapPost("/api/live/start/{token}", async (string token, bool? transcode, Htt
     }
     else
     {
-        // Fast path: remux only, keeping CPU usage low.
         ffmpegArgs.AddRange(new[] { "-c", "copy" });
     }
     ffmpegArgs.AddRange(new[]
     {
-        "-f", "hls",
-        "-hls_time", "2",
-        "-hls_list_size", "6",
+        "-f", "hls", "-hls_time", "2", "-hls_list_size", "6",
         "-hls_flags", "delete_segments+append_list+omit_endlist",
-        "-hls_segment_filename", segmentPattern,
-        playlistPath
+        "-hls_segment_filename", segmentPattern, playlistPath
     });
     foreach (var arg in ffmpegArgs) psi.ArgumentList.Add(arg);
 
@@ -850,43 +862,55 @@ app.MapPost("/api/live/start/{token}", async (string token, bool? transcode, Htt
         catch { }
     });
 
-    var deadline = DateTimeOffset.UtcNow.AddSeconds(15);
-    while (DateTimeOffset.UtcNow < deadline && !ctx.RequestAborted.IsCancellationRequested)
+    return Results.Accepted($"/api/live/status/{sessionId}", new
     {
-        if (process.HasExited)
-        {
-            string detail;
-            lock (errorLog) detail = errorLog.ToString().Trim();
-            var exitCode = process.ExitCode;
-            await StopLiveSession(sessionId);
-            if (detail.Length > 1600) detail = detail[^1600..];
-            return Results.Problem(
-                title: "Live TV stream could not be prepared for the browser",
-                detail: string.IsNullOrWhiteSpace(detail) ? $"FFmpeg exited with code {exitCode}." : detail,
-                statusCode: 502);
-        }
+        sessionId,
+        status = "starting",
+        statusUrl = $"/api/live/status/{sessionId}",
+        playbackUrl = $"/api/live/hls/{sessionId}/index.m3u8",
+        mode = transcode == true ? "hls-transcode" : "hls-remux",
+        sourceHost = sourceUri.Host
+    });
+}).RequireAuthorization();
 
-        if (File.Exists(playlistPath) && Directory.EnumerateFiles(sessionDir, "*.ts").Any())
+app.MapGet("/api/live/status/{sessionId}", async (string sessionId) =>
+{
+    if (!liveSessions.TryGetValue(sessionId, out var session)) return Results.NotFound();
+    var playlistPath = Path.Combine(session.Directory, "index.m3u8");
+    var ready = File.Exists(playlistPath) && Directory.EnumerateFiles(session.Directory, "*.ts").Any();
+    if (ready)
+        return Results.Ok(new { sessionId, status = "ready", playbackUrl = $"/api/live/hls/{sessionId}/index.m3u8" });
+
+    if (session.Process.HasExited)
+    {
+        string detail;
+        lock (session.ErrorLog) detail = session.ErrorLog.ToString().Trim();
+        var exitCode = session.Process.ExitCode;
+        if (detail.Length > 1600) detail = detail[^1600..];
+        await StopLiveSession(sessionId);
+        return Results.Ok(new
         {
-            return Results.Ok(new
-            {
-                sessionId,
-                playbackUrl = $"/api/live/hls/{sessionId}/index.m3u8",
-                mode = transcode == true ? "hls-transcode" : "hls-remux",
-                sourceHost = sourceUri.Host
-            });
-        }
-        await Task.Delay(250, ctx.RequestAborted);
+            sessionId,
+            status = "failed",
+            error = string.IsNullOrWhiteSpace(detail) ? $"FFmpeg exited with code {exitCode}." : detail
+        });
     }
 
-    string timeoutDetail;
-    lock (errorLog) timeoutDetail = errorLog.ToString().Trim();
-    await StopLiveSession(sessionId);
-    if (timeoutDetail.Length > 1200) timeoutDetail = timeoutDetail[^1200..];
-    return Results.Problem(
-        title: "Live TV startup timed out",
-        detail: string.IsNullOrWhiteSpace(timeoutDetail) ? "FFmpeg did not create an HLS segment within 15 seconds." : timeoutDetail,
-        statusCode: 504);
+    if (DateTimeOffset.UtcNow - session.Started > TimeSpan.FromSeconds(20))
+    {
+        string detail;
+        lock (session.ErrorLog) detail = session.ErrorLog.ToString().Trim();
+        if (detail.Length > 1200) detail = detail[^1200..];
+        await StopLiveSession(sessionId);
+        return Results.Ok(new
+        {
+            sessionId,
+            status = "failed",
+            error = string.IsNullOrWhiteSpace(detail) ? "FFmpeg did not create an HLS segment within 20 seconds." : detail
+        });
+    }
+
+    return Results.Ok(new { sessionId, status = "starting" });
 }).RequireAuthorization();
 
 app.MapGet("/api/live/hls/{sessionId}/{fileName}", (string sessionId, string fileName) =>
@@ -916,7 +940,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "0.3.13",
+        version = "0.3.14",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -1121,29 +1145,88 @@ async Task RunDownload(DownloadJob job)
     return p is null ? null : (p.Id, p, Connection(p));
 }
 
-async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, (string Key, string Value)? extra = null)
+async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, TimeSpan timeout, (string Key, string Value)? extra = null)
 {
     var url = BuildXtreamPlayerApiUrl(c, action, extra);
-    using var response = await SendProviderRequest(url, HttpCompletionOption.ResponseHeadersRead, TimeSpan.FromSeconds(30));
+    using var request = new HttpRequestMessage(HttpMethod.Get, url);
+    request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.3.14");
+    using var cts = new CancellationTokenSource(timeout);
+    using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
         throw new HttpRequestException($"Provider returned HTTP {(int)response.StatusCode} {response.ReasonPhrase}".Trim());
-    await using var stream = await response.Content.ReadAsStreamAsync();
-    return await JsonDocument.ParseAsync(stream);
+    await using var stream = await response.Content.ReadAsStreamAsync(cts.Token);
+    return await JsonDocument.ParseAsync(stream, cancellationToken: cts.Token);
 }
 
-async Task<List<object>> LoadXtreamLiveChannels(ProviderConnection c)
+async Task<List<LiveChannel>> GetCachedChannels(ProviderStored p)
 {
+    var now = DateTimeOffset.UtcNow;
+    if (channelCache.TryGetValue(p.Id, out var hit) && now - hit.Loaded < TimeSpan.FromMinutes(10))
+        return hit.Channels;
+
+    // If stale data exists, serve it immediately and refresh in the background.
+    if (hit is not null && hit.Channels.Count > 0)
+    {
+        _ = Task.Run(async () =>
+        {
+            var gate = channelLocks.GetOrAdd(p.Id, _ => new SemaphoreSlim(1, 1));
+            if (!await gate.WaitAsync(0)) return;
+            try
+            {
+                var refreshed = await LoadProviderChannels(p);
+                channelCache[p.Id] = new ChannelCacheEntry(refreshed, DateTimeOffset.UtcNow);
+                app.Logger.LogInformation("Refreshed {Count} cached Live TV channels for provider {ProviderId}.", refreshed.Count, p.Id);
+            }
+            catch (Exception ex)
+            {
+                app.Logger.LogWarning(ex, "Background Live TV channel refresh failed for provider {ProviderId}; stale cache retained.", p.Id);
+            }
+            finally { gate.Release(); }
+        });
+        return hit.Channels;
+    }
+
+    var loadGate = channelLocks.GetOrAdd(p.Id, _ => new SemaphoreSlim(1, 1));
+    await loadGate.WaitAsync();
+    try
+    {
+        if (channelCache.TryGetValue(p.Id, out hit) && DateTimeOffset.UtcNow - hit.Loaded < TimeSpan.FromMinutes(10))
+            return hit.Channels;
+        var rows = await LoadProviderChannels(p);
+        channelCache[p.Id] = new ChannelCacheEntry(rows, DateTimeOffset.UtcNow);
+        return rows;
+    }
+    finally { loadGate.Release(); }
+}
+
+async Task<List<LiveChannel>> LoadProviderChannels(ProviderStored p)
+{
+    var c = Connection(p);
+    if (p.Type == "xtream")
+        return await LoadXtreamLiveChannels(c);
+    if (string.IsNullOrWhiteSpace(c.PlaylistUrl))
+        throw new InvalidOperationException("Provider has no playlist URL.");
+    return await LoadM3uChannels(c.PlaylistUrl);
+}
+
+async Task<List<LiveChannel>> LoadXtreamLiveChannels(ProviderConnection c)
+{
+    // The channel list is the critical request. Keep its timeout bounded so reverse proxies never wait for minutes.
+    using var doc = await XtreamJson(c, "get_live_streams", TimeSpan.FromSeconds(12));
+    if (doc.RootElement.ValueKind != JsonValueKind.Array)
+        throw new InvalidOperationException("Xtream get_live_streams did not return a JSON array.");
+
     var categories = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     try
     {
-        using var categoryDoc = await XtreamJson(c, "get_live_categories");
+        using var categoryDoc = await XtreamJson(c, "get_live_categories", TimeSpan.FromSeconds(3));
         if (categoryDoc.RootElement.ValueKind == JsonValueKind.Array)
         {
             foreach (var item in categoryDoc.RootElement.EnumerateArray())
             {
                 var id = JsonString(item, "category_id");
-                if (!string.IsNullOrWhiteSpace(id))
-                    categories[id] = JsonString(item, "category_name");
+                if (!string.IsNullOrWhiteSpace(id)) categories[id] = JsonString(item, "category_name");
             }
         }
     }
@@ -1152,52 +1235,43 @@ async Task<List<object>> LoadXtreamLiveChannels(ProviderConnection c)
         app.Logger.LogInformation(ex, "Xtream live categories unavailable; channel list will use category IDs.");
     }
 
-    using var doc = await XtreamJson(c, "get_live_streams");
-    if (doc.RootElement.ValueKind != JsonValueKind.Array)
-        throw new InvalidOperationException("Xtream get_live_streams did not return a JSON array.");
-
-    var rows = new List<object>();
+    var rows = new List<LiveChannel>();
     foreach (var x in doc.RootElement.EnumerateArray().Take(20000))
     {
-        var id = JsonString(x, "stream_id");
-        if (string.IsNullOrWhiteSpace(id)) continue;
+        var streamId = JsonString(x, "stream_id");
+        if (string.IsNullOrWhiteSpace(streamId)) continue;
         var categoryId = JsonString(x, "category_id");
         var group = categories.TryGetValue(categoryId, out var categoryName) && !string.IsNullOrWhiteSpace(categoryName)
             ? categoryName : (string.IsNullOrWhiteSpace(categoryId) ? "Other" : categoryId);
-        var source = BuildXtreamLiveUrl(c, id);
-        rows.Add(new
-        {
-            Id = string.IsNullOrWhiteSpace(JsonString(x, "epg_channel_id")) ? id : JsonString(x, "epg_channel_id"),
-            Name = string.IsNullOrWhiteSpace(JsonString(x, "name")) ? $"Channel {id}" : JsonString(x, "name"),
-            Group = group,
-            Number = JsonString(x, "num"),
-            logo = ProxyArtwork(JsonString(x, "stream_icon")),
-            playUrl = ProxyUrl(source, "media"),
-            playToken = RegisterProxy(source, "live"),
-            playback = "server-hls"
-        });
+        var epgId = JsonString(x, "epg_channel_id");
+        rows.Add(new LiveChannel(
+            streamId,
+            string.IsNullOrWhiteSpace(epgId) ? streamId : epgId,
+            string.IsNullOrWhiteSpace(JsonString(x, "name")) ? $"Channel {streamId}" : JsonString(x, "name"),
+            group,
+            JsonString(x, "num"),
+            JsonString(x, "stream_icon"),
+            BuildXtreamLiveUrl(c, streamId)));
     }
     return rows;
 }
 
-async Task<List<object>> LoadM3uChannels(string url)
+async Task<List<LiveChannel>> LoadM3uChannels(string url)
 {
-    using var response = await SendProviderRequest(url, HttpCompletionOption.ResponseContentRead, TimeSpan.FromSeconds(30));
+    using var request = new HttpRequestMessage(HttpMethod.Get, url);
+    request.Headers.TryAddWithoutValidation("Accept", "application/x-mpegURL,text/plain,*/*");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.3.14");
+    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+    using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
         throw new HttpRequestException($"Provider returned HTTP {(int)response.StatusCode} {response.ReasonPhrase}".Trim());
-    var text = await response.Content.ReadAsStringAsync();
+    var text = await response.Content.ReadAsStringAsync(cts.Token);
     if (!text.Contains("#EXTM3U", StringComparison.OrdinalIgnoreCase) && !text.Contains("#EXTINF", StringComparison.OrdinalIgnoreCase))
         throw new InvalidOperationException("Provider response was not an M3U playlist.");
-    return ParseM3u(text).Take(20000).Select(ch => (object)new
+    return ParseM3u(text).Take(20000).Select(ch =>
     {
-        ch.Id,
-        ch.Name,
-        ch.Group,
-        ch.Number,
-        logo = string.IsNullOrWhiteSpace(ch.Logo) ? "" : ProxyUrl(ch.Logo, "artwork"),
-        playUrl = ProxyUrl(ch.Url, "media"),
-        playToken = RegisterProxy(ch.Url, "live"),
-        playback = "server-hls"
+        var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(ch.Url))).Substring(0, 24);
+        return new LiveChannel(key, ch.Id, ch.Name, ch.Group, ch.Number, ch.Logo, ch.Url);
     }).ToList();
 }
 
@@ -1205,7 +1279,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.3.13");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.3.14");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }
@@ -1431,6 +1505,8 @@ record ProviderInput(string? Id, string Name, string Type, string? PlaylistUrl, 
 record LegacyProvider(string? Id, string? Name, string? Type, string? PlaylistUrl, string? EpgUrl, string? BaseUrl, string? Username, string? Password);
 record Channel(string Id, string Name, string Group, string Logo, string Url, string Number);
 record ProviderProbe(bool Ok, int? StatusCode, string Message, string ContentType, long LatencyMs, string Host);
+record LiveChannel(string Key, string Id, string Name, string Group, string Number, string LogoUrl, string SourceUrl);
+record ChannelCacheEntry(List<LiveChannel> Channels, DateTimeOffset Loaded);
 record ContinueItem(string Id, string Title, string Url, double PositionSeconds, DateTimeOffset Updated);
 record SetupRequest(string? Username, string Password);
 record LoginRequest(string Username, string Password);

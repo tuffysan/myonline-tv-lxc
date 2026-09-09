@@ -123,7 +123,7 @@ function renderFilter(){
   $('#chan').innerHTML=rows.map(c=>`<article class=channelCard>
     <div class=logoBox>${c.logo?`<img loading=lazy src="${escAttr(c.logo)}" onerror="this.style.display='none'">`:''}</div>
     <div class=channelInfo><b>${esc(c.number?c.number+' · ':'')}${esc(c.name)}</b><small>${esc(c.group)}</small></div>
-    <button class=round onclick='playLive(${JSON.stringify(c.playToken)},${JSON.stringify(c.name)})'>▶</button>
+    <button class=round onclick='playLive(${JSON.stringify(c.key)},${JSON.stringify(c.name)})'>▶</button>
     <button class=round onclick="toggleFav('${escAttr(c.id)}')">${fav.has(c.id)?'★':'☆'}</button>
   </article>`).join('');
 }
@@ -132,7 +132,7 @@ async function toggleFav(id){fav=new Set(await api('/api/favourites/'+encodeURIC
 let activeLiveSession=null;
 let liveFallbackTried=false;
 
-async function playLive(token,name,forceTranscode=false){
+async function playLive(channelKey,name,forceTranscode=false){
   if(!forceTranscode)liveFallbackTried=false;
   destroyPlayer();
   const wrap=$('#playerWrap')||$('#mediaPlayer');
@@ -140,13 +140,27 @@ async function playLive(token,name,forceTranscode=false){
   wrap.innerHTML=`<div class=playerCard><video id=video controls autoplay playsinline></video><div class=nowPlaying>${esc(name)} · Starting Live TV…</div></div>`;
   wrap.scrollIntoView({behavior:'smooth',block:'start'});
   try{
-    const info=await api('/api/live/start/'+encodeURIComponent(token)+(forceTranscode?'?transcode=true':''),{method:'POST'});
+    const tokenInfo=await api('/api/live/token/'+encodeURIComponent(currentProvider)+'/'+encodeURIComponent(channelKey),{method:'POST'});
+    const info=await api('/api/live/start/'+encodeURIComponent(tokenInfo.token)+(forceTranscode?'?transcode=true':''),{method:'POST'});
     activeLiveSession=info.sessionId;
+
+    let state=null;
+    const deadline=Date.now()+22000;
+    while(Date.now()<deadline){
+      state=await api(info.statusUrl||('/api/live/status/'+encodeURIComponent(info.sessionId)));
+      if(state.status==='ready')break;
+      if(state.status==='failed')throw new Error(state.error||'FFmpeg could not prepare this channel.');
+      const np=wrap.querySelector('.nowPlaying');if(np)np.textContent=name+' · Preparing browser stream…';
+      await new Promise(r=>setTimeout(r,500));
+    }
+    if(!state||state.status!=='ready')throw new Error('Live TV startup timed out.');
+
     const video=$('#video');
     if(!video)return;
+    const playbackUrl=state.playbackUrl||info.playbackUrl;
     if(window.Hls&&Hls.isSupported()){
       hls=new Hls({enableWorker:true,lowLatencyMode:true,liveSyncDurationCount:3,backBufferLength:30});
-      hls.loadSource(info.playbackUrl);hls.attachMedia(video);
+      hls.loadSource(playbackUrl);hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED,()=>video.play().catch(()=>{}));
       hls.on(Hls.Events.ERROR,async(_,d)=>{
         if(d.fatal){
@@ -154,7 +168,7 @@ async function playLive(token,name,forceTranscode=false){
           if(!forceTranscode&&!liveFallbackTried){
             liveFallbackTried=true;
             const np=wrap.querySelector('.nowPlaying');if(np)np.textContent=name+' · Retrying with compatibility transcoding…';
-            await playLive(token,name,true);
+            await playLive(channelKey,name,true);
             return;
           }
           const np=wrap.querySelector('.nowPlaying');
@@ -162,12 +176,21 @@ async function playLive(token,name,forceTranscode=false){
         }
       });
     }else if(video.canPlayType('application/vnd.apple.mpegurl')){
-      video.src=info.playbackUrl;await video.play().catch(()=>{});
+      video.src=playbackUrl;await video.play().catch(()=>{});
     }else throw new Error('This browser does not support HLS playback.');
     const np=wrap.querySelector('.nowPlaying');if(np)np.textContent=name+' · Live';
   }catch(e){
-    const np=wrap.querySelector('.nowPlaying');if(np)np.textContent=name+' · '+(e.message||e);
+    const np=wrap.querySelector('.nowPlaying');if(np)np.textContent=name+' · '+friendlyError(e);
   }
+}
+
+function friendlyError(e){
+  const raw=(e&&e.message)||String(e||'Unknown error');
+  if(raw.includes('504 Gateway Time-out'))return 'Server timeout while contacting IPTV provider.';
+  try{
+    const j=JSON.parse(raw);
+    return j.detail||j.title||raw;
+  }catch(_){return raw.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();}
 }
 
 function playMedia(url,name){
@@ -346,7 +369,7 @@ async function testProvider(id,button){
 async function removeProvider(id){if(!confirm('Remove this provider?'))return;await api('/api/providers/'+id,{method:'DELETE'});providers=await api('/api/providers');if(currentProvider===id)currentProvider=null;settings()}
 
 function noProvider(){return '<div class=card>No IPTV provider configured. Open Settings and add one.</div>'}
-function errorCard(e){return `<div class="card danger"><b>Error</b><p>${esc(e.message)}</p></div>`}
+function errorCard(e){return `<div class="card danger"><b>Error</b><p>${esc(friendlyError(e))}</p></div>`}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function escAttr(s){return esc(s)}
 boot().catch(e=>{$('#auth').classList.remove('hidden');$('#auth').innerHTML=`<div class=authCard><h2>Startup error</h2><pre>${esc(e.message)}</pre></div>`});
