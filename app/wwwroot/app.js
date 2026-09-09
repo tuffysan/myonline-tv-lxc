@@ -43,6 +43,7 @@ async function enterApp(st){
   $('#auth').classList.add('hidden');$('#app').classList.remove('hidden');
   $('#userBadge').textContent=st.user||'admin';
   const s=await api('/api/status');$('#status').textContent=`${s.version} · ${s.platform}`;
+  const brandVersion=$('#brandVersion');if(brandVersion)brandVersion.textContent=`Web v${s.version}`;
   providers=await api('/api/providers');fav=new Set(await api('/api/favourites'));
   if(!currentProvider&&providers.length)currentProvider=providers[0].id;
   show('home');

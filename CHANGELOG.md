@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.11 — Reverse-proxy host fix, dynamic UI version and updater diagnostics
+
+- Fixed provider POST requests returning `403 Cross-origin state-changing requests are not allowed` behind Nginx Proxy Manager.
+- Internal Nginx now preserves the upstream `X-Forwarded-Host` and uses it for both `Host` and `X-Forwarded-Host` when proxying to Kestrel.
+- Moved all `proxy_set_header` directives into `location /` so Nginx header inheritance cannot discard Host/forwarded headers when WebSocket headers are present.
+- Direct LAN HTTP requests still fall back to the locally received host and scheme.
+- Sidebar version is now populated dynamically from `/api/status`; removed the stale hard-coded `Web v0.3.6` label.
+- Update script now reports the exact failed step, line, command and exit code instead of terminating silently under `set -e`.
+- Expanded update step 3 with staging/upload/extraction verification and corrected all progress counters to `[1/8]` through `[8/8]`.
+- Reverse-proxy migration verification now requires `$my_forwarded_host` for `Host` and `X-Forwarded-Host`.
+
 ## 0.3.10 — Same-origin normalization, loopback binding and upgrade execution fix
 
 - Reworked same-origin protection for authenticated state-changing API requests.

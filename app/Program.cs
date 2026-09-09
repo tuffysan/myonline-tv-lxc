@@ -80,7 +80,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.3.10");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.3.11");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
@@ -230,7 +230,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "0.3.10",
+    version = "0.3.11",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -268,14 +268,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = File.Exists(adminFile);
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "0.3.10", checks })
-        : Results.Json(new { status = "not-ready", version = "0.3.10", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "0.3.11", checks })
+        : Results.Json(new { status = "not-ready", version = "0.3.11", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "0.3.10",
+    version = "0.3.11",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = File.Exists(adminFile),
@@ -676,7 +676,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "0.3.10",
+        version = "0.3.11",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,

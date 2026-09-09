@@ -73,23 +73,31 @@ server {
 
     client_max_body_size 0;
 
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-
-    # Preserve the original external scheme/host from an upstream reverse proxy.
-    # If there is no upstream X-Forwarded-Proto (direct LAN HTTP), fall back to http.
+    # Preserve the original external scheme and host from an upstream reverse proxy
+    # (for example Nginx Proxy Manager). Direct LAN HTTP requests fall back to the
+    # host/scheme received by this local Nginx instance.
     set $my_forwarded_proto $http_x_forwarded_proto;
     if ($my_forwarded_proto = "") {
         set $my_forwarded_proto $scheme;
     }
 
-    proxy_set_header X-Forwarded-Proto $my_forwarded_proto;
-    proxy_set_header X-Forwarded-Host $host;
+    set $my_forwarded_host $http_x_forwarded_host;
+    if ($my_forwarded_host = "") {
+        set $my_forwarded_host $host;
+    }
 
     location / {
         proxy_pass http://127.0.0.1:5080;
+        proxy_http_version 1.1;
+
+        # Keep all proxy_set_header directives in this location. Nginx only inherits
+        # proxy_set_header directives when none are defined at the current level.
+        proxy_set_header Host $my_forwarded_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $my_forwarded_proto;
+        proxy_set_header X-Forwarded-Host $my_forwarded_host;
+
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_buffering off;

@@ -1,5 +1,21 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
+
+CURRENT_STEP="startup"
+on_update_error() {
+  local rc=$?
+  local line="${BASH_LINENO[0]:-${LINENO}}"
+  echo >&2
+  echo "============================================================" >&2
+  echo " MyOnline TV update FAILED" >&2
+  echo " Step    : ${CURRENT_STEP}" >&2
+  echo " Line    : ${line}" >&2
+  echo " Command : ${BASH_COMMAND}" >&2
+  echo " Exit    : ${rc}" >&2
+  echo "============================================================" >&2
+  exit "$rc"
+}
+trap on_update_error ERR
 
 REPO_DIR="${1:?Usage: update-local.sh <repo-dir>}"
 source "${REPO_DIR}/scripts/github-common.sh"
@@ -24,7 +40,8 @@ fi
 STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP="/var/lib/myonlinetv/backups/pre-update-${CURRENT_VERSION}-to-${TARGET_VERSION}-${STAMP}.tar.gz"
 
-echo "[1/7] Creating persistent-data backup..."
+CURRENT_STEP="1/8 Creating persistent-data backup"
+echo "[1/8] Creating persistent-data backup..."
 pct exec "$CTID" -- bash -lc "
 set -e
 mkdir -p /var/lib/myonlinetv/backups
@@ -33,7 +50,8 @@ printf '%s\n' '${BACKUP}' >/var/lib/myonlinetv/last-pre-update-backup
 chown www-data:www-data '${BACKUP}' /var/lib/myonlinetv/last-pre-update-backup
 "
 
-echo "[2/7] Preparing runtime..."
+CURRENT_STEP="2/8 Preparing runtime"
+echo "[2/8] Preparing runtime..."
 pct exec "$CTID" -- bash -lc 'apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates ffmpeg tar'
 if [[ -n "$ARTIFACT" ]]; then
   pct exec "$CTID" -- bash -lc 'DEBIAN_FRONTEND=noninteractive apt-get install -y aspnetcore-runtime-10.0'
@@ -41,12 +59,22 @@ else
   pct exec "$CTID" -- bash -lc 'DEBIAN_FRONTEND=noninteractive apt-get install -y dotnet-sdk-10.0'
 fi
 
-echo "[3/7] Preparing new application..."
+CURRENT_STEP="3/8 Preparing new application"
+echo "[3/8] Preparing new application..."
+echo "  - Cleaning staging directory..."
 pct exec "$CTID" -- rm -rf /opt/myonlinetv/publish.new
+echo "  - Creating staging directory..."
 pct exec "$CTID" -- mkdir -p /opt/myonlinetv/publish.new
 if [[ -n "$ARTIFACT" ]]; then
+  [[ -f "$ARTIFACT" ]] || { echo "Release artifact not found: $ARTIFACT" >&2; exit 1; }
+  echo "  - Uploading release artifact to CT ${CTID}..."
   pct push "$CTID" "$ARTIFACT" /tmp/myonline-tv-release.tar.gz
-  pct exec "$CTID" -- bash -lc 'tar -xzf /tmp/myonline-tv-release.tar.gz -C /opt/myonlinetv/publish.new && rm -f /tmp/myonline-tv-release.tar.gz'
+  echo "  - Verifying uploaded artifact..."
+  pct exec "$CTID" -- test -s /tmp/myonline-tv-release.tar.gz
+  echo "  - Extracting release artifact..."
+  pct exec "$CTID" -- bash -lc 'tar -tzf /tmp/myonline-tv-release.tar.gz >/dev/null && tar -xzf /tmp/myonline-tv-release.tar.gz -C /opt/myonlinetv/publish.new && rm -f /tmp/myonline-tv-release.tar.gz'
+  echo "  - Verifying extracted application..."
+  pct exec "$CTID" -- test -f /opt/myonlinetv/publish.new/MyOnlineTV.Web.dll
 else
   pct exec "$CTID" -- mkdir -p /opt/myonlinetv/src/wwwroot
   pct push "$CTID" "${REPO_DIR}/app/MyOnlineTV.Web.csproj" /opt/myonlinetv/src/MyOnlineTV.Web.csproj
@@ -55,7 +83,8 @@ else
   pct exec "$CTID" -- bash -lc 'dotnet publish /opt/myonlinetv/src/MyOnlineTV.Web.csproj -c Release -o /opt/myonlinetv/publish.new'
 fi
 
-echo "[4/7] Creating binary rollback snapshot..."
+CURRENT_STEP="4/8 Creating binary rollback snapshot"
+echo "[4/8] Creating binary rollback snapshot..."
 pct exec "$CTID" -- bash -lc "
 set -e
 systemctl stop myonlinetv || true
@@ -64,7 +93,8 @@ if [[ -d /opt/myonlinetv/publish ]]; then cp -a /opt/myonlinetv/publish /opt/myo
 printf '%s\n' '${CURRENT_VERSION}' >/var/lib/myonlinetv/rollback-version
 "
 
-echo "[5/7] Activating v${TARGET_VERSION}..."
+CURRENT_STEP="5/8 Activating v${TARGET_VERSION}"
+echo "[5/8] Activating v${TARGET_VERSION}..."
 pct exec "$CTID" -- bash -lc "
 set -e
 rm -rf /opt/myonlinetv/publish.old
@@ -80,6 +110,7 @@ systemctl daemon-reload
 systemctl start myonlinetv
 "
 
+CURRENT_STEP="6/8 Health check"
 echo "[6/8] Health check..."
 sleep 2
 HEALTH=1
@@ -103,6 +134,7 @@ systemctl start myonlinetv
 fi
 
 
+CURRENT_STEP="7/8 Applying system configuration migrations"
 echo "[7/8] Applying system configuration migrations..."
 set_container_hostname "$CTID" "MyOnlineTV"
 write_nginx_config "$CTID"
@@ -115,11 +147,13 @@ systemctl is-active --quiet myonlinetv
 systemctl is-active --quiet nginx
 '
 
+CURRENT_STEP="8/8 Verifying backend and reverse proxy"
 echo "[8/8] Verifying backend and reverse proxy..."
 pct exec "$CTID" -- bash -lc '
 set -e
 grep -q "X-Forwarded-Proto \$my_forwarded_proto" /etc/nginx/sites-enabled/myonlinetv
-grep -q "X-Forwarded-Host \$host" /etc/nginx/sites-enabled/myonlinetv
+grep -q "proxy_set_header Host \$my_forwarded_host" /etc/nginx/sites-enabled/myonlinetv
+grep -q "X-Forwarded-Host \$my_forwarded_host" /etc/nginx/sites-enabled/myonlinetv
 curl -fsS --retry 10 --retry-delay 1 --retry-connrefused http://127.0.0.1:5080/health >/dev/null
 curl -fsS --retry 10 --retry-delay 1 --retry-connrefused http://127.0.0.1/health >/dev/null
 '

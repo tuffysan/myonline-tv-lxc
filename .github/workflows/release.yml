@@ -99,7 +99,7 @@ jobs:
         with:
           generate_release_notes: true
           files: |
-            myonline-tv-web-v0.3.10-linux-x64.tar.gz
-            myonline-tv-lxc-v0.3.10-source.tar.gz
+            myonline-tv-web-v0.3.11-linux-x64.tar.gz
+            myonline-tv-lxc-v0.3.11-source.tar.gz
             SHA256SUMS-RELEASE.txt
             release.json
