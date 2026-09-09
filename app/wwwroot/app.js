@@ -270,13 +270,32 @@ async function settings(){
   <div class=field><label>M3U playlist URL</label><input id=purl placeholder="https://.../playlist.m3u"></div><div class=field><label>XMLTV EPG URL</label><input id=pepg placeholder="https://.../epg.xml"></div>
   <div class=field><label>Xtream base URL</label><input id=pbase placeholder="https://provider.example:443"></div><div class=field><label>Username</label><input id=puser></div>
   <div class=field><label>Password</label><input id=ppass type=password></div></div><button class=btn id=savep>Add provider</button></div>
-  <div class=grid>${providers.map(p=>`<div class=card><h3>${esc(p.name)}</h3><div class=muted>${esc(p.type)} · ${esc(p.host||'')}</div><p>${p.hasEpg?'EPG configured':'No explicit EPG'} · ${p.hasCredentials?'Credentials stored':'No credentials'}</p><button class=btn onclick="removeProvider('${p.id}')">Remove</button></div>`).join('')}</div>
+  <div class=grid>${providers.map(p=>`<div class=card><h3>${esc(p.name)}</h3><div class=muted>${esc(p.type)} · ${esc(p.host||'')}</div><p>${p.hasEpg?'EPG configured':'No explicit EPG'} · ${p.hasCredentials?'Credentials stored':'No credentials'}</p><div class=row><button class=btn onclick="testProvider('${p.id}',this)">Test</button><button class=btn onclick="removeProvider('${p.id}')">Remove</button></div><div id="ptest-${p.id}" class=muted></div></div>`).join('')}</div>
   <div class=card style="margin-top:18px"><h3>Security</h3><p>Provider connection fields are never returned to the browser after saving. The password is not stored in plaintext.</p><p class=muted>For Internet exposure, use HTTPS and preferably Tailscale/VPN or an authenticated reverse proxy.</p></div>`;
   $('#savep').onclick=async()=>{
     const p={id:'',name:$('#pname').value,type:$('#ptype').value,playlistUrl:$('#purl').value,epgUrl:$('#pepg').value,baseUrl:$('#pbase').value,username:$('#puser').value,password:$('#ppass').value,keepExistingConnection:false};
     try{await jpost('/api/providers',p);providers=await api('/api/providers');settings()}catch(e){alert(e.message)}
   };
 }
+
+async function testProvider(id,button){
+  const box=$('#ptest-'+id);
+  if(box)box.textContent='Testing provider…';
+  if(button)button.disabled=true;
+  try{
+    const r=await api('/api/providers/'+encodeURIComponent(id)+'/test');
+    let details='';
+    if(r.type==='xtream'){
+      const a=r.auth||{},l=r.live||{};
+      details=`Auth: ${a.statusCode??'-'} ${a.message||''}; Live: ${l.statusCode??'-'} ${l.message||''}`;
+    }else{
+      const p=r.playlist||{};details=`Playlist: ${p.statusCode??'-'} ${p.message||''}`;
+    }
+    if(box){box.className=r.ok?'muted':'danger';box.textContent=(r.ok?'OK · ':'Failed · ')+details+` · ${r.latencyMs} ms`;}
+  }catch(e){if(box){box.className='danger';box.textContent=e.message}}
+  finally{if(button)button.disabled=false}
+}
+
 async function removeProvider(id){if(!confirm('Remove this provider?'))return;await api('/api/providers/'+id,{method:'DELETE'});providers=await api('/api/providers');if(currentProvider===id)currentProvider=null;settings()}
 
 function noProvider(){return '<div class=card>No IPTV provider configured. Open Settings and add one.</div>'}

@@ -1,6 +1,17 @@
 # Changelog
 
-## 0.3.11 — Reverse-proxy host fix, dynamic UI version and updater diagnostics
+## v0.3.12
+
+- Live TV for Xtream providers now prefers `player_api.php?action=get_live_streams` instead of downloading the full M3U playlist.
+- Adds Xtream live-category lookup and builds proxied live stream URLs from stream IDs.
+- Falls back to the Xtream M3U endpoint if the live API fails.
+- Converts upstream provider failures into a clear HTTP 502 response instead of a generic application 500.
+- Adds safe provider diagnostics without returning stored credentials to the browser.
+- Adds **Test** for each provider in Settings, reporting auth/live or playlist status, content type and latency.
+- Adds provider request User-Agent and bounded request timeouts.
+- Redacts username/password values from provider error messages written to the UI/log diagnostic path.
+
+## 0.3.12 — Reverse-proxy host fix, dynamic UI version and updater diagnostics
 
 - Fixed provider POST requests returning `403 Cross-origin state-changing requests are not allowed` behind Nginx Proxy Manager.
 - Internal Nginx now preserves the upstream `X-Forwarded-Host` and uses it for both `Host` and `X-Forwarded-Host` when proxying to Kestrel.

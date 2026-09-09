@@ -80,7 +80,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.3.11");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.3.12");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
@@ -230,7 +230,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "0.3.11",
+    version = "0.3.12",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -268,14 +268,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = File.Exists(adminFile);
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "0.3.11", checks })
-        : Results.Json(new { status = "not-ready", version = "0.3.11", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "0.3.12", checks })
+        : Results.Json(new { status = "not-ready", version = "0.3.12", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "0.3.11",
+    version = "0.3.12",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = File.Exists(adminFile),
@@ -394,21 +394,101 @@ app.MapGet("/api/channels/{providerId}", async (string providerId) =>
     try
     {
         var c = Connection(p);
-        var url = p.Type == "xtream" ? BuildXtreamM3uUrl(c) : c.PlaylistUrl;
-        if (string.IsNullOrWhiteSpace(url)) return Results.BadRequest("Provider has no playlist URL.");
-        var text = await http.GetStringAsync(url);
-        var channels = ParseM3u(text).Take(20000).Select(ch => new
+        if (p.Type == "xtream")
         {
-            ch.Id,
-            ch.Name,
-            ch.Group,
-            ch.Number,
-            logo = string.IsNullOrWhiteSpace(ch.Logo) ? "" : ProxyUrl(ch.Logo, "artwork"),
-            playUrl = ProxyUrl(ch.Url, "media")
-        });
-        return Results.Ok(channels);
+            try
+            {
+                var rows = await LoadXtreamLiveChannels(c);
+                return Results.Ok(rows);
+            }
+            catch (Exception apiEx)
+            {
+                app.Logger.LogWarning(apiEx,
+                    "Xtream live API failed for provider {ProviderId} host {Host}; trying M3U fallback.",
+                    p.Id, ProviderHost(p, c));
+
+                try
+                {
+                    var rows = await LoadM3uChannels(BuildXtreamM3uUrl(c));
+                    return Results.Ok(rows);
+                }
+                catch (Exception m3uEx)
+                {
+                    app.Logger.LogWarning(m3uEx,
+                        "Xtream M3U fallback failed for provider {ProviderId} host {Host}.",
+                        p.Id, ProviderHost(p, c));
+                    return Results.Problem(
+                        title: "IPTV provider rejected the Live TV request",
+                        detail: $"Xtream API: {SafeProviderError(apiEx)}; M3U fallback: {SafeProviderError(m3uEx)}",
+                        statusCode: StatusCodes.Status502BadGateway);
+                }
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(c.PlaylistUrl))
+            return Results.BadRequest("Provider has no playlist URL.");
+        return Results.Ok(await LoadM3uChannels(c.PlaylistUrl));
     }
-    catch (Exception ex) { return Results.Problem(ex.Message); }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Live TV channel loading failed for provider {ProviderId}.", p.Id);
+        return Results.Problem(
+            title: "Could not load Live TV channels",
+            detail: SafeProviderError(ex),
+            statusCode: StatusCodes.Status502BadGateway);
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/providers/{providerId}/test", async (string providerId) =>
+{
+    var p = LoadProviders().FirstOrDefault(x => x.Id == providerId);
+    if (p is null) return Results.NotFound();
+    var c = Connection(p);
+    var sw = Stopwatch.StartNew();
+    try
+    {
+        if (p.Type == "xtream")
+        {
+            var auth = await ProbeProvider(BuildXtreamPlayerApiUrl(c), TimeSpan.FromSeconds(10));
+            ProviderProbe? live = null;
+            if (auth.Ok)
+                live = await ProbeProvider(BuildXtreamPlayerApiUrl(c, "get_live_streams"), TimeSpan.FromSeconds(15));
+            sw.Stop();
+            return Results.Ok(new
+            {
+                p.Id, p.Name, p.Type,
+                host = ProviderHost(p, c),
+                ok = auth.Ok && (live?.Ok ?? false),
+                latencyMs = sw.ElapsedMilliseconds,
+                auth,
+                live
+            });
+        }
+
+        var playlist = await ProbeProvider(c.PlaylistUrl!, TimeSpan.FromSeconds(15));
+        sw.Stop();
+        return Results.Ok(new
+        {
+            p.Id, p.Name, p.Type,
+            host = ProviderHost(p, c),
+            ok = playlist.Ok,
+            latencyMs = sw.ElapsedMilliseconds,
+            playlist
+        });
+    }
+    catch (Exception ex)
+    {
+        sw.Stop();
+        app.Logger.LogWarning(ex, "Provider test failed for provider {ProviderId} host {Host}.", p.Id, ProviderHost(p, c));
+        return Results.Ok(new
+        {
+            p.Id, p.Name, p.Type,
+            host = ProviderHost(p, c),
+            ok = false,
+            latencyMs = sw.ElapsedMilliseconds,
+            error = SafeProviderError(ex)
+        });
+    }
 }).RequireAuthorization();
 
 app.MapGet("/api/epg/{providerId}", async (string providerId, int? hours) =>
@@ -676,7 +756,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "0.3.11",
+        version = "0.3.12",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -864,13 +944,119 @@ async Task RunDownload(DownloadJob job)
 
 async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, (string Key, string Value)? extra = null)
 {
-    var url = $"{c.BaseUrl!.TrimEnd('/')}/player_api.php?username={Uri.EscapeDataString(c.Username ?? "")}&password={Uri.EscapeDataString(c.Password ?? "")}&action={Uri.EscapeDataString(action)}";
-    if (extra is not null)
-        url += $"&{Uri.EscapeDataString(extra.Value.Key)}={Uri.EscapeDataString(extra.Value.Value)}";
-    using var response = await http.GetAsync(url);
-    response.EnsureSuccessStatusCode();
+    var url = BuildXtreamPlayerApiUrl(c, action, extra);
+    using var response = await SendProviderRequest(url, HttpCompletionOption.ResponseHeadersRead, TimeSpan.FromSeconds(30));
+    if (!response.IsSuccessStatusCode)
+        throw new HttpRequestException($"Provider returned HTTP {(int)response.StatusCode} {response.ReasonPhrase}".Trim());
     await using var stream = await response.Content.ReadAsStreamAsync();
     return await JsonDocument.ParseAsync(stream);
+}
+
+async Task<List<object>> LoadXtreamLiveChannels(ProviderConnection c)
+{
+    var categories = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    try
+    {
+        using var categoryDoc = await XtreamJson(c, "get_live_categories");
+        if (categoryDoc.RootElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in categoryDoc.RootElement.EnumerateArray())
+            {
+                var id = JsonString(item, "category_id");
+                if (!string.IsNullOrWhiteSpace(id))
+                    categories[id] = JsonString(item, "category_name");
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogInformation(ex, "Xtream live categories unavailable; channel list will use category IDs.");
+    }
+
+    using var doc = await XtreamJson(c, "get_live_streams");
+    if (doc.RootElement.ValueKind != JsonValueKind.Array)
+        throw new InvalidOperationException("Xtream get_live_streams did not return a JSON array.");
+
+    var rows = new List<object>();
+    foreach (var x in doc.RootElement.EnumerateArray().Take(20000))
+    {
+        var id = JsonString(x, "stream_id");
+        if (string.IsNullOrWhiteSpace(id)) continue;
+        var categoryId = JsonString(x, "category_id");
+        var group = categories.TryGetValue(categoryId, out var categoryName) && !string.IsNullOrWhiteSpace(categoryName)
+            ? categoryName : (string.IsNullOrWhiteSpace(categoryId) ? "Other" : categoryId);
+        var source = BuildXtreamLiveUrl(c, id);
+        rows.Add(new
+        {
+            Id = string.IsNullOrWhiteSpace(JsonString(x, "epg_channel_id")) ? id : JsonString(x, "epg_channel_id"),
+            Name = string.IsNullOrWhiteSpace(JsonString(x, "name")) ? $"Channel {id}" : JsonString(x, "name"),
+            Group = group,
+            Number = JsonString(x, "num"),
+            logo = ProxyArtwork(JsonString(x, "stream_icon")),
+            playUrl = ProxyUrl(source, "media")
+        });
+    }
+    return rows;
+}
+
+async Task<List<object>> LoadM3uChannels(string url)
+{
+    using var response = await SendProviderRequest(url, HttpCompletionOption.ResponseContentRead, TimeSpan.FromSeconds(30));
+    if (!response.IsSuccessStatusCode)
+        throw new HttpRequestException($"Provider returned HTTP {(int)response.StatusCode} {response.ReasonPhrase}".Trim());
+    var text = await response.Content.ReadAsStringAsync();
+    if (!text.Contains("#EXTM3U", StringComparison.OrdinalIgnoreCase) && !text.Contains("#EXTINF", StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException("Provider response was not an M3U playlist.");
+    return ParseM3u(text).Take(20000).Select(ch => (object)new
+    {
+        ch.Id,
+        ch.Name,
+        ch.Group,
+        ch.Number,
+        logo = string.IsNullOrWhiteSpace(ch.Logo) ? "" : ProxyUrl(ch.Logo, "artwork"),
+        playUrl = ProxyUrl(ch.Url, "media")
+    }).ToList();
+}
+
+async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOption completion, TimeSpan timeout)
+{
+    using var request = new HttpRequestMessage(HttpMethod.Get, url);
+    request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.3.12");
+    using var cts = new CancellationTokenSource(timeout);
+    return await http.SendAsync(request, completion, cts.Token);
+}
+
+async Task<ProviderProbe> ProbeProvider(string url, TimeSpan timeout)
+{
+    var sw = Stopwatch.StartNew();
+    try
+    {
+        using var response = await SendProviderRequest(url, HttpCompletionOption.ResponseHeadersRead, timeout);
+        sw.Stop();
+        return new ProviderProbe(
+            response.IsSuccessStatusCode,
+            (int)response.StatusCode,
+            response.ReasonPhrase ?? "",
+            response.Content.Headers.ContentType?.MediaType ?? "",
+            sw.ElapsedMilliseconds,
+            response.RequestMessage?.RequestUri?.Host ?? "");
+    }
+    catch (Exception ex)
+    {
+        sw.Stop();
+        return new ProviderProbe(false, null, SafeProviderError(ex), "", sw.ElapsedMilliseconds,
+            Uri.TryCreate(url, UriKind.Absolute, out var u) ? u.Host : "");
+    }
+}
+
+static string SafeProviderError(Exception ex)
+{
+    var message = ex.GetBaseException().Message;
+    // Do not accidentally expose credentials if a provider URL is included in an exception.
+    message = Regex.Replace(message, @"([?&](?:username|password)=)[^&\s]+", "$1***", RegexOptions.IgnoreCase);
+    message = Regex.Replace(message, @"/(live|movie|series)/[^/\s]+/[^/\s]+/", "/$1/***/***/", RegexOptions.IgnoreCase);
+    return message.Length > 600 ? message[..600] : message;
 }
 
 string ProxyArtwork(string? url) =>
@@ -901,6 +1087,19 @@ static string ProviderHost(ProviderStored p, ProviderConnection c)
 
 static string BuildXtreamM3uUrl(ProviderConnection c) =>
     $"{c.BaseUrl?.TrimEnd('/')}/get.php?username={Uri.EscapeDataString(c.Username ?? "")}&password={Uri.EscapeDataString(c.Password ?? "")}&type=m3u_plus&output=ts";
+
+static string BuildXtreamPlayerApiUrl(ProviderConnection c, string? action = null, (string Key, string Value)? extra = null)
+{
+    var url = $"{c.BaseUrl?.TrimEnd('/')}/player_api.php?username={Uri.EscapeDataString(c.Username ?? "")}&password={Uri.EscapeDataString(c.Password ?? "")}";
+    if (!string.IsNullOrWhiteSpace(action))
+        url += $"&action={Uri.EscapeDataString(action)}";
+    if (extra is not null)
+        url += $"&{Uri.EscapeDataString(extra.Value.Key)}={Uri.EscapeDataString(extra.Value.Value)}";
+    return url;
+}
+
+static string BuildXtreamLiveUrl(ProviderConnection c, string id) =>
+    $"{c.BaseUrl?.TrimEnd('/')}/live/{Uri.EscapeDataString(c.Username ?? "")}/{Uri.EscapeDataString(c.Password ?? "")}/{Uri.EscapeDataString(id)}.ts";
 
 static string BuildXtreamXmlTvUrl(ProviderConnection c) =>
     $"{c.BaseUrl?.TrimEnd('/')}/xmltv.php?username={Uri.EscapeDataString(c.Username ?? "")}&password={Uri.EscapeDataString(c.Password ?? "")}";
@@ -1048,6 +1247,7 @@ record ProviderConnection(string? PlaylistUrl, string? EpgUrl, string? BaseUrl, 
 record ProviderInput(string? Id, string Name, string Type, string? PlaylistUrl, string? EpgUrl, string? BaseUrl, string? Username, string? Password, bool KeepExistingConnection = false);
 record LegacyProvider(string? Id, string? Name, string? Type, string? PlaylistUrl, string? EpgUrl, string? BaseUrl, string? Username, string? Password);
 record Channel(string Id, string Name, string Group, string Logo, string Url, string Number);
+record ProviderProbe(bool Ok, int? StatusCode, string Message, string ContentType, long LatencyMs, string Host);
 record ContinueItem(string Id, string Title, string Url, double PositionSeconds, DateTimeOffset Updated);
 record SetupRequest(string? Username, string Password);
 record LoginRequest(string Username, string Password);
