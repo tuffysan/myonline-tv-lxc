@@ -1,4 +1,4 @@
-# MyOnline TV Web v0.4.7 — Proxmox LXC
+# MyOnline TV Web v0.4.8 — Proxmox LXC
 
 MyOnline TV Web is a self-hosted entertainment appliance for Proxmox VE.
 
@@ -282,36 +282,36 @@ Back up `secrets.key` together with encrypted provider data.
 The bundled Nginx configuration defaults to HTTP for trusted LAN deployment. Do not directly expose it to the public Internet. Use HTTPS and preferably Tailscale/VPN or a properly secured reverse proxy for remote access.
 
 
-## Live TV browser playback (v0.4.7)
+## Live TV browser playback (v0.4.8)
 
 Raw MPEG-TS/`video/mp2t` Live TV streams are now converted to browser-compatible HLS by FFmpeg inside the LXC. The default path uses stream-copy remuxing (`-c copy`) for low CPU use. If hls.js reports a fatal codec/playback failure, the web UI retries once with H.264/AAC compatibility transcoding. Switching channel stops the previous FFmpeg session and removes temporary HLS segments. Provider source URLs and credentials remain server-side.
 
 ### Live TV channel cache and startup flow
 
-v0.4.7 caches each provider's Live TV channel metadata for 10 minutes. Once a cache exists, stale data is returned immediately while refresh runs in the background. Artwork proxying is lazy, which avoids generating tens of thousands of proxy entries during a channel refresh. Live TV playback no longer uses a temporary in-memory playback token: the browser sends the provider ID and channel key to the server, which resolves the protected source URL from the server-side channel cache. FFmpeg startup remains asynchronous: the browser starts a session and polls its status until HLS is ready, so a slow stream cannot hold an Nginx request open until a gateway timeout.
+v0.4.8 caches each provider's Live TV channel metadata for 10 minutes. Once a cache exists, stale data is returned immediately while refresh runs in the background. Artwork proxying is lazy, which avoids generating tens of thousands of proxy entries during a channel refresh. Live TV playback no longer uses a temporary in-memory playback token: the browser sends the provider ID and channel key to the server, which resolves the protected source URL from the server-side channel cache. FFmpeg startup remains asynchronous: the browser starts a session and polls its status until HLS is ready, so a slow stream cannot hold an Nginx request open until a gateway timeout.
 
 ## Release naming
 
-For v0.4.7 and later, the preferred Git tag format is:
+For v0.4.8 and later, the preferred Git tag format is:
 
 ```text
-v0.4.7
+v0.4.8
 ```
 
-The release workflow also accepts the legacy form `v.0.4.7`, and the updater normalizes both forms when locating release artifacts.
+The release workflow also accepts the legacy form `v.0.4.8`, and the updater normalizes both forms when locating release artifacts.
 
 A successful GitHub Release must contain these generated assets in addition to GitHub's automatic source archives:
 
 ```text
-myonline-tv-web-v0.4.7-linux-x64.tar.gz
-myonline-tv-lxc-v0.4.7-source.tar.gz
+myonline-tv-web-v0.4.8-linux-x64.tar.gz
+myonline-tv-lxc-v0.4.8-source.tar.gz
 SHA256SUMS-RELEASE.txt
 release.json
 ```
 
 If only `Source code (zip)` and `Source code (tar.gz)` are shown, the Release workflow did not finish successfully and the Proxmox updater should not be run yet.
 
-## v0.4.7 media library behaviour
+## v0.4.8 media library behaviour
 
 Movies and Series are loaded in pages of 100 items. Search and category filtering are processed server-side against the ten-minute Xtream catalogue cache. This keeps browser rendering, artwork tokens and response payloads bounded even for very large IPTV libraries.
 

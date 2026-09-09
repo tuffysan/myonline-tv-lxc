@@ -492,42 +492,31 @@ function showProgramDetails(channelKey,channelNameText,payload){
   playLive(channelKey,channelNameText);
 }
 
-const MEDIA_PAGE_SIZE=100;
-let mediaItems=[],mediaTotal=0,mediaHasMore=false,mediaSkip=0,mediaSearchTimer=null;
-let seriesItems=[],seriesTotal=0,seriesHasMore=false,seriesSkip=0,seriesSearchTimer=null;
-
 async function movies(){
   if(!await ensureProvider('xtream')){content.innerHTML='<div class=card>Movies require an Xtream-compatible provider.</div>';return}
   content.innerHTML='<div class=card>Loading movies…</div>';
   try{
     const cats=await api(`/api/vod/${currentProvider}/categories`);
-    content.innerHTML=`<div class=toolbar>${providerSelect('xtream')}<select id=category><option value="">All categories</option>${cats.map(c=>`<option value="${escAttr(c.id)}">${esc(c.name)}</option>`).join('')}</select><input id=mediaq placeholder="Search movies"></div><div id=mediaPlayer></div><div id=mediaSummary class=muted></div><div id=mediaGrid class=posterGrid></div><div class=loadMoreWrap><button id=mediaMore class=btn style="display:none">Load more</button></div>`;
+    content.innerHTML=`<div class=toolbar>${providerSelect('xtream')}<select id=category><option value="">All categories</option>${cats.map(c=>`<option value="${escAttr(c.id)}">${esc(c.name)}</option>`).join('')}</select><input id=mediaq placeholder="Search movies"></div><div id=mediaPlayer></div><div id=mediaGrid class=posterGrid></div>`;
     $('#provider').onchange=async e=>{currentProvider=e.target.value;await movies()};
-    $('#category').onchange=()=>loadMovies(true);
-    $('#mediaq').oninput=()=>{clearTimeout(mediaSearchTimer);mediaSearchTimer=setTimeout(()=>loadMovies(true),300)};
-    $('#mediaMore').onclick=()=>loadMovies(false);
-    await loadMovies(true);
+    $('#category').onchange=loadMovies;$('#mediaq').oninput=filterMedia;
+    await loadMovies();
   }catch(e){content.innerHTML=errorCard(e)}
 }
-async function loadMovies(reset=true){
-  const grid=$('#mediaGrid');if(!grid)return;
-  if(reset){mediaItems=[];mediaSkip=0;grid.innerHTML='<div class=card>Loading movies…</div>'}
-  else $('#mediaMore').disabled=true;
+let mediaItems=[];
+async function loadMovies(){
+  const grid=$('#mediaGrid');if(grid)grid.innerHTML='<div class=card>Loading movies…</div>';
   try{
-    const category=$('#category')?.value||'',q=$('#mediaq')?.value||'';
-    const page=await api(`/api/vod/${currentProvider}/items?categoryId=${encodeURIComponent(category)}&q=${encodeURIComponent(q)}&skip=${mediaSkip}&take=${MEDIA_PAGE_SIZE}`);
-    mediaTotal=page.total||0;mediaHasMore=!!page.hasMore;
-    mediaItems=reset?(page.items||[]):mediaItems.concat(page.items||[]);
-    mediaSkip=mediaItems.length;
-    renderMovies();
-  }catch(e){grid.innerHTML=errorCard(e)}
+    mediaItems=await api(`/api/vod/${currentProvider}/items?categoryId=${encodeURIComponent($('#category')?.value||'')}`);
+    filterMedia();
+  }catch(e){if(grid)grid.innerHTML=errorCard(e)}
 }
-function renderMovies(){
-  const grid=$('#mediaGrid');if(!grid)return;
-  $('#mediaSummary').textContent=`Showing ${mediaItems.length} of ${mediaTotal} movies`;
-  grid.innerHTML=mediaItems.length?mediaItems.map(m=>`<article class=posterCard>${m.poster?`<img loading=lazy src="${escAttr(m.poster)}">`:'<div class=posterPlaceholder>▶</div>'}<div class=posterBody><b>${esc(m.name)}</b><small>${esc(m.year||'')} ${m.rating?'· '+esc(m.rating):''}</small><div class=row><button class=btn onclick='playMovie(${JSON.stringify(m.id)},${JSON.stringify(m.name)})'>Play</button><button class=btn onclick='movieDetails(${JSON.stringify(m.id)})'>Info</button><button class=btn onclick='downloadMovie(${JSON.stringify(m.id)},${JSON.stringify(m.name)})'>↓</button></div></div></article>`).join(''):'<div class=card>No movies found.</div>';
-  const more=$('#mediaMore');if(more){more.style.display=mediaHasMore?'inline-flex':'none';more.disabled=false}
+function filterMedia(){
+  const q=($('#mediaq')?.value||'').toLowerCase();
+  const rows=mediaItems.filter(x=>!q||x.name.toLowerCase().includes(q)).slice(0,1000);
+  $('#mediaGrid').innerHTML=rows.map(m=>`<article class=posterCard>${m.poster?`<img loading=lazy src="${escAttr(m.poster)}">`:'<div class=posterPlaceholder>▶</div>'}<div class=posterBody><b>${esc(m.name)}</b><small>${esc(m.year||'')} ${m.rating?'· '+esc(m.rating):''}</small><div class=row><button class=btn onclick='playMovie(${JSON.stringify(m.id)},${JSON.stringify(m.name)})'>Play</button><button class=btn onclick='movieDetails(${JSON.stringify(m.id)})'>Info</button><button class=btn onclick='downloadMovie(${JSON.stringify(m.id)},${JSON.stringify(m.name)})'>↓</button></div></div></article>`).join('');
 }
+
 function movieDetails(id){
   const m=mediaItems.find(x=>String(x.id)===String(id));if(!m)return;$('#movieDetail')?.remove();
   const grid=$('#mediaGrid');grid.insertAdjacentHTML('beforebegin',`<div id=movieDetail class=mediaDetail>${m.poster?`<img src="${escAttr(m.poster)}">`:''}<div><button class=btn onclick="$('#movieDetail').remove()">← Back</button><h2>${esc(m.name)}</h2><p class=muted>${esc([m.year,m.genre,m.rating&&('★ '+m.rating)].filter(Boolean).join(' · '))}</p><p>${esc(m.plot||'No description available.')}</p><div class=row><button class=btn onclick='playMovie(${JSON.stringify(m.id)},${JSON.stringify(m.name)})'>▶ Play</button><button class=btn onclick='downloadMovie(${JSON.stringify(m.id)},${JSON.stringify(m.name)})'>↓ Download</button></div></div></div>`);$('#movieDetail').scrollIntoView({behavior:'smooth'});
@@ -538,46 +527,36 @@ async function series(){
   content.innerHTML='<div class=card>Loading series…</div>';
   try{
     const cats=await api(`/api/series/${currentProvider}/categories`);
-    content.innerHTML=`<div class=toolbar>${providerSelect('xtream')}<select id=category><option value="">All categories</option>${cats.map(c=>`<option value="${escAttr(c.id)}">${esc(c.name)}</option>`).join('')}</select><input id=seriesq placeholder="Search series"></div><div id=mediaPlayer></div><div id=seriesSummary class=muted></div><div id=seriesContent></div><div class=loadMoreWrap><button id=seriesMore class=btn style="display:none">Load more</button></div>`;
+    content.innerHTML=`<div class=toolbar>${providerSelect('xtream')}<select id=category><option value="">All categories</option>${cats.map(c=>`<option value="${escAttr(c.id)}">${esc(c.name)}</option>`).join('')}</select><input id=seriesq placeholder="Search series"></div><div id=mediaPlayer></div><div id=seriesContent></div>`;
     $('#provider').onchange=async e=>{currentProvider=e.target.value;await series()};
-    $('#category').onchange=()=>loadSeries(true);
-    $('#seriesq').oninput=()=>{clearTimeout(seriesSearchTimer);seriesSearchTimer=setTimeout(()=>loadSeries(true),300)};
-    $('#seriesMore').onclick=()=>loadSeries(false);
-    await loadSeries(true);
+    $('#category').onchange=loadSeries;$('#seriesq').oninput=filterSeries;
+    await loadSeries();
   }catch(e){content.innerHTML=errorCard(e)}
 }
-async function loadSeries(reset=true){
-  const box=$('#seriesContent');if(!box)return;
-  if(reset){seriesItems=[];seriesSkip=0;box.innerHTML='<div class=card>Loading series…</div>'}
-  else $('#seriesMore').disabled=true;
+let seriesItems=[];
+async function loadSeries(){
+  const box=$('#seriesContent');if(box)box.innerHTML='<div class=card>Loading series…</div>';
   try{
-    const category=$('#category')?.value||'',q=$('#seriesq')?.value||'';
-    const page=await api(`/api/series/${currentProvider}/items?categoryId=${encodeURIComponent(category)}&q=${encodeURIComponent(q)}&skip=${seriesSkip}&take=${MEDIA_PAGE_SIZE}`);
-    seriesTotal=page.total||0;seriesHasMore=!!page.hasMore;
-    seriesItems=reset?(page.items||[]):seriesItems.concat(page.items||[]);
-    seriesSkip=seriesItems.length;
-    renderSeries();
-  }catch(e){box.innerHTML=errorCard(e)}
+    seriesItems=await api(`/api/series/${currentProvider}/items?categoryId=${encodeURIComponent($('#category')?.value||'')}`);
+    filterSeries();
+  }catch(e){if(box)box.innerHTML=errorCard(e)}
 }
-function renderSeries(){
-  $('#seriesSummary').textContent=`Showing ${seriesItems.length} of ${seriesTotal} series`;
-  $('#seriesContent').innerHTML=seriesItems.length?`<div class=posterGrid>${seriesItems.map(s=>`<button class="posterCard seriesButton" onclick="openSeries('${escAttr(s.id)}')">${s.poster?`<img loading=lazy src="${escAttr(s.poster)}">`:'<div class=posterPlaceholder>▦</div>'}<div class=posterBody><b>${esc(s.name)}</b><small>${esc(s.year||'')} ${s.rating?'· ★ '+esc(s.rating):''}</small><small>${esc(s.genre||'')}</small></div></button>`).join('')}</div>`:'<div class=card>No series found.</div>';
-  const more=$('#seriesMore');if(more){more.style.display=seriesHasMore?'inline-flex':'none';more.disabled=false}
+function filterSeries(){
+  const q=($('#seriesq')?.value||'').toLowerCase(),rows=seriesItems.filter(x=>!q||x.name.toLowerCase().includes(q)).slice(0,1000);
+  $('#seriesContent').innerHTML=`<div class=posterGrid>${rows.map(s=>`<button class="posterCard seriesButton" onclick="openSeries('${escAttr(s.id)}')">${s.poster?`<img loading=lazy src="${escAttr(s.poster)}">`:'<div class=posterPlaceholder>▦</div>'}<div class=posterBody><b>${esc(s.name)}</b><small>${esc(s.year||'')} ${s.rating?'· ★ '+esc(s.rating):''}</small><small>${esc(s.genre||'')}</small></div></button>`).join('')}</div>`;
 }
 async function openSeries(id){
   $('#seriesContent').innerHTML='<div class=card>Loading episodes…</div>';
   try{
-    const seriesMeta=seriesItems.find(x=>String(x.id)===String(id))||{};
     const s=await api(`/api/series/${currentProvider}/${encodeURIComponent(id)}`);
     const by={};s.episodes.forEach(e=>(by[e.season]??=[]).push(e));
-    const cover=s.cover||seriesMeta.poster||'';
-    $('#seriesContent').innerHTML=`<div class=seriesHero>${cover?`<img src="${escAttr(cover)}">`:''}<div><button class=btn onclick=renderSeries()>← Back</button><h2>${esc(s.name)}</h2><p>${esc(s.plot||'')}</p></div></div>
-    ${Object.keys(by).sort((a,b)=>Number(a)-Number(b)).map(season=>`<section><h3>Season ${esc(season)}</h3><div class=episodeList>${by[season].map(e=>`<div class=episode><span><b>E${esc(e.episode)}</b> ${esc(e.title||'Episode')}</span><div class=row><button class=btn onclick='playEpisode(${JSON.stringify(e.id)},${JSON.stringify(e.extension||'mp4')},${JSON.stringify(e.title||'Episode')},${JSON.stringify({id:'episode:'+currentProvider+':'+e.id,title:(s.name||'Series')+' · S'+season+'E'+e.episode,providerId:currentProvider,mediaType:'episode',mediaId:String(e.id),extension:e.extension||'mp4',poster:cover})})'>Play</button><button class=btn onclick='downloadEpisode(${JSON.stringify(e.id)},${JSON.stringify(e.extension||'mp4')},${JSON.stringify((s.name||'Series')+' - S'+season+'E'+e.episode)})'>↓</button></div></div>`).join('')}</div></section>`).join('')}`;
+    $('#seriesContent').innerHTML=`<div class=seriesHero>${s.cover?`<img src="${escAttr(s.cover)}">`:''}<div><button class=btn onclick=filterSeries()>← Back</button><h2>${esc(s.name)}</h2><p>${esc(s.plot||'')}</p></div></div>
+    ${Object.keys(by).sort((a,b)=>Number(a)-Number(b)).map(season=>`<section><h3>Season ${esc(season)}</h3><div class=episodeList>${by[season].map(e=>`<div class=episode><span><b>E${esc(e.episode)}</b> ${esc(e.title||'Episode')}</span><div class=row><button class=btn onclick='playEpisode(${JSON.stringify(e.id)},${JSON.stringify(e.extension||'mp4')},${JSON.stringify(e.title||'Episode')},${JSON.stringify('episode:'+s.name+':'+season+':'+e.episode)})'>Play</button><button class=btn onclick='downloadEpisode(${JSON.stringify(e.id)},${JSON.stringify(e.extension||'mp4')},${JSON.stringify((s.name||'Series')+' - S'+season+'E'+e.episode)})'>↓</button></div></div>`).join('')}</div></section>`).join('')}`;
   }catch(e){$('#seriesContent').innerHTML=errorCard(e)}
 }
 
-async function movieToken(id,providerId=currentProvider){
-  return await api(`/api/vod/${encodeURIComponent(providerId)}/${encodeURIComponent(id)}/token`,{method:'POST'});
+async function movieToken(id){
+  return await api(`/api/vod/${currentProvider}/${encodeURIComponent(id)}/token`,{method:'POST'});
 }
 async function playMovie(id,name){
   try{
@@ -590,13 +569,13 @@ async function playMovie(id,name){
 async function downloadMovie(id,name){
   try{const t=await movieToken(id);await startMediaDownload(t.downloadToken,name)}catch(e){alert(e.message)}
 }
-async function episodeToken(id,ext,providerId=currentProvider){
-  return await api(`/api/series/${encodeURIComponent(providerId)}/episode/${encodeURIComponent(id)}/token?ext=${encodeURIComponent(ext||'mp4')}`,{method:'POST'});
+async function episodeToken(id,ext){
+  return await api(`/api/series/${currentProvider}/episode/${encodeURIComponent(id)}/token?ext=${encodeURIComponent(ext||'mp4')}`,{method:'POST'});
 }
-async function playEpisode(id,ext,name,mediaMeta){
+async function playEpisode(id,ext,name,mediaId){
   try{
     const t=await episodeToken(id,ext);
-    const meta=(mediaMeta&&typeof mediaMeta==='object')?mediaMeta:{id:'episode:'+currentProvider+':'+id,title:name,providerId:currentProvider,mediaType:'episode',mediaId:String(id),extension:ext||'mp4',poster:''};
+    const meta={id:String(mediaId||('episode:'+currentProvider+':'+id)),title:name,providerId:currentProvider,mediaType:'episode',mediaId:String(id),extension:ext||'mp4',poster:''};
     await playServerMedia(t.playToken,name,meta);
   }catch(e){alert(e.message)}
 }

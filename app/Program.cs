@@ -82,7 +82,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.4.7");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.4.8");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
@@ -258,7 +258,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "0.4.7",
+    version = "0.4.8",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -296,14 +296,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = File.Exists(adminFile);
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "0.4.7", checks })
-        : Results.Json(new { status = "not-ready", version = "0.4.7", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "0.4.8", checks })
+        : Results.Json(new { status = "not-ready", version = "0.4.8", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "0.4.7",
+    version = "0.4.8",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = File.Exists(adminFile),
@@ -588,7 +588,7 @@ app.MapGet("/api/vod/{providerId}/categories", async (string providerId) =>
     }
 }).RequireAuthorization();
 
-app.MapGet("/api/vod/{providerId}/items", async (string providerId, string? categoryId, string? q, int? skip, int? take) =>
+app.MapGet("/api/vod/{providerId}/items", async (string providerId, string? categoryId) =>
 {
     var resolved = ResolveXtream(providerId);
     if (resolved is null) return Results.NotFound();
@@ -598,49 +598,28 @@ app.MapGet("/api/vod/{providerId}/items", async (string providerId, string? cate
         var cacheKey = providerId + ":" + (categoryId ?? "");
         using var doc = await CachedXtreamJson(vodItemCache, cacheKey, resolved.Value.Connection,
             "get_vod_streams", TimeSpan.FromSeconds(20), extra);
-
-        var offset = Math.Max(0, skip ?? 0);
-        var pageSize = Math.Clamp(take ?? 100, 20, 200);
-        var query = (q ?? "").Trim();
-
-        var matches = doc.RootElement.EnumerateArray()
-            .Where(x =>
+        var rows = new List<object>();
+        foreach (var x in doc.RootElement.EnumerateArray().Take(5000))
+        {
+            var id = JsonString(x, "stream_id");
+            var ext = JsonString(x, "container_extension");
+            var source = BuildXtreamMovieUrl(resolved.Value.Connection, id, ext);
+            rows.Add(new
             {
-                if (query.Length == 0) return true;
-                var haystack = string.Join(" ",
-                    JsonString(x, "name"),
-                    JsonString(x, "year"),
-                    JsonString(x, "genre"),
-                    JsonString(x, "plot"));
-                return haystack.Contains(query, StringComparison.OrdinalIgnoreCase);
-            })
-            .Take(5000)
-            .ToList();
-
-        var page = matches.Skip(offset).Take(pageSize).Select(x => new
-        {
-            id = JsonString(x, "stream_id"),
-            name = JsonString(x, "name"),
-            year = JsonString(x, "year"),
-            rating = JsonString(x, "rating"),
-            plot = JsonString(x, "plot"),
-            genre = JsonString(x, "genre"),
-            extension = JsonString(x, "container_extension"),
-            poster = ProxyArtwork(JsonString(x, "stream_icon"))
-        }).ToList();
-
-        return Results.Ok(new
-        {
-            items = page,
-            total = matches.Count,
-            skip = offset,
-            take = pageSize,
-            hasMore = offset + page.Count < matches.Count
-        });
+                id,
+                name = JsonString(x, "name"),
+                year = JsonString(x, "year"),
+                rating = JsonString(x, "rating"),
+                plot = JsonString(x, "plot"),
+                genre = JsonString(x, "genre"),
+                poster = ProxyArtwork(JsonString(x, "stream_icon"))
+            });
+        }
+        return Results.Ok(rows);
     }
     catch (Exception ex)
     {
-        app.Logger.LogWarning(ex, "Xtream VOD catalogue request failed.");
+        app.Logger.LogWarning(ex, "Xtream catalogue request failed.");
         return Results.Problem(detail: SafeProviderError(ex), statusCode: StatusCodes.Status502BadGateway);
     }
 }).RequireAuthorization();
@@ -666,7 +645,7 @@ app.MapGet("/api/series/{providerId}/categories", async (string providerId) =>
     }
 }).RequireAuthorization();
 
-app.MapGet("/api/series/{providerId}/items", async (string providerId, string? categoryId, string? q, int? skip, int? take) =>
+app.MapGet("/api/series/{providerId}/items", async (string providerId, string? categoryId) =>
 {
     var resolved = ResolveXtream(providerId);
     if (resolved is null) return Results.NotFound();
@@ -676,26 +655,7 @@ app.MapGet("/api/series/{providerId}/items", async (string providerId, string? c
         var cacheKey = providerId + ":" + (categoryId ?? "");
         using var doc = await CachedXtreamJson(seriesItemCache, cacheKey, resolved.Value.Connection,
             "get_series", TimeSpan.FromSeconds(20), extra);
-
-        var offset = Math.Max(0, skip ?? 0);
-        var pageSize = Math.Clamp(take ?? 100, 20, 200);
-        var query = (q ?? "").Trim();
-
-        var matches = doc.RootElement.EnumerateArray()
-            .Where(x =>
-            {
-                if (query.Length == 0) return true;
-                var haystack = string.Join(" ",
-                    JsonString(x, "name"),
-                    JsonString(x, "year"),
-                    JsonString(x, "genre"),
-                    JsonString(x, "plot"));
-                return haystack.Contains(query, StringComparison.OrdinalIgnoreCase);
-            })
-            .Take(5000)
-            .ToList();
-
-        var page = matches.Skip(offset).Take(pageSize).Select(x => new
+        var rows = doc.RootElement.EnumerateArray().Take(5000).Select(x => new
         {
             id = JsonString(x, "series_id"),
             name = JsonString(x, "name"),
@@ -705,19 +665,11 @@ app.MapGet("/api/series/{providerId}/items", async (string providerId, string? c
             genre = JsonString(x, "genre"),
             poster = ProxyArtwork(JsonString(x, "cover"))
         }).ToList();
-
-        return Results.Ok(new
-        {
-            items = page,
-            total = matches.Count,
-            skip = offset,
-            take = pageSize,
-            hasMore = offset + page.Count < matches.Count
-        });
+        return Results.Ok(rows);
     }
     catch (Exception ex)
     {
-        app.Logger.LogWarning(ex, "Xtream Series catalogue request failed.");
+        app.Logger.LogWarning(ex, "Xtream catalogue request failed.");
         return Results.Problem(detail: SafeProviderError(ex), statusCode: StatusCodes.Status502BadGateway);
     }
 }).RequireAuthorization();
@@ -1253,7 +1205,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "0.4.7",
+        version = "0.4.8",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -1487,7 +1439,7 @@ async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, TimeSpa
     var url = BuildXtreamPlayerApiUrl(c, action, extra);
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.4.7");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.4.8");
     using var cts = new CancellationTokenSource(timeout);
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -1626,7 +1578,7 @@ async Task<List<LiveChannel>> LoadM3uChannels(string url)
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/x-mpegURL,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.4.7");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.4.8");
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -1645,7 +1597,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.4.7");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.4.8");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }
