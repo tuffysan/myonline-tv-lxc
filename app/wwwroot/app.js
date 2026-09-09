@@ -123,11 +123,52 @@ function renderFilter(){
   $('#chan').innerHTML=rows.map(c=>`<article class=channelCard>
     <div class=logoBox>${c.logo?`<img loading=lazy src="${escAttr(c.logo)}" onerror="this.style.display='none'">`:''}</div>
     <div class=channelInfo><b>${esc(c.number?c.number+' · ':'')}${esc(c.name)}</b><small>${esc(c.group)}</small></div>
-    <button class=round onclick='playMedia(${JSON.stringify(c.playUrl)},${JSON.stringify(c.name)})'>▶</button>
+    <button class=round onclick='playLive(${JSON.stringify(c.playToken)},${JSON.stringify(c.name)})'>▶</button>
     <button class=round onclick="toggleFav('${escAttr(c.id)}')">${fav.has(c.id)?'★':'☆'}</button>
   </article>`).join('');
 }
 async function toggleFav(id){fav=new Set(await api('/api/favourites/'+encodeURIComponent(id),{method:'POST'}));if(currentView==='live')renderFilter()}
+
+let activeLiveSession=null;
+let liveFallbackTried=false;
+
+async function playLive(token,name,forceTranscode=false){
+  if(!forceTranscode)liveFallbackTried=false;
+  destroyPlayer();
+  const wrap=$('#playerWrap')||$('#mediaPlayer');
+  if(!wrap)return;
+  wrap.innerHTML=`<div class=playerCard><video id=video controls autoplay playsinline></video><div class=nowPlaying>${esc(name)} · Starting Live TV…</div></div>`;
+  wrap.scrollIntoView({behavior:'smooth',block:'start'});
+  try{
+    const info=await api('/api/live/start/'+encodeURIComponent(token)+(forceTranscode?'?transcode=true':''),{method:'POST'});
+    activeLiveSession=info.sessionId;
+    const video=$('#video');
+    if(!video)return;
+    if(window.Hls&&Hls.isSupported()){
+      hls=new Hls({enableWorker:true,lowLatencyMode:true,liveSyncDurationCount:3,backBufferLength:30});
+      hls.loadSource(info.playbackUrl);hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED,()=>video.play().catch(()=>{}));
+      hls.on(Hls.Events.ERROR,async(_,d)=>{
+        if(d.fatal){
+          console.warn('HLS fatal',d);
+          if(!forceTranscode&&!liveFallbackTried){
+            liveFallbackTried=true;
+            const np=wrap.querySelector('.nowPlaying');if(np)np.textContent=name+' · Retrying with compatibility transcoding…';
+            await playLive(token,name,true);
+            return;
+          }
+          const np=wrap.querySelector('.nowPlaying');
+          if(np)np.textContent=name+' · Playback error: '+(d.details||d.type||'HLS error');
+        }
+      });
+    }else if(video.canPlayType('application/vnd.apple.mpegurl')){
+      video.src=info.playbackUrl;await video.play().catch(()=>{});
+    }else throw new Error('This browser does not support HLS playback.');
+    const np=wrap.querySelector('.nowPlaying');if(np)np.textContent=name+' · Live';
+  }catch(e){
+    const np=wrap.querySelector('.nowPlaying');if(np)np.textContent=name+' · '+(e.message||e);
+  }
+}
 
 function playMedia(url,name){
   destroyPlayer();
@@ -143,7 +184,13 @@ function playMedia(url,name){
   else video.src=url;
   wrap.scrollIntoView({behavior:'smooth',block:'start'});
 }
-function destroyPlayer(){if(hls){try{hls.destroy()}catch{}hls=null}}
+function destroyPlayer(){
+  if(hls){try{hls.destroy()}catch{}hls=null}
+  if(activeLiveSession){
+    const id=activeLiveSession;activeLiveSession=null;
+    fetch('/api/live/session/'+encodeURIComponent(id),{method:'DELETE',keepalive:true}).catch(()=>{});
+  }
+}
 
 async function guide(){
   if(!await ensureProvider()){content.innerHTML=noProvider();return}
@@ -169,7 +216,7 @@ function timelineRow(c,progs,start,end,span){
     const left=(a-start)/span*100,width=Math.max(.8,(b-a)/span*100);
     return `<button class=prog style="left:${left}%;width:${width}%" title="${escAttr(p.desc||'')}"><b>${esc(p.title)}</b><small>${new Date(p.start).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</small></button>`;
   }).join('');
-  return `<div class=timelineRow><button class=timelineChannel onclick='playMedia(${JSON.stringify(c.playUrl)},${JSON.stringify(c.name)})'>${c.logo?`<img src="${escAttr(c.logo)}">`:''}<span>${esc(c.name)}</span></button><div class=programLane>${blocks}</div></div>`;
+  return `<div class=timelineRow><button class=timelineChannel onclick='playLive(${JSON.stringify(c.playToken)},${JSON.stringify(c.name)})'>${c.logo?`<img src="${escAttr(c.logo)}">`:''}<span>${esc(c.name)}</span></button><div class=programLane>${blocks}</div></div>`;
 }
 
 async function movies(){

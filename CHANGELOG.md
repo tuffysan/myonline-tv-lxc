@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.3.13
+
+- Added server-side Live TV playback for browsers: MPEG-TS/RAW provider streams are remuxed by FFmpeg to HLS.
+- Added authenticated Live TV start, HLS segment and session-stop endpoints.
+- Live TV and Guide now use the server HLS pipeline instead of sending `video/mp2t` directly to HTML5 video.
+- Channel changes stop the previous FFmpeg process and clean temporary HLS segments.
+- Uses stream-copy remuxing first for low CPU usage.
+- If hls.js reports a fatal playback/codec error, the UI retries once using H.264/AAC compatibility transcoding.
+- Added 15-second FFmpeg startup timeout and sanitized playback diagnostics.
+- No DRM/encryption bypass is implemented.
+
 ## v0.3.12
 
 - Live TV for Xtream providers now prefers `player_api.php?action=get_live_streams` instead of downloading the full M3U playlist.

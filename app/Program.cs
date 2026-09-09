@@ -80,11 +80,14 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.3.12");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.3.13");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
 var downloads = new ConcurrentDictionary<string, DownloadJob>();
+var liveSessions = new ConcurrentDictionary<string, LiveSession>();
+var liveHlsRoot = Path.Combine(dataDir, "live-hls");
+Directory.CreateDirectory(liveHlsRoot);
 
 T? Load<T>(string path)
 {
@@ -230,7 +233,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "0.3.12",
+    version = "0.3.13",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -268,14 +271,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = File.Exists(adminFile);
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "0.3.12", checks })
-        : Results.Json(new { status = "not-ready", version = "0.3.12", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "0.3.13", checks })
+        : Results.Json(new { status = "not-ready", version = "0.3.13", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "0.3.12",
+    version = "0.3.13",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = File.Exists(adminFile),
@@ -748,6 +751,163 @@ app.MapGet("/api/proxy/{token}", async (string token, HttpContext ctx) =>
 }).RequireAuthorization();
 
 
+
+// Browser-compatible Live TV: remux provider streams to short HLS segments with FFmpeg.
+app.MapPost("/api/live/start/{token}", async (string token, bool? transcode, HttpContext ctx) =>
+{
+    if (!proxyTokens.TryGetValue(token, out var target) || target.Kind != "live")
+        return Results.NotFound("Live stream token not found or expired.");
+
+    if (!Uri.TryCreate(target.Url, UriKind.Absolute, out var sourceUri) || sourceUri.Scheme is not ("http" or "https"))
+        return Results.BadRequest("Invalid provider stream URL.");
+
+    var ffmpeg = FindExecutable("ffmpeg");
+    if (ffmpeg is null)
+        return Results.Problem("FFmpeg is not installed in the MyOnline TV container.", statusCode: 503);
+
+    // One active browser Live TV session per appliance keeps CPU/network use predictable.
+    foreach (var existing in liveSessions.Keys.ToArray())
+        await StopLiveSession(existing);
+
+    var sessionId = Guid.NewGuid().ToString("N");
+    var sessionDir = Path.Combine(liveHlsRoot, sessionId);
+    Directory.CreateDirectory(sessionDir);
+    var playlistPath = Path.Combine(sessionDir, "index.m3u8");
+    var segmentPattern = Path.Combine(sessionDir, "seg-%06d.ts");
+
+    var psi = new ProcessStartInfo
+    {
+        FileName = ffmpeg,
+        UseShellExecute = false,
+        RedirectStandardError = true,
+        RedirectStandardOutput = true,
+        CreateNoWindow = true
+    };
+    var ffmpegArgs = new List<string>
+    {
+        "-hide_banner", "-loglevel", "warning", "-nostdin",
+        "-rw_timeout", "15000000",
+        "-i", target.Url,
+        "-map", "0:v:0?", "-map", "0:a:0?"
+    };
+    if (transcode == true)
+    {
+        // Compatibility fallback for source codecs that a browser cannot decode in HLS.
+        ffmpegArgs.AddRange(new[]
+        {
+            "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency",
+            "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k"
+        });
+    }
+    else
+    {
+        // Fast path: remux only, keeping CPU usage low.
+        ffmpegArgs.AddRange(new[] { "-c", "copy" });
+    }
+    ffmpegArgs.AddRange(new[]
+    {
+        "-f", "hls",
+        "-hls_time", "2",
+        "-hls_list_size", "6",
+        "-hls_flags", "delete_segments+append_list+omit_endlist",
+        "-hls_segment_filename", segmentPattern,
+        playlistPath
+    });
+    foreach (var arg in ffmpegArgs) psi.ArgumentList.Add(arg);
+
+    var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
+    var errorLog = new StringBuilder();
+    try
+    {
+        if (!process.Start())
+            return Results.Problem("Could not start FFmpeg for Live TV.", statusCode: 500);
+    }
+    catch (Exception ex)
+    {
+        try { Directory.Delete(sessionDir, true); } catch { }
+        return Results.Problem($"Could not start FFmpeg: {ex.Message}", statusCode: 500);
+    }
+
+    var session = new LiveSession(sessionId, sessionDir, process, errorLog, target.Url, DateTimeOffset.UtcNow);
+    liveSessions[sessionId] = session;
+
+    _ = Task.Run(async () =>
+    {
+        try
+        {
+            while (true)
+            {
+                var line = await process.StandardError.ReadLineAsync();
+                if (line is null) break;
+                line = line.Replace(target.Url, "[provider-stream]", StringComparison.Ordinal);
+                lock (errorLog)
+                {
+                    errorLog.AppendLine(line);
+                    if (errorLog.Length > 12000) errorLog.Remove(0, Math.Min(4000, errorLog.Length));
+                }
+            }
+        }
+        catch { }
+    });
+
+    var deadline = DateTimeOffset.UtcNow.AddSeconds(15);
+    while (DateTimeOffset.UtcNow < deadline && !ctx.RequestAborted.IsCancellationRequested)
+    {
+        if (process.HasExited)
+        {
+            string detail;
+            lock (errorLog) detail = errorLog.ToString().Trim();
+            var exitCode = process.ExitCode;
+            await StopLiveSession(sessionId);
+            if (detail.Length > 1600) detail = detail[^1600..];
+            return Results.Problem(
+                title: "Live TV stream could not be prepared for the browser",
+                detail: string.IsNullOrWhiteSpace(detail) ? $"FFmpeg exited with code {exitCode}." : detail,
+                statusCode: 502);
+        }
+
+        if (File.Exists(playlistPath) && Directory.EnumerateFiles(sessionDir, "*.ts").Any())
+        {
+            return Results.Ok(new
+            {
+                sessionId,
+                playbackUrl = $"/api/live/hls/{sessionId}/index.m3u8",
+                mode = transcode == true ? "hls-transcode" : "hls-remux",
+                sourceHost = sourceUri.Host
+            });
+        }
+        await Task.Delay(250, ctx.RequestAborted);
+    }
+
+    string timeoutDetail;
+    lock (errorLog) timeoutDetail = errorLog.ToString().Trim();
+    await StopLiveSession(sessionId);
+    if (timeoutDetail.Length > 1200) timeoutDetail = timeoutDetail[^1200..];
+    return Results.Problem(
+        title: "Live TV startup timed out",
+        detail: string.IsNullOrWhiteSpace(timeoutDetail) ? "FFmpeg did not create an HLS segment within 15 seconds." : timeoutDetail,
+        statusCode: 504);
+}).RequireAuthorization();
+
+app.MapGet("/api/live/hls/{sessionId}/{fileName}", (string sessionId, string fileName) =>
+{
+    if (!liveSessions.TryGetValue(sessionId, out var session)) return Results.NotFound();
+    if (string.IsNullOrWhiteSpace(fileName) || fileName.Contains("..", StringComparison.Ordinal) ||
+        fileName.Contains('/') || fileName.Contains('\\')) return Results.BadRequest();
+
+    var path = Path.Combine(session.Directory, fileName);
+    if (!File.Exists(path)) return Results.NotFound();
+    var contentType = fileName.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase)
+        ? "application/vnd.apple.mpegurl" : "video/mp2t";
+    return Results.File(path, contentType, enableRangeProcessing: true);
+}).RequireAuthorization();
+
+app.MapDelete("/api/live/session/{sessionId}", async (string sessionId) =>
+{
+    await StopLiveSession(sessionId);
+    return Results.NoContent();
+}).RequireAuthorization();
+
 app.MapGet("/api/system", () =>
 {
     var driveRoot = Path.GetPathRoot(dataDir) ?? "/";
@@ -756,7 +916,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "0.3.12",
+        version = "0.3.13",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -864,6 +1024,25 @@ app.MapGet("/api/system/backups", () =>
 
 app.MapFallbackToFile("index.html");
 app.Run();
+
+async Task StopLiveSession(string sessionId)
+{
+    if (!liveSessions.TryRemove(sessionId, out var session)) return;
+    try
+    {
+        if (!session.Process.HasExited)
+        {
+            session.Process.Kill(entireProcessTree: true);
+            await session.Process.WaitForExitAsync();
+        }
+    }
+    catch { }
+    finally
+    {
+        try { session.Process.Dispose(); } catch { }
+        try { if (Directory.Exists(session.Directory)) Directory.Delete(session.Directory, true); } catch { }
+    }
+}
 
 async Task RunDownload(DownloadJob job)
 {
@@ -993,7 +1172,9 @@ async Task<List<object>> LoadXtreamLiveChannels(ProviderConnection c)
             Group = group,
             Number = JsonString(x, "num"),
             logo = ProxyArtwork(JsonString(x, "stream_icon")),
-            playUrl = ProxyUrl(source, "media")
+            playUrl = ProxyUrl(source, "media"),
+            playToken = RegisterProxy(source, "live"),
+            playback = "server-hls"
         });
     }
     return rows;
@@ -1014,7 +1195,9 @@ async Task<List<object>> LoadM3uChannels(string url)
         ch.Group,
         ch.Number,
         logo = string.IsNullOrWhiteSpace(ch.Logo) ? "" : ProxyUrl(ch.Logo, "artwork"),
-        playUrl = ProxyUrl(ch.Url, "media")
+        playUrl = ProxyUrl(ch.Url, "media"),
+        playToken = RegisterProxy(ch.Url, "live"),
+        playback = "server-hls"
     }).ToList();
 }
 
@@ -1022,7 +1205,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.3.12");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.3.13");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }
@@ -1253,6 +1436,8 @@ record SetupRequest(string? Username, string Password);
 record LoginRequest(string Username, string Password);
 record MediaDownloadRequest(string Token, string? Title);
 record ProxyTarget(string Url, string Kind, DateTimeOffset Created);
+record LiveSession(string Id, string Directory, Process Process, StringBuilder ErrorLog, string SourceUrl, DateTimeOffset Started);
+
 record DownloadJob(string Id, string Title, string SourceUrl, string Path, string Status, double Progress, string? Error, DateTimeOffset Created)
 {
     public object Safe() => new
