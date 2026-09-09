@@ -1,0 +1,252 @@
+const $=s=>document.querySelector(s), content=$('#content'), title=$('#title');
+let providers=[], currentProvider=null, channels=[], epg=[], fav=new Set(), hls=null, currentView='home';
+
+async function api(url,opt={}){
+  const r=await fetch(url,{credentials:'same-origin',...opt});
+  if(r.status===401){await authGate();throw new Error('Authentication required');}
+  if(!r.ok)throw new Error(await r.text());
+  if(r.status===204)return null;
+  const t=r.headers.get('content-type')||'';
+  return t.includes('json')?r.json():r.text();
+}
+const jpost=(url,obj)=>api(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(obj)});
+
+async function boot(){
+  const st=await fetch('/api/auth/status',{credentials:'same-origin'}).then(r=>r.json());
+  if(!st.configured||!st.authenticated){await authGate(st);return}
+  await enterApp(st);
+}
+async function authGate(state){
+  const st=state||await fetch('/api/auth/status',{credentials:'same-origin'}).then(r=>r.json());
+  $('#app').classList.add('hidden');$('#auth').classList.remove('hidden');
+  if(!st.configured){
+    $('#auth').innerHTML=`<div class="authCard"><h1>Set up MyOnline TV</h1><p>Create the administrator account for this server.</p>
+      <label>Username</label><input id=su value=admin autocomplete=username>
+      <label>Password</label><input id=sp type=password autocomplete=new-password>
+      <label>Confirm password</label><input id=sp2 type=password autocomplete=new-password>
+      <button id=setup class=btn>Create administrator</button><div id=authmsg></div></div>`;
+    $('#setup').onclick=async()=>{
+      const p=$('#sp').value;if(p!==$('#sp2').value){$('#authmsg').textContent='Passwords do not match.';return}
+      try{await jpost('/api/auth/setup',{username:$('#su').value,password:p});await enterApp({authenticated:true,user:$('#su').value})}
+      catch(e){$('#authmsg').textContent=e.message}
+    }
+  }else{
+    $('#auth').innerHTML=`<div class="authCard"><h1>MyOnline TV</h1><p>Sign in to your private entertainment server.</p>
+      <label>Username</label><input id=lu value=admin autocomplete=username>
+      <label>Password</label><input id=lp type=password autocomplete=current-password>
+      <button id=login class=btn>Sign in</button><div id=authmsg></div></div>`;
+    const go=async()=>{try{const r=await jpost('/api/auth/login',{username:$('#lu').value,password:$('#lp').value});await enterApp({authenticated:true,user:r.user})}catch(e){$('#authmsg').textContent='Sign-in failed.'}};
+    $('#login').onclick=go;$('#lp').onkeydown=e=>{if(e.key==='Enter')go()}
+  }
+}
+async function enterApp(st){
+  $('#auth').classList.add('hidden');$('#app').classList.remove('hidden');
+  $('#userBadge').textContent=st.user||'admin';
+  const s=await api('/api/status');$('#status').textContent=`${s.version} · ${s.platform}`;
+  providers=await api('/api/providers');fav=new Set(await api('/api/favourites'));
+  if(!currentProvider&&providers.length)currentProvider=providers[0].id;
+  show('home');
+}
+$('#logout').onclick=async()=>{await api('/api/auth/logout',{method:'POST'});await authGate()};
+document.querySelectorAll('nav button[data-view]').forEach(b=>b.onclick=()=>show(b.dataset.view));
+
+async function show(v){
+  currentView=v;destroyPlayer();
+  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',downloads:'Downloads',settings:'Settings'})[v]||v;
+  if(v==='home')await home();
+  if(v==='live')await live();
+  if(v==='guide')await guide();
+  if(v==='movies')await movies();
+  if(v==='series')await series();
+  if(v==='downloads')await downloadView();
+  if(v==='settings')await settings();
+}
+
+async function home(){
+  const cont=await api('/api/continue');
+  content.innerHTML=`<div class=hero><div><span class=kicker>MYONLINE TV WEB</span><h2>Everything. One interface.</h2>
+  <p class=muted>Self-hosted on Proxmox. IPTV, EPG, movies, series, secure provider storage, favourites, downloads and browser playback.</p></div></div>
+  <div class=stats>
+    <div class=stat><b>${providers.length}</b><span>Providers</span></div>
+    <div class=stat><b>${fav.size}</b><span>Favourites</span></div>
+    <div class=stat><b>${cont.length}</b><span>Continue watching</span></div>
+  </div>
+  <h2>Quick access</h2><div class=grid>
+    <button class="card actionCard" onclick="show('live')"><h3>Live TV</h3><p>Channels and groups</p></button>
+    <button class="card actionCard" onclick="show('guide')"><h3>TV Guide</h3><p>Timeline EPG</p></button>
+    <button class="card actionCard" onclick="show('movies')"><h3>Movies</h3><p>Xtream VOD library</p></button>
+    <button class="card actionCard" onclick="show('series')"><h3>Series</h3><p>Seasons and episodes</p></button>
+  </div>
+  <h2>Official streaming services</h2>
+  <div class=serviceRow>
+    <a class=service href="https://www.netflix.com" target=_blank>Netflix</a>
+    <a class=service href="https://www.disneyplus.com" target=_blank>Disney+</a>
+    <a class=service href="https://www.max.com" target=_blank>Max</a>
+    <a class=service href="https://www.primevideo.com" target=_blank>Prime Video</a>
+    <a class=service href="https://www.svtplay.se" target=_blank>SVT Play</a>
+  </div>`;
+}
+
+async function ensureProvider(type){
+  providers=await api('/api/providers');
+  if(currentProvider && !providers.some(p=>p.id===currentProvider))currentProvider=null;
+  if(type==='xtream'){
+    const xp=providers.filter(p=>p.type==='xtream');
+    if(!xp.length)return false;
+    if(!xp.some(p=>p.id===currentProvider))currentProvider=xp[0].id;
+  }else if(!currentProvider&&providers.length)currentProvider=providers[0].id;
+  return !!currentProvider;
+}
+
+function providerSelect(type){
+  const rows=type?providers.filter(p=>p.type===type):providers;
+  return `<select id=provider>${rows.map(p=>`<option value="${p.id}" ${p.id===currentProvider?'selected':''}>${esc(p.name)}</option>`).join('')}</select>`;
+}
+
+async function live(){
+  if(!await ensureProvider()){content.innerHTML=noProvider();return}
+  content.innerHTML='<div class=card>Loading channels…</div>';
+  try{channels=await api('/api/channels/'+currentProvider);renderChannels()}
+  catch(e){content.innerHTML=errorCard(e)}
+}
+function renderChannels(){
+  content.innerHTML=`<div class=toolbar>${providerSelect()}<input id=q placeholder="Search channels"><select id=group><option value="">All groups</option>${[...new Set(channels.map(x=>x.group))].sort().map(g=>`<option>${esc(g)}</option>`).join('')}</select></div>
+  <div id=playerWrap></div><div id=chan class=channelGrid></div>`;
+  $('#provider').onchange=async e=>{currentProvider=e.target.value;await live()};
+  $('#q').oninput=renderFilter;$('#group').onchange=renderFilter;renderFilter();
+}
+function renderFilter(){
+  const q=($('#q')?.value||'').toLowerCase(),g=$('#group')?.value||'';
+  const rows=channels.filter(c=>(!q||c.name.toLowerCase().includes(q))&&(!g||c.group===g)).slice(0,800);
+  $('#chan').innerHTML=rows.map(c=>`<article class=channelCard>
+    <div class=logoBox>${c.logo?`<img loading=lazy src="${escAttr(c.logo)}" onerror="this.style.display='none'">`:''}</div>
+    <div class=channelInfo><b>${esc(c.number?c.number+' · ':'')}${esc(c.name)}</b><small>${esc(c.group)}</small></div>
+    <button class=round onclick='playMedia(${JSON.stringify(c.playUrl)},${JSON.stringify(c.name)})'>▶</button>
+    <button class=round onclick="toggleFav('${escAttr(c.id)}')">${fav.has(c.id)?'★':'☆'}</button>
+  </article>`).join('');
+}
+async function toggleFav(id){fav=new Set(await api('/api/favourites/'+encodeURIComponent(id),{method:'POST'}));if(currentView==='live')renderFilter()}
+
+function playMedia(url,name){
+  destroyPlayer();
+  const wrap=$('#playerWrap')||$('#mediaPlayer');
+  if(!wrap)return;
+  wrap.innerHTML=`<div class=playerCard><video id=video controls autoplay playsinline></video><div class=nowPlaying>${esc(name)}</div></div>`;
+  const video=$('#video');
+  if(window.Hls&&Hls.isSupported()){
+    hls=new Hls({enableWorker:true,lowLatencyMode:true});
+    hls.loadSource(url);hls.attachMedia(video);
+    hls.on(Hls.Events.ERROR,(_,d)=>{if(d.fatal)console.warn('HLS fatal',d)});
+  }else if(video.canPlayType('application/vnd.apple.mpegurl')) video.src=url;
+  else video.src=url;
+  wrap.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function destroyPlayer(){if(hls){try{hls.destroy()}catch{}hls=null}}
+
+async function guide(){
+  if(!await ensureProvider()){content.innerHTML=noProvider();return}
+  content.innerHTML='<div class=card>Loading EPG…</div>';
+  try{
+    [channels,epg]=await Promise.all([api('/api/channels/'+currentProvider),api('/api/epg/'+currentProvider+'?hours=6')]);
+    renderGuide();
+  }catch(e){content.innerHTML=errorCard(e)}
+}
+function renderGuide(){
+  const now=new Date(), start=new Date(now.getTime()-30*60000), end=new Date(now.getTime()+6*3600000), span=end-start;
+  const by=new Map();epg.forEach(p=>{if(!by.has(p.channel))by.set(p.channel,[]);by.get(p.channel).push(p)});
+  const epgChannels=channels.filter(c=>by.has(c.id)).slice(0,120);
+  const ticks=[];for(let t=new Date(start);t<end;t=new Date(t.getTime()+3600000))ticks.push(t);
+  content.innerHTML=`<div class=toolbar>${providerSelect()}<button class=btn id=refreshGuide>Refresh</button></div>
+  <div class=timelineWrap><div class=timelineHead><div class=channelHead>Channel</div><div class=timeAxis>${ticks.map(t=>`<span>${t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>`).join('')}</div></div>
+  <div class=timeline>${epgChannels.map(c=>timelineRow(c,by.get(c.id)||[],start,end,span)).join('')}</div></div>`;
+  $('#provider').onchange=async e=>{currentProvider=e.target.value;await guide()};$('#refreshGuide').onclick=guide;
+}
+function timelineRow(c,progs,start,end,span){
+  const blocks=progs.map(p=>{
+    const a=Math.max(new Date(p.start),start),b=Math.min(new Date(p.stop),end);
+    const left=(a-start)/span*100,width=Math.max(.8,(b-a)/span*100);
+    return `<button class=prog style="left:${left}%;width:${width}%" title="${escAttr(p.desc||'')}"><b>${esc(p.title)}</b><small>${new Date(p.start).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</small></button>`;
+  }).join('');
+  return `<div class=timelineRow><button class=timelineChannel onclick='playMedia(${JSON.stringify(c.playUrl)},${JSON.stringify(c.name)})'>${c.logo?`<img src="${escAttr(c.logo)}">`:''}<span>${esc(c.name)}</span></button><div class=programLane>${blocks}</div></div>`;
+}
+
+async function movies(){
+  if(!await ensureProvider('xtream')){content.innerHTML='<div class=card>Movies require an Xtream-compatible provider.</div>';return}
+  content.innerHTML='<div class=card>Loading movies…</div>';
+  try{
+    const cats=await api(`/api/vod/${currentProvider}/categories`);
+    content.innerHTML=`<div class=toolbar>${providerSelect('xtream')}<select id=category><option value="">All categories</option>${cats.map(c=>`<option value="${escAttr(c.id)}">${esc(c.name)}</option>`).join('')}</select><input id=mediaq placeholder="Search movies"></div><div id=mediaPlayer></div><div id=mediaGrid class=posterGrid></div>`;
+    $('#provider').onchange=async e=>{currentProvider=e.target.value;await movies()};
+    $('#category').onchange=loadMovies;$('#mediaq').oninput=filterMedia;
+    await loadMovies();
+  }catch(e){content.innerHTML=errorCard(e)}
+}
+let mediaItems=[];
+async function loadMovies(){
+  mediaItems=await api(`/api/vod/${currentProvider}/items?categoryId=${encodeURIComponent($('#category')?.value||'')}`);filterMedia();
+}
+function filterMedia(){
+  const q=($('#mediaq')?.value||'').toLowerCase();
+  const rows=mediaItems.filter(x=>!q||x.name.toLowerCase().includes(q)).slice(0,1000);
+  $('#mediaGrid').innerHTML=rows.map(m=>`<article class=posterCard>${m.poster?`<img loading=lazy src="${escAttr(m.poster)}">`:'<div class=posterPlaceholder>▶</div>'}<div class=posterBody><b>${esc(m.name)}</b><small>${esc(m.year||'')} ${m.rating?'· '+esc(m.rating):''}</small><div class=row><button class=btn onclick='playMedia(${JSON.stringify(m.playUrl)},${JSON.stringify(m.name)})'>Play</button><button class=btn onclick='startMediaDownload(${JSON.stringify(m.downloadToken)},${JSON.stringify(m.name)})'>↓</button></div></div></article>`).join('');
+}
+
+async function series(){
+  if(!await ensureProvider('xtream')){content.innerHTML='<div class=card>Series require an Xtream-compatible provider.</div>';return}
+  content.innerHTML='<div class=card>Loading series…</div>';
+  try{
+    const cats=await api(`/api/series/${currentProvider}/categories`);
+    content.innerHTML=`<div class=toolbar>${providerSelect('xtream')}<select id=category><option value="">All categories</option>${cats.map(c=>`<option value="${escAttr(c.id)}">${esc(c.name)}</option>`).join('')}</select><input id=seriesq placeholder="Search series"></div><div id=mediaPlayer></div><div id=seriesContent></div>`;
+    $('#provider').onchange=async e=>{currentProvider=e.target.value;await series()};
+    $('#category').onchange=loadSeries;$('#seriesq').oninput=filterSeries;
+    await loadSeries();
+  }catch(e){content.innerHTML=errorCard(e)}
+}
+let seriesItems=[];
+async function loadSeries(){seriesItems=await api(`/api/series/${currentProvider}/items?categoryId=${encodeURIComponent($('#category')?.value||'')}`);filterSeries()}
+function filterSeries(){
+  const q=($('#seriesq')?.value||'').toLowerCase(),rows=seriesItems.filter(x=>!q||x.name.toLowerCase().includes(q)).slice(0,1000);
+  $('#seriesContent').innerHTML=`<div class=posterGrid>${rows.map(s=>`<button class="posterCard seriesButton" onclick="openSeries('${escAttr(s.id)}')">${s.poster?`<img loading=lazy src="${escAttr(s.poster)}">`:'<div class=posterPlaceholder>▦</div>'}<div class=posterBody><b>${esc(s.name)}</b><small>${esc(s.year||'')}</small></div></button>`).join('')}</div>`;
+}
+async function openSeries(id){
+  $('#seriesContent').innerHTML='<div class=card>Loading episodes…</div>';
+  try{
+    const s=await api(`/api/series/${currentProvider}/${encodeURIComponent(id)}`);
+    const by={};s.episodes.forEach(e=>(by[e.season]??=[]).push(e));
+    $('#seriesContent').innerHTML=`<div class=seriesHero>${s.cover?`<img src="${escAttr(s.cover)}">`:''}<div><button class=btn onclick=filterSeries()>← Back</button><h2>${esc(s.name)}</h2><p>${esc(s.plot||'')}</p></div></div>
+    ${Object.keys(by).sort((a,b)=>Number(a)-Number(b)).map(season=>`<section><h3>Season ${esc(season)}</h3><div class=episodeList>${by[season].map(e=>`<div class=episode><span><b>E${esc(e.episode)}</b> ${esc(e.title||'Episode')}</span><div class=row><button class=btn onclick='playMedia(${JSON.stringify(e.playUrl)},${JSON.stringify(e.title||'Episode')})'>Play</button><button class=btn onclick='startMediaDownload(${JSON.stringify(e.downloadToken)},${JSON.stringify((s.name||'Series')+' - S'+season+'E'+e.episode)})'>↓</button></div></div>`).join('')}</div></section>`).join('')}`;
+  }catch(e){$('#seriesContent').innerHTML=errorCard(e)}
+}
+
+async function startMediaDownload(token,name){
+  try{await jpost('/api/downloads/media',{token,title:name});show('downloads')}catch(e){alert(e.message)}
+}
+async function downloadView(){
+  const jobs=await api('/api/downloads');
+  content.innerHTML=`<div class=hero><h2>Downloads</h2><p class=muted>Movies and episodes can be saved on the MyOnline TV server. Non-encrypted HLS is handled by FFmpeg. Protected/DRM streams are not bypassed.</p><button class=btn id=refreshDl>Refresh</button></div>
+  <div class=downloadList>${jobs.length?jobs.map(j=>`<article class=downloadCard><div><h3>${esc(j.title)}</h3><span class="status ${j.status==='Failed'?'bad':''}">${esc(j.status)}</span></div><div class=progress><div style="width:${j.progress<0?35:Math.max(0,j.progress)}%"></div></div><small>${j.progress<0?'Working…':Math.round(j.progress)+'%'} · ${esc(j.fileName||'')}</small>${j.error?`<p class=danger>${esc(j.error)}</p>`:''}<div class=row>${j.completed?`<a class=btn href="/api/downloads/${j.id}/file">Save to device</a>`:''}<button class=btn onclick="deleteDownload('${j.id}')">Remove</button></div></article>`).join(''):'<div class=card>No downloads yet. Open Movies or Series and click ↓.</div>'}</div>`;
+  $('#refreshDl').onclick=downloadView;
+}
+async function deleteDownload(id){await api('/api/downloads/'+id,{method:'DELETE'});downloadView()}
+
+async function settings(){
+  providers=await api('/api/providers');
+  content.innerHTML=`<div class=hero><h2>IPTV providers</h2><p class=muted>Connection details are encrypted at rest with an AES-256-GCM key stored only on this server.</p>
+  <div class=formGrid><div class=field><label>Name</label><input id=pname></div><div class=field><label>Type</label><select id=ptype><option value=m3u>M3U + XMLTV</option><option value=xtream>Xtream-compatible</option></select></div>
+  <div class=field><label>M3U playlist URL</label><input id=purl placeholder="https://.../playlist.m3u"></div><div class=field><label>XMLTV EPG URL</label><input id=pepg placeholder="https://.../epg.xml"></div>
+  <div class=field><label>Xtream base URL</label><input id=pbase placeholder="https://provider.example:443"></div><div class=field><label>Username</label><input id=puser></div>
+  <div class=field><label>Password</label><input id=ppass type=password></div></div><button class=btn id=savep>Add provider</button></div>
+  <div class=grid>${providers.map(p=>`<div class=card><h3>${esc(p.name)}</h3><div class=muted>${esc(p.type)} · ${esc(p.host||'')}</div><p>${p.hasEpg?'EPG configured':'No explicit EPG'} · ${p.hasCredentials?'Credentials stored':'No credentials'}</p><button class=btn onclick="removeProvider('${p.id}')">Remove</button></div>`).join('')}</div>
+  <div class=card style="margin-top:18px"><h3>Security</h3><p>Provider connection fields are never returned to the browser after saving. The password is not stored in plaintext.</p><p class=muted>For Internet exposure, use HTTPS and preferably Tailscale/VPN or an authenticated reverse proxy.</p></div>`;
+  $('#savep').onclick=async()=>{
+    const p={id:'',name:$('#pname').value,type:$('#ptype').value,playlistUrl:$('#purl').value,epgUrl:$('#pepg').value,baseUrl:$('#pbase').value,username:$('#puser').value,password:$('#ppass').value,keepExistingConnection:false};
+    try{await jpost('/api/providers',p);providers=await api('/api/providers');settings()}catch(e){alert(e.message)}
+  };
+}
+async function removeProvider(id){if(!confirm('Remove this provider?'))return;await api('/api/providers/'+id,{method:'DELETE'});providers=await api('/api/providers');if(currentProvider===id)currentProvider=null;settings()}
+
+function noProvider(){return '<div class=card>No IPTV provider configured. Open Settings and add one.</div>'}
+function errorCard(e){return `<div class="card danger"><b>Error</b><p>${esc(e.message)}</p></div>`}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function escAttr(s){return esc(s)}
+boot().catch(e=>{$('#auth').classList.remove('hidden');$('#auth').innerHTML=`<div class=authCard><h2>Startup error</h2><pre>${esc(e.message)}</pre></div>`});

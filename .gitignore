@@ -1,0 +1,16 @@
+# Build output
+app/bin/
+app/obj/
+dist/
+*.log
+
+# Local/runtime state
+data/
+.env
+*.local
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

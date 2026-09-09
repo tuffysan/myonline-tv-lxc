@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MyOnline TV</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="auth" class="auth hidden"></div>
+<div id="app" class="hidden">
+  <aside>
+    <div class="brand">
+      <h1>MyOnline TV</h1>
+      <small>Web v0.2.0</small>
+    </div>
+    <nav>
+      <button data-view="home">⌂ Home</button>
+      <button data-view="live">▣ Live TV</button>
+      <button data-view="guide">▤ Guide</button>
+      <button data-view="movies">▶ Movies</button>
+      <button data-view="series">▦ Series</button>
+      <button data-view="downloads">↓ Downloads</button>
+      <button data-view="settings">⚙ Settings</button>
+    </nav>
+    <button id="logout" class="logout">Sign out</button>
+  </aside>
+  <main>
+    <header>
+      <div><b id="title">Home</b><span id="status"></span></div>
+      <div id="userBadge"></div>
+    </header>
+    <section id="content"></section>
+  </main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+name: Validate
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bash syntax
+        run: |
+          bash -n install-lxc.sh
+          bash -n update-from-github.sh
+          bash -n health-check.sh
+          bash -n rollback.sh
+          bash -n uninstall-lxc.sh
+          bash -n scripts/github-common.sh
+          bash -n scripts/install-local.sh
+          bash -n scripts/update-local.sh
+
+      - name: JavaScript syntax
+        run: node --check app/wwwroot/app.js
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build web app
+        run: dotnet build app/MyOnlineTV.Web.csproj -c Release
+
+      - name: Publish web app
+        run: dotnet publish app/MyOnlineTV.Web.csproj -c Release -o dist/publish
