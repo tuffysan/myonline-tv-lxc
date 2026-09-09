@@ -57,7 +57,7 @@ download_release_artifact() {
 
   (
     cd "$target"
-    grep "  ${name}$" "$sums" | sha256sum -c -
+    grep "  ${name}$" "$sums" | sha256sum -c - >&2
   )
   printf '%s\n' "${target}/${name}"
 }

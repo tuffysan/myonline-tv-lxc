@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.3 — Release artifact path fix
+
+- Fixed stable install/update failure after SHA-256 verification.
+- `download_release_artifact()` now sends `sha256sum -c` status output to stderr.
+- Command substitution now captures only the downloaded artifact path.
+- Prevents `ARTIFACT` from containing both `filename: OK` and the actual path.
+- Ensures `pct push` receives a valid local file path and copies the release archive into the LXC.
+- Keeps the v0.3.2 architecture-safe Debian template selection.
+
 ## 0.3.2 — Proxmox architecture selection fix
 
 - Fixed LXC startup failure caused by selecting an ARM64 Debian template on an x86_64 Proxmox host.

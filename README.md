@@ -1,4 +1,4 @@
-# MyOnline TV Web v0.3.2 — Proxmox LXC
+# MyOnline TV Web v0.3.3 — Proxmox LXC
 
 MyOnline TV Web is a self-hosted entertainment appliance for Proxmox VE.
 
@@ -34,7 +34,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/tuffysan/myonline-tv-lxc
 
 ## Architecture-safe LXC template selection
 
-v0.3.2 detects the Proxmox host architecture before creating the container:
+v0.3.3 detects the Proxmox host architecture before creating the container:
 
 ```text
 x86_64        -> amd64
@@ -61,7 +61,7 @@ A second verification is performed after `pct create`; a mismatched container is
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/tuffysan/myonline-tv-lxc/main/update-from-github.sh)"
 ```
 
-Before activating a new version, v0.3.2 creates:
+Before activating a new version, v0.3.3 creates:
 
 ```text
 /var/lib/myonlinetv/backups/pre-update-<old>-to-<new>-<timestamp>.tar.gz
@@ -91,7 +91,7 @@ Downloads are deliberately excluded from automatic data rollback.
 CTID=145 ./health-check.sh
 ```
 
-v0.3.2 exposes:
+v0.3.3 exposes:
 
 ```text
 GET /health
@@ -119,8 +119,8 @@ The web UI now includes **System** showing:
 Every `v*` tag builds:
 
 ```text
-myonline-tv-web-v0.3.2-linux-x64.tar.gz
-myonline-tv-lxc-v0.3.2-source.tar.gz
+myonline-tv-web-v0.3.3-linux-x64.tar.gz
+myonline-tv-lxc-v0.3.3-source.tar.gz
 SHA256SUMS-RELEASE.txt
 release.json
 ```
