@@ -18,21 +18,14 @@ jobs:
         shell: bash
         run: |
           EXPECTED="v$(tr -d '[:space:]' < VERSION)"
-          if [[ "${GITHUB_REF_NAME}" != "${EXPECTED}" ]]; then
-            echo "Tag ${GITHUB_REF_NAME} does not match VERSION (${EXPECTED})."
+          test "${GITHUB_REF_NAME}" = "${EXPECTED}" || {
+            echo "Tag ${GITHUB_REF_NAME} does not match VERSION ${EXPECTED}"
             exit 1
-          fi
+          }
 
-      - name: Validate scripts
+      - name: Validate scripts and frontend
         run: |
-          bash -n install-lxc.sh
-          bash -n update-from-github.sh
-          bash -n health-check.sh
-          bash -n rollback.sh
-          bash -n uninstall-lxc.sh
-          bash -n scripts/github-common.sh
-          bash -n scripts/install-local.sh
-          bash -n scripts/update-local.sh
+          find . -name '*.sh' -print0 | xargs -0 -n1 bash -n
           node --check app/wwwroot/app.js
 
       - name: Setup .NET 10
@@ -43,16 +36,39 @@ jobs:
       - name: Build
         run: dotnet build app/MyOnlineTV.Web.csproj -c Release
 
-      - name: Create source package
+      - name: Publish linux-x64
         run: |
+          rm -rf dist
+          mkdir -p dist/publish
+          dotnet publish app/MyOnlineTV.Web.csproj \
+            -c Release \
+            -r linux-x64 \
+            --self-contained false \
+            -o dist/publish
+
+      - name: Create release artifacts
+        shell: bash
+        run: |
+          VERSION="$(cat VERSION | tr -d '[:space:]')"
+          APP="myonline-tv-web-v${VERSION}-linux-x64.tar.gz"
+          SRC="myonline-tv-lxc-v${VERSION}-source.tar.gz"
+
+          tar -C dist/publish -czf "${APP}" .
           tar \
             --exclude='.git' \
             --exclude='app/bin' \
             --exclude='app/obj' \
-            -czf "myonline-tv-lxc-${GITHUB_REF_NAME}.tar.gz" .
+            --exclude='dist' \
+            -czf "${SRC}" .
+
+          sha256sum "${APP}" "${SRC}" > SHA256SUMS-RELEASE.txt
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: myonline-tv-lxc-${{ github.ref_name }}.tar.gz
+          files: |
+            myonline-tv-web-${{ github.ref_name }}-linux-x64.tar.gz
+            myonline-tv-lxc-${{ github.ref_name }}-source.tar.gz
+            SHA256SUMS-RELEASE.txt
+            release.json

@@ -36,3 +36,16 @@ jobs:
 
       - name: Publish web app
         run: dotnet publish app/MyOnlineTV.Web.csproj -c Release -o dist/publish
+
+
+      - name: Validate release metadata
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          version=Path("VERSION").read_text().strip()
+          meta=json.loads(Path("release.json").read_text())
+          assert meta["version"] == version
+          assert meta["artifact"] == f"myonline-tv-web-v{version}-linux-x64.tar.gz"
+          print("release.json OK")
+          PY

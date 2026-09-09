@@ -3,6 +3,7 @@ set -euo pipefail
 
 REPO_DIR="${1:?Usage: install-local.sh <repo-dir>}"
 VERSION="$(tr -d '[:space:]' < "${REPO_DIR}/VERSION")"
+ARTIFACT="${MYONLINE_ARTIFACT:-}"
 
 CTID="${CTID:-145}"
 HOSTNAME="${HOSTNAME:-myonlinetv}"
@@ -17,93 +18,68 @@ ROOT_PASSWORD="${ROOT_PASSWORD:-}"
 echo "============================================================"
 echo " MyOnline TV Web v${VERSION} - Proxmox LXC Installer"
 echo "============================================================"
-echo " CTID      : ${CTID}"
-echo " Hostname  : ${HOSTNAME}"
-echo " Storage   : ${STORAGE}"
-echo " CPU       : ${CORES}"
-echo " Memory    : ${MEMORY} MB"
-echo " Disk      : ${DISK} GB"
-echo " Network   : ${IP_CONFIG}"
+echo " CTID: ${CTID}  Hostname: ${HOSTNAME}"
+echo " CPU: ${CORES}  RAM: ${MEMORY} MB  Disk: ${DISK} GB"
+echo " Mode: $([[ -n "$ARTIFACT" ]] && echo 'prebuilt release' || echo 'source build')"
 echo "============================================================"
 
-[[ $EUID -eq 0 ]] || { echo "Run as root on the Proxmox host."; exit 1; }
-command -v pct >/dev/null || { echo "pct was not found. Run this on a Proxmox VE host."; exit 1; }
-command -v pveam >/dev/null || { echo "pveam was not found."; exit 1; }
-
+[[ $EUID -eq 0 ]] || { echo "Run as root on Proxmox."; exit 1; }
+command -v pct >/dev/null || { echo "pct not found."; exit 1; }
 if pct status "$CTID" >/dev/null 2>&1; then
-  echo "CT ${CTID} already exists."
-  echo "Use update-from-github.sh for an existing MyOnline TV installation."
+  echo "CT ${CTID} already exists. Use update-from-github.sh."
   exit 1
 fi
 
-echo "[1/9] Finding Debian LXC template..."
+echo "[1/9] Preparing Debian template..."
 pveam update >/dev/null
 TEMPLATE="$(pveam available --section system | awk '/debian-13-standard/ {print $2}' | tail -1)"
-if [[ -z "$TEMPLATE" ]]; then
-  TEMPLATE="$(pveam available --section system | awk '/debian-12-standard/ {print $2}' | tail -1)"
-fi
-[[ -n "$TEMPLATE" ]] || { echo "No Debian 12/13 standard template found."; exit 1; }
-
+[[ -n "$TEMPLATE" ]] || TEMPLATE="$(pveam available --section system | awk '/debian-12-standard/ {print $2}' | tail -1)"
+[[ -n "$TEMPLATE" ]] || { echo "No Debian 12/13 template found."; exit 1; }
 LOCAL_TEMPLATE="local:vztmpl/$(basename "$TEMPLATE")"
-if ! pveam list local | grep -q "$(basename "$TEMPLATE")"; then
-  echo "[2/9] Downloading ${TEMPLATE}..."
-  pveam download local "$TEMPLATE"
-else
-  echo "[2/9] Debian template already available."
-fi
+if ! pveam list local | grep -q "$(basename "$TEMPLATE")"; then pveam download local "$TEMPLATE"; fi
 
-echo "[3/9] Creating LXC CT ${CTID}..."
-CREATE=(
-  pct create "$CTID" "$LOCAL_TEMPLATE"
-  --hostname "$HOSTNAME"
-  --cores "$CORES"
-  --memory "$MEMORY"
-  --swap 512
-  --rootfs "$STORAGE:$DISK"
-  --net0 "name=eth0,bridge=$BRIDGE,$IP_CONFIG"
-  --unprivileged 1
-  --features nesting=1
-  --onboot 1
-  --start 1
-)
-if [[ -n "$ROOT_PASSWORD" ]]; then CREATE+=(--password "$ROOT_PASSWORD"); fi
+echo "[2/9] Creating CT ${CTID}..."
+CREATE=(pct create "$CTID" "$LOCAL_TEMPLATE" --hostname "$HOSTNAME" --cores "$CORES" --memory "$MEMORY" --swap 512 --rootfs "$STORAGE:$DISK" --net0 "name=eth0,bridge=$BRIDGE,$IP_CONFIG" --unprivileged 1 --features nesting=1 --onboot 1 --start 1)
+[[ -n "$ROOT_PASSWORD" ]] && CREATE+=(--password "$ROOT_PASSWORD")
 "${CREATE[@]}"
 
-echo "[4/9] Waiting for container..."
-for i in {1..60}; do
-  if pct exec "$CTID" -- true >/dev/null 2>&1; then break; fi
-  sleep 2
-done
+echo "[3/9] Waiting for container..."
+for i in {1..60}; do pct exec "$CTID" -- true >/dev/null 2>&1 && break; sleep 2; done
 pct exec "$CTID" -- true >/dev/null 2>&1 || { echo "Container did not become ready."; exit 1; }
 
-echo "[5/9] Installing OS dependencies..."
-pct exec "$CTID" -- bash -lc \
-  'apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl wget gnupg nginx unzip rsync ffmpeg'
+echo "[4/9] Installing OS dependencies..."
+pct exec "$CTID" -- bash -lc 'apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl wget gnupg nginx ffmpeg tar'
 
-echo "[6/9] Installing .NET 10 SDK..."
-pct exec "$CTID" -- bash -lc '
+echo "[5/9] Installing Microsoft .NET packages..."
+pct exec "$CTID" -- bash -lc "
 set -e
 . /etc/os-release
-wget -q "https://packages.microsoft.com/config/debian/${VERSION_ID}/packages-microsoft-prod.deb" -O /tmp/packages-microsoft-prod.deb || true
+wget -q \"https://packages.microsoft.com/config/debian/\${VERSION_ID}/packages-microsoft-prod.deb\" -O /tmp/packages-microsoft-prod.deb || true
 if ! dpkg -i /tmp/packages-microsoft-prod.deb 2>/dev/null; then
   wget -q https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O /tmp/packages-microsoft-prod.deb
   dpkg -i /tmp/packages-microsoft-prod.deb
 fi
 apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get install -y dotnet-sdk-10.0
-'
+"
+if [[ -n "$ARTIFACT" ]]; then
+  pct exec "$CTID" -- bash -lc 'DEBIAN_FRONTEND=noninteractive apt-get install -y aspnetcore-runtime-10.0'
+else
+  pct exec "$CTID" -- bash -lc 'DEBIAN_FRONTEND=noninteractive apt-get install -y dotnet-sdk-10.0'
+fi
 
-echo "[7/9] Uploading and publishing MyOnline TV..."
-pct exec "$CTID" -- mkdir -p /opt/myonlinetv/src/wwwroot /opt/myonlinetv/publish /var/lib/myonlinetv/downloads
-pct push "$CTID" "${REPO_DIR}/app/MyOnlineTV.Web.csproj" /opt/myonlinetv/src/MyOnlineTV.Web.csproj
-pct push "$CTID" "${REPO_DIR}/app/Program.cs" /opt/myonlinetv/src/Program.cs
-for f in "${REPO_DIR}"/app/wwwroot/*; do
-  pct push "$CTID" "$f" "/opt/myonlinetv/src/wwwroot/$(basename "$f")"
-done
-pct exec "$CTID" -- bash -lc \
-  'rm -rf /opt/myonlinetv/publish/* && cd /opt/myonlinetv/src && dotnet publish -c Release -o /opt/myonlinetv/publish'
+echo "[6/9] Installing MyOnline TV..."
+pct exec "$CTID" -- mkdir -p /opt/myonlinetv/publish /opt/myonlinetv/src/wwwroot /var/lib/myonlinetv/downloads /var/lib/myonlinetv/backups
+if [[ -n "$ARTIFACT" ]]; then
+  pct push "$CTID" "$ARTIFACT" /tmp/myonline-tv-release.tar.gz
+  pct exec "$CTID" -- bash -lc 'rm -rf /opt/myonlinetv/publish/* && tar -xzf /tmp/myonline-tv-release.tar.gz -C /opt/myonlinetv/publish && rm -f /tmp/myonline-tv-release.tar.gz'
+else
+  pct push "$CTID" "${REPO_DIR}/app/MyOnlineTV.Web.csproj" /opt/myonlinetv/src/MyOnlineTV.Web.csproj
+  pct push "$CTID" "${REPO_DIR}/app/Program.cs" /opt/myonlinetv/src/Program.cs
+  for f in "${REPO_DIR}"/app/wwwroot/*; do pct push "$CTID" "$f" "/opt/myonlinetv/src/wwwroot/$(basename "$f")"; done
+  pct exec "$CTID" -- bash -lc 'cd /opt/myonlinetv/src && dotnet publish -c Release -o /opt/myonlinetv/publish'
+fi
 
-echo "[8/9] Installing systemd and Nginx..."
+echo "[7/9] Configuring systemd..."
 cat >/tmp/myonlinetv.service <<'UNIT'
 [Unit]
 Description=MyOnline TV Web
@@ -131,6 +107,7 @@ UNIT
 pct push "$CTID" /tmp/myonlinetv.service /etc/systemd/system/myonlinetv.service
 rm -f /tmp/myonlinetv.service
 
+echo "[8/9] Configuring Nginx..."
 cat >/tmp/myonlinetv.nginx <<'NGINX'
 server {
     listen 80 default_server;
@@ -139,7 +116,6 @@ server {
     client_max_body_size 4g;
     proxy_read_timeout 3600s;
     proxy_send_timeout 3600s;
-
     location / {
         proxy_pass http://127.0.0.1:5080;
         proxy_http_version 1.1;
@@ -158,6 +134,9 @@ rm -f /tmp/myonlinetv.nginx
 pct exec "$CTID" -- bash -lc "
 set -e
 printf '%s\n' '${VERSION}' >/var/lib/myonlinetv/version
+cat >/var/lib/myonlinetv/release.json <<'META'
+$(cat "${REPO_DIR}/release.json")
+META
 chown -R www-data:www-data /var/lib/myonlinetv /opt/myonlinetv
 chmod 700 /var/lib/myonlinetv
 rm -f /etc/nginx/sites-enabled/default
@@ -167,23 +146,16 @@ systemctl daemon-reload
 systemctl enable --now myonlinetv nginx
 "
 
-echo "[9/9] Running health check..."
+echo "[9/9] Health and readiness checks..."
 sleep 2
-pct exec "$CTID" -- curl -fsS http://127.0.0.1:5080/api/status >/dev/null
+pct exec "$CTID" -- curl -fsS http://127.0.0.1:5080/health >/dev/null
+pct exec "$CTID" -- curl -fsS http://127.0.0.1:5080/ready >/dev/null
 
 IP="$(pct exec "$CTID" -- hostname -I | awk '{print $1}')"
 echo
 echo "============================================================"
-echo " MyOnline TV Web installation completed"
+echo " MyOnline TV Web v${VERSION} installed"
+echo " URL: http://${IP}/"
+echo " CT : ${CTID}"
 echo "============================================================"
-echo " Version : ${VERSION}"
-echo " CTID    : ${CTID}"
-echo " URL     : http://${IP}/"
-echo " Data    : /var/lib/myonlinetv"
-echo
 echo "Open the URL and create the administrator account."
-echo "For Internet access, add HTTPS and preferably Tailscale/VPN."
-echo
-echo "Logs:"
-echo "  pct exec ${CTID} -- journalctl -u myonlinetv -f"
-echo "============================================================"

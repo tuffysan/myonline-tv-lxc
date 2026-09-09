@@ -52,13 +52,14 @@ document.querySelectorAll('nav button[data-view]').forEach(b=>b.onclick=()=>show
 
 async function show(v){
   currentView=v;destroyPlayer();
-  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',downloads:'Downloads',settings:'Settings'})[v]||v;
+  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',downloads:'Downloads',system:'System',settings:'Settings'})[v]||v;
   if(v==='home')await home();
   if(v==='live')await live();
   if(v==='guide')await guide();
   if(v==='movies')await movies();
   if(v==='series')await series();
   if(v==='downloads')await downloadView();
+  if(v==='system')await systemView();
   if(v==='settings')await settings();
 }
 
@@ -228,6 +229,38 @@ async function downloadView(){
   $('#refreshDl').onclick=downloadView;
 }
 async function deleteDownload(id){await api('/api/downloads/'+id,{method:'DELETE'});downloadView()}
+
+
+async function systemView(){
+  content.innerHTML='<div class=card>Loading system information…</div>';
+  try{
+    const [sys,health,backs]=await Promise.all([
+      api('/api/system'),
+      api('/api/providers/health'),
+      api('/api/system/backups')
+    ]);
+    const gb=n=>(n/1024/1024/1024).toFixed(1);
+    const uptime=Math.floor(sys.uptimeSeconds/3600);
+    content.innerHTML=`<div class=hero><span class=kicker>APPLIANCE STATUS</span><h2>MyOnline TV System</h2>
+      <p class=muted>Version ${esc(sys.version)} · schema ${sys.dataSchemaVersion} · uptime ${uptime} h</p>
+      <div class=row><button class=btn id=createBackup>Create backup</button><button class=btn id=refreshSystem>Refresh</button></div></div>
+      <div class=stats>
+        <div class=stat><b>${sys.providers}</b><span>Providers</span></div>
+        <div class=stat><b>${sys.downloads}</b><span>Downloaded files</span></div>
+        <div class=stat><b>${sys.backups}</b><span>Backups</span></div>
+      </div>
+      <div class=grid>
+        <div class=card><h3>Runtime</h3><p>${esc(sys.framework)}</p><p class=muted>${esc(sys.os)}</p><p>FFmpeg: <b>${sys.ffmpeg?'OK':'Missing'}</b></p></div>
+        <div class=card><h3>Disk</h3><p><b>${gb(sys.disk.usedBytes)} GB</b> used of ${gb(sys.disk.totalBytes)} GB</p><p>${gb(sys.disk.freeBytes)} GB free</p></div>
+      </div>
+      <h2>Provider health</h2>
+      <div class=downloadList>${health.length?health.map(h=>`<article class=downloadCard><div class=row><span class="healthDot ${h.ok?'ok':'fail'}"></span><h3>${esc(h.name)}</h3></div><p>${esc(h.type)} · ${h.latencyMs} ms</p><small>${esc(h.message)}</small></article>`).join(''):'<div class=card>No providers configured.</div>'}</div>
+      <h2>Backups</h2>
+      <div class=downloadList>${backs.length?backs.map(b=>`<article class=downloadCard><b>${esc(b.fileName)}</b><small>${(b.sizeBytes/1024).toFixed(1)} KiB · ${new Date(b.created).toLocaleString()}</small></article>`).join(''):'<div class=card>No backups yet.</div>'}</div>`;
+    $('#createBackup').onclick=async()=>{try{const b=await api('/api/system/backup',{method:'POST'});alert('Backup created: '+b.fileName);systemView()}catch(e){alert(e.message)}};
+    $('#refreshSystem').onclick=systemView;
+  }catch(e){content.innerHTML=errorCard(e)}
+}
 
 async function settings(){
   providers=await api('/api/providers');

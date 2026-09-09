@@ -1,176 +1,154 @@
-# MyOnline TV Web v0.2.0 — Proxmox LXC
+# MyOnline TV Web v0.3.0 — Proxmox LXC
 
-Self-hosted MyOnline TV Web for Proxmox VE.
+MyOnline TV Web is a self-hosted entertainment appliance for Proxmox VE.
 
-## One-line installation
+## Install
 
-Run on the **Proxmox host** as root:
+Run on the Proxmox host as root:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/tuffysan/myonline-tv-lxc/main/install-lxc.sh)"
 ```
 
-Default deployment:
+The default **stable** channel resolves the latest GitHub Release, downloads the prebuilt `linux-x64` application artifact, verifies its SHA-256 checksum, creates the Debian LXC and installs only the ASP.NET Core 10 runtime, Nginx and FFmpeg.
 
-- CTID `145`
-- hostname `myonlinetv`
-- 2 CPU cores
-- 2048 MB RAM
-- 16 GB disk
-- DHCP
-- `local-lvm`
-- `vmbr0`
-
-After installation the script prints the URL, for example:
+Default CT:
 
 ```text
-http://192.168.1.75/
+CTID:     145
+Hostname: myonlinetv
+CPU:      2 cores
+RAM:      2048 MB
+Disk:     16 GB
+Network:  DHCP
+Storage:  local-lvm
 ```
 
-Open it and create the administrator account.
+Custom example:
 
-## Update from GitHub
+```bash
+CTID=150 MEMORY=4096 CORES=4 DISK=32 \
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/tuffysan/myonline-tv-lxc/main/install-lxc.sh)"
+```
+
+## Update
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/tuffysan/myonline-tv-lxc/main/update-from-github.sh)"
 ```
 
-The updater:
+Before activating a new version, v0.3.0 creates:
 
-1. resolves the latest stable GitHub Release;
-2. compares it with the installed version;
-3. downloads the repository;
-4. builds the new ASP.NET Core application inside the LXC;
-5. creates a rollback snapshot;
-6. activates the new version;
-7. runs an API health check;
-8. automatically rolls back if the health check fails.
-
-Use `FORCE=1` to reinstall the same version.
-
-## Health check
-
-```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/tuffysan/myonline-tv-lxc/main/health-check.sh)"
+```text
+/var/lib/myonlinetv/backups/pre-update-<old>-to-<new>-<timestamp>.tar.gz
 ```
 
-Or after cloning the repository:
-
-```bash
-CTID=145 ./health-check.sh
-```
+It then keeps an application rollback snapshot, activates the release, calls `/health` and `/ready`, and automatically rolls back the binaries if validation fails.
 
 ## Rollback
+
+Application only:
 
 ```bash
 CTID=145 ./rollback.sh
 ```
 
-The updater retains the previous published application as `/opt/myonlinetv/publish.rollback`.
-
-Persistent application data under `/var/lib/myonlinetv` is not replaced during application rollback.
-
-## Uninstall
-
-Clone/download the repository and run:
+Application + last pre-update data snapshot:
 
 ```bash
-CTID=145 ./uninstall-lxc.sh
+CTID=145 RESTORE_DATA=1 ./rollback.sh
 ```
 
-A destructive confirmation phrase is required before the container is removed.
+Downloads are deliberately excluded from automatic data rollback.
 
-## Custom installation
+## Health check
 
 ```bash
-CTID=150 \
-MEMORY=4096 \
-CORES=4 \
-DISK=32 \
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/tuffysan/myonline-tv-lxc/main/install-lxc.sh)"
+CTID=145 ./health-check.sh
 ```
 
-Static IP:
-
-```bash
-CTID=150 \
-IP_CONFIG='ip=192.168.1.50/24,gw=192.168.1.1' \
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/tuffysan/myonline-tv-lxc/main/install-lxc.sh)"
-```
-
-## Stable vs main
-
-The default is:
+v0.3.0 exposes:
 
 ```text
-MYONLINE_CHANNEL=stable
+GET /health
+GET /ready
 ```
 
-When a GitHub Release exists, installation/update uses the latest release. If no release exists yet it falls back to `main`.
+`/health` verifies the process is alive. `/ready` verifies writable persistent storage, the encryption key and important appliance prerequisites.
 
-Use current `main` explicitly:
+## System page
+
+The web UI now includes **System** showing:
+
+- application/schema version;
+- uptime;
+- runtime/OS;
+- disk usage;
+- FFmpeg availability;
+- provider count;
+- provider connectivity and response latency;
+- backup count;
+- manual configuration backup.
+
+## GitHub release model
+
+Every `v*` tag builds:
+
+```text
+myonline-tv-web-v0.3.0-linux-x64.tar.gz
+myonline-tv-lxc-v0.3.0-source.tar.gz
+SHA256SUMS-RELEASE.txt
+release.json
+```
+
+The stable installer uses the first artifact. This avoids restoring NuGet packages and compiling the app during normal Proxmox installation.
+
+`main` is still supported for development:
 
 ```bash
-MYONLINE_CHANNEL=main bash -c "$(curl -fsSL https://raw.githubusercontent.com/tuffysan/myonline-tv-lxc/main/install-lxc.sh)"
+MYONLINE_CHANNEL=main \
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/tuffysan/myonline-tv-lxc/main/install-lxc.sh)"
 ```
 
-Use a specific version:
+Development/main mode falls back to building source in the container and therefore installs the .NET SDK.
 
-```bash
-MYONLINE_REF=v0.2.0 bash -c "$(curl -fsSL https://raw.githubusercontent.com/tuffysan/myonline-tv-lxc/main/install-lxc.sh)"
-```
+## Core features
 
-## v0.2.0 features
-
-- administrator setup/login;
-- PBKDF2-SHA256 password hashing;
-- AES-256-GCM encrypted IPTV provider connections;
-- migration from v0.1.0 plaintext provider storage;
-- authenticated provider/media proxy;
-- M3U Live TV;
-- XMLTV timeline EPG;
-- Xtream-compatible Movies and Series;
+- authenticated administrator account;
+- encrypted IPTV provider credentials;
+- M3U and Xtream-compatible providers;
+- Live TV;
+- XMLTV EPG;
+- Movies and Series;
 - artwork/posters;
-- hls.js playback;
 - favourites;
-- Continue Watching storage;
-- server-side video downloads;
-- FFmpeg support for authorized non-encrypted HLS;
-- responsive TV/tablet/mobile UI.
+- Continue Watching data;
+- HLS/browser playback;
+- server-side media proxy;
+- video downloads for authorized direct/non-encrypted media;
+- FFmpeg HLS processing;
+- System/Admin appliance status;
+- backup and rollback.
 
-MyOnline TV does not bypass DRM or protected streaming-service download restrictions.
+MyOnline TV does not bypass DRM, protected downloads or subscription access controls.
 
 ## Persistent data
 
 ```text
 /var/lib/myonlinetv/
 ├── version
+├── release.json
 ├── admin.json
 ├── secrets.key
 ├── providers.json
 ├── favourites.json
 ├── continue-watching.json
-└── downloads/
+├── downloads/
+└── backups/
 ```
 
-Back up `providers.json` and `secrets.key` together.
-
-## GitHub Actions
-
-Two workflows are included:
-
-- **Validate** — checks Bash/JavaScript, builds and publishes the .NET application.
-- **Release** — triggers on `v*` tags, checks the tag against `VERSION`, builds the application and creates the GitHub Release.
-
-See:
-
-- `docs/GITHUB-SETUP.md`
-- `docs/RELEASE-PROCESS.md`
-- `docs/ARCHITECTURE.md`
-- `docs/SECURITY.md`
+Back up `secrets.key` together with encrypted provider data.
 
 ## Security
 
-The default Nginx listener is HTTP for LAN use. Do **not** directly expose it to the public Internet.
-
-For remote access use HTTPS and preferably Tailscale/VPN or another properly secured reverse proxy.
+The bundled Nginx configuration defaults to HTTP for trusted LAN deployment. Do not directly expose it to the public Internet. Use HTTPS and preferably Tailscale/VPN or a properly secured reverse proxy for remote access.

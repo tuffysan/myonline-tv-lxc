@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using System.IO.Compression;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
@@ -47,14 +48,18 @@ var continueFile = Path.Combine(dataDir, "continue-watching.json");
 var adminFile = Path.Combine(dataDir, "admin.json");
 var secretKeyFile = Path.Combine(dataDir, "secrets.key");
 var downloadsDir = Path.Combine(dataDir, "downloads");
+var backupsDir = Path.Combine(dataDir, "backups");
+var versionFile = Path.Combine(dataDir, "version");
 Directory.CreateDirectory(downloadsDir);
+Directory.CreateDirectory(backupsDir);
+var startedAt = DateTimeOffset.UtcNow;
 
 var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true };
 var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = DecompressionMethods.All })
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.2.0");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.3.0");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
@@ -155,10 +160,56 @@ app.Use(async (ctx, next) =>
     await next();
 });
 
+
+app.MapGet("/health", () => Results.Ok(new
+{
+    status = "ok",
+    version = "0.3.0",
+    uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
+})).AllowAnonymous();
+
+app.MapGet("/ready", () =>
+{
+    var checks = new Dictionary<string, object>();
+    var ready = true;
+
+    try
+    {
+        Directory.CreateDirectory(dataDir);
+        var probe = Path.Combine(dataDir, ".ready-probe");
+        File.WriteAllText(probe, DateTimeOffset.UtcNow.ToString("O"));
+        File.Delete(probe);
+        checks["dataDirectory"] = "ok";
+    }
+    catch (Exception ex)
+    {
+        ready = false;
+        checks["dataDirectory"] = ex.Message;
+    }
+
+    try
+    {
+        checks["secretKey"] = File.Exists(secretKeyFile) && new FileInfo(secretKeyFile).Length > 20 ? "ok" : "missing";
+        if (!File.Exists(secretKeyFile)) ready = false;
+    }
+    catch (Exception ex)
+    {
+        ready = false;
+        checks["secretKey"] = ex.Message;
+    }
+
+    checks["ffmpeg"] = FindExecutable("ffmpeg") is not null ? "ok" : "missing";
+    checks["authConfigured"] = File.Exists(adminFile);
+
+    return ready
+        ? Results.Ok(new { status = "ready", version = "0.3.0", checks })
+        : Results.Json(new { status = "not-ready", version = "0.3.0", checks }, statusCode: 503);
+}).AllowAnonymous();
+
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "0.2.0",
+    version = "0.3.0",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = File.Exists(adminFile),
@@ -548,6 +599,121 @@ app.MapGet("/api/proxy/{token}", async (string token, HttpContext ctx) =>
     }
     catch (OperationCanceledException) { return Results.Empty; }
     catch (Exception ex) { return Results.Problem(ex.Message); }
+}).RequireAuthorization();
+
+
+app.MapGet("/api/system", () =>
+{
+    var driveRoot = Path.GetPathRoot(dataDir) ?? "/";
+    var drive = new DriveInfo(driveRoot);
+    var downloadCount = Directory.Exists(downloadsDir) ? Directory.EnumerateFiles(downloadsDir).Count() : 0;
+    var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
+    return Results.Ok(new
+    {
+        version = "0.3.0",
+        dataSchemaVersion = 3,
+        uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
+        processId = Environment.ProcessId,
+        machineName = Environment.MachineName,
+        os = Environment.OSVersion.ToString(),
+        framework = System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription,
+        ffmpeg = FindExecutable("ffmpeg") is not null,
+        providers = LoadProviders().Count,
+        downloads = downloadCount,
+        backups = backupCount,
+        disk = new
+        {
+            totalBytes = drive.TotalSize,
+            freeBytes = drive.AvailableFreeSpace,
+            usedBytes = drive.TotalSize - drive.AvailableFreeSpace
+        }
+    });
+}).RequireAuthorization();
+
+app.MapGet("/api/providers/health", async () =>
+{
+    var rows = new List<object>();
+    foreach (var provider in LoadProviders())
+    {
+        var sw = Stopwatch.StartNew();
+        var ok = false;
+        var message = "Unknown";
+        try
+        {
+            var c = Connection(provider);
+            var testUrl = provider.Type == "xtream"
+                ? $"{c.BaseUrl?.TrimEnd('/')}/player_api.php?username={Uri.EscapeDataString(c.Username ?? "")}&password={Uri.EscapeDataString(c.Password ?? "")}"
+                : c.PlaylistUrl;
+
+            if (string.IsNullOrWhiteSpace(testUrl))
+                throw new InvalidOperationException("Provider URL is missing.");
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, testUrl);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+            ok = response.IsSuccessStatusCode;
+            message = $"{(int)response.StatusCode} {response.ReasonPhrase}";
+        }
+        catch (Exception ex)
+        {
+            message = ex.GetBaseException().Message;
+        }
+        sw.Stop();
+        rows.Add(new
+        {
+            provider.Id,
+            provider.Name,
+            provider.Type,
+            ok,
+            latencyMs = sw.ElapsedMilliseconds,
+            message
+        });
+    }
+    return Results.Ok(rows);
+}).RequireAuthorization();
+
+app.MapPost("/api/system/backup", () =>
+{
+    Directory.CreateDirectory(backupsDir);
+    var stamp = DateTimeOffset.Now.ToString("yyyyMMdd-HHmmss");
+    var file = Path.Combine(backupsDir, $"myonline-tv-backup-{stamp}.zip");
+
+    using (var archive = ZipFile.Open(file, ZipArchiveMode.Create))
+    {
+        foreach (var name in new[]
+        {
+            "admin.json", "secrets.key", "providers.json", "favourites.json",
+            "continue-watching.json", "version", "release.json"
+        })
+        {
+            var source = Path.Combine(dataDir, name);
+            if (File.Exists(source))
+                archive.CreateEntryFromFile(source, name, CompressionLevel.SmallestSize);
+        }
+    }
+
+    return Results.Ok(new
+    {
+        fileName = Path.GetFileName(file),
+        sizeBytes = new FileInfo(file).Length,
+        created = DateTimeOffset.Now
+    });
+}).RequireAuthorization();
+
+app.MapGet("/api/system/backups", () =>
+{
+    Directory.CreateDirectory(backupsDir);
+    var rows = Directory.EnumerateFiles(backupsDir, "*.zip")
+        .Select(x => new FileInfo(x))
+        .OrderByDescending(x => x.CreationTimeUtc)
+        .Take(50)
+        .Select(x => new
+        {
+            fileName = x.Name,
+            sizeBytes = x.Length,
+            created = x.CreationTimeUtc
+        });
+    return Results.Ok(rows);
 }).RequireAuthorization();
 
 app.MapFallbackToFile("index.html");

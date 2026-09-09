@@ -19,37 +19,45 @@ resolve_ref() {
     printf '%s\n' "$MYONLINE_REF"
     return
   fi
-
   if [[ "${MYONLINE_CHANNEL}" == "stable" ]]; then
     local tag
     tag="$(github_latest_release_tag "$MYONLINE_REPO")"
-    if [[ -n "$tag" ]]; then
-      printf '%s\n' "$tag"
-      return
-    fi
+    if [[ -n "$tag" ]]; then printf '%s\n' "$tag"; return; fi
   fi
-
   printf 'main\n'
 }
 
 download_repo() {
-  local repo="$1"
-  local ref="$2"
-  local target="$3"
+  local repo="$1" ref="$2" target="$3"
   local archive="${target}/repo.tar.gz"
-
   mkdir -p "$target"
-  echo "Downloading ${repo}@${ref}..."
+  echo "Downloading source ${repo}@${ref}..." >&2
   curl -fL --retry 3 --connect-timeout 15 \
-    "https://github.com/${repo}/archive/refs/heads/${ref}.tar.gz" \
-    -o "$archive" 2>/dev/null || \
+    "https://github.com/${repo}/archive/refs/heads/${ref}.tar.gz" -o "$archive" 2>/dev/null || \
   curl -fL --retry 3 --connect-timeout 15 \
-    "https://github.com/${repo}/archive/refs/tags/${ref}.tar.gz" \
-    -o "$archive"
-
+    "https://github.com/${repo}/archive/refs/tags/${ref}.tar.gz" -o "$archive"
   tar -xzf "$archive" -C "$target"
   local dir
   dir="$(find "$target" -mindepth 1 -maxdepth 1 -type d | head -1)"
   [[ -n "$dir" ]] || { echo "Could not locate extracted repository."; return 1; }
   printf '%s\n' "$dir"
+}
+
+download_release_artifact() {
+  local repo="$1" ref="$2" target="$3"
+  local version="${ref#v}"
+  local name="myonline-tv-web-v${version}-linux-x64.tar.gz"
+  local sums="SHA256SUMS-RELEASE.txt"
+  mkdir -p "$target"
+
+  local base="https://github.com/${repo}/releases/download/${ref}"
+  echo "Downloading prebuilt ${name}..." >&2
+  curl -fL --retry 3 "${base}/${name}" -o "${target}/${name}"
+  curl -fL --retry 3 "${base}/${sums}" -o "${target}/${sums}"
+
+  (
+    cd "$target"
+    grep "  ${name}$" "$sums" | sha256sum -c -
+  )
+  printf '%s\n' "${target}/${name}"
 }
