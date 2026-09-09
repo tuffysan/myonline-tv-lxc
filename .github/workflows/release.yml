@@ -11,6 +11,7 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -24,6 +25,7 @@ jobs:
           }
 
       - name: Validate scripts and frontend
+        shell: bash
         run: |
           find . -name '*.sh' -print0 | xargs -0 -n1 bash -n
           node --check app/wwwroot/app.js
@@ -37,6 +39,7 @@ jobs:
         run: dotnet build app/MyOnlineTV.Web.csproj -c Release
 
       - name: Publish linux-x64
+        shell: bash
         run: |
           rm -rf dist
           mkdir -p dist/publish
@@ -49,26 +52,54 @@ jobs:
       - name: Create release artifacts
         shell: bash
         run: |
-          VERSION="$(cat VERSION | tr -d '[:space:]')"
+          set -euo pipefail
+
+          VERSION="$(tr -d '[:space:]' < VERSION)"
           APP="myonline-tv-web-v${VERSION}-linux-x64.tar.gz"
           SRC="myonline-tv-lxc-v${VERSION}-source.tar.gz"
 
-          tar -C dist/publish -czf "${APP}" .
+          rm -f "${APP}" "${SRC}" SHA256SUMS-RELEASE.txt
+
+          # Build archives outside the repository tree.
+          # This avoids GNU tar seeing its own output file change while reading ".".
+          tar -C dist/publish -czf "/tmp/${APP}" .
+
           tar \
             --exclude='.git' \
             --exclude='app/bin' \
             --exclude='app/obj' \
             --exclude='dist' \
-            -czf "${SRC}" .
+            --exclude='*.tar.gz' \
+            --exclude='SHA256SUMS-RELEASE.txt' \
+            -czf "/tmp/${SRC}" .
+
+          mv "/tmp/${APP}" .
+          mv "/tmp/${SRC}" .
 
           sha256sum "${APP}" "${SRC}" > SHA256SUMS-RELEASE.txt
+
+      - name: Verify release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          test -s "myonline-tv-web-v${VERSION}-linux-x64.tar.gz"
+          test -s "myonline-tv-lxc-v${VERSION}-source.tar.gz"
+          test -s "SHA256SUMS-RELEASE.txt"
+          test -s "release.json"
+
+          grep "  myonline-tv-web-v${VERSION}-linux-x64.tar.gz$" SHA256SUMS-RELEASE.txt
+          grep "  myonline-tv-lxc-v${VERSION}-source.tar.gz$" SHA256SUMS-RELEASE.txt
+
+          tar -tzf "myonline-tv-web-v${VERSION}-linux-x64.tar.gz" >/dev/null
+          tar -tzf "myonline-tv-lxc-v${VERSION}-source.tar.gz" >/dev/null
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
-            myonline-tv-web-${{ github.ref_name }}-linux-x64.tar.gz
-            myonline-tv-lxc-${{ github.ref_name }}-source.tar.gz
+            myonline-tv-web-v0.3.1-linux-x64.tar.gz
+            myonline-tv-lxc-v0.3.1-source.tar.gz
             SHA256SUMS-RELEASE.txt
             release.json

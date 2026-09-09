@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.1 — GitHub Release workflow fix
+
+- Fixed GitHub Release packaging failure: `tar: .: file changed as we read it`.
+- Release archives are now created in `/tmp`, outside the repository tree being archived.
+- Release workflow now reliably produces:
+  - `myonline-tv-web-v0.3.1-linux-x64.tar.gz`
+  - `myonline-tv-lxc-v0.3.1-source.tar.gz`
+  - `SHA256SUMS-RELEASE.txt`
+  - `release.json`
+- Added an explicit artifact-existence verification step before release upload.
+- Keeps all v0.3.0 appliance functionality unchanged.
+
 ## 0.3.0 — Appliance release
 
 - Stable GitHub installs now use a prebuilt `linux-x64` release artifact.
