@@ -18,11 +18,15 @@ jobs:
       - name: Validate tag matches VERSION
         shell: bash
         run: |
-          EXPECTED="v$(tr -d '[:space:]' < VERSION)"
-          test "${GITHUB_REF_NAME}" = "${EXPECTED}" || {
-            echo "Tag ${GITHUB_REF_NAME} does not match VERSION ${EXPECTED}"
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          CANONICAL="v${VERSION}"
+          LEGACY="v.${VERSION}"
+          if [[ "${GITHUB_REF_NAME}" != "${CANONICAL}" && "${GITHUB_REF_NAME}" != "${LEGACY}" ]]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match VERSION ${VERSION}."
+            echo "Use ${CANONICAL} (preferred) or ${LEGACY} (legacy-compatible)."
             exit 1
-          }
+          fi
+          echo "Release tag accepted: ${GITHUB_REF_NAME}"
 
       - name: Validate scripts and frontend
         shell: bash
@@ -99,7 +103,7 @@ jobs:
         with:
           generate_release_notes: true
           files: |
-            myonline-tv-web-v0.4.3-linux-x64.tar.gz
-            myonline-tv-lxc-v0.4.3-source.tar.gz
+            myonline-tv-web-v*-linux-x64.tar.gz
+            myonline-tv-lxc-v*-source.tar.gz
             SHA256SUMS-RELEASE.txt
             release.json

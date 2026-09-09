@@ -46,14 +46,22 @@ download_repo() {
 download_release_artifact() {
   local repo="$1" ref="$2" target="$3"
   local version="${ref#v}"
+  version="${version#.}"
   local name="myonline-tv-web-v${version}-linux-x64.tar.gz"
   local sums="SHA256SUMS-RELEASE.txt"
   mkdir -p "$target"
 
   local base="https://github.com/${repo}/releases/download/${ref}"
   echo "Downloading prebuilt ${name}..." >&2
-  curl -fL --retry 3 "${base}/${name}" -o "${target}/${name}"
-  curl -fL --retry 3 "${base}/${sums}" -o "${target}/${sums}"
+  if ! curl -fL --retry 3 "${base}/${name}" -o "${target}/${name}"; then
+    echo "ERROR: Release ${ref} exists but prebuilt artifact ${name} was not found." >&2
+    echo "Check GitHub Actions -> Release and confirm the build completed successfully." >&2
+    return 1
+  fi
+  if ! curl -fL --retry 3 "${base}/${sums}" -o "${target}/${sums}"; then
+    echo "ERROR: Release checksum file ${sums} was not found for ${ref}." >&2
+    return 1
+  fi
 
   (
     cd "$target"
