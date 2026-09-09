@@ -20,3 +20,33 @@ input,select{background:#07131d;color:#fff;border:1px solid #29475d;padding:10px
 @media(max-width:800px){#app{grid-template-columns:1fr}aside{position:sticky;top:0;height:auto;z-index:6;padding:12px}.brand{display:flex;align-items:baseline;gap:10px}nav{display:flex;overflow:auto;margin-top:10px}.logout{position:absolute;right:12px;top:10px;padding:7px}main header{display:none}#content{padding:14px}.formGrid{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}.timelineHead,.timelineRow{grid-template-columns:130px minmax(900px,1fr)}.seriesHero{grid-template-columns:100px 1fr}.seriesHero img{width:100px}.channelCard{grid-template-columns:48px 1fr auto auto}}
 
 .healthDot{width:12px;height:12px;border-radius:50%;display:inline-block;background:#768697}.healthDot.ok{background:#53d78b}.healthDot.fail{background:#ff6f79}
+
+
+/* v0.3.17 Live TV UX */
+.liveHelp{font-size:.85rem;opacity:.7;margin:.35rem 0 .8rem}
+.channelCard{transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease}
+.channelCard.selectedChannel{outline:2px solid currentColor;outline-offset:2px;transform:translateY(-1px)}
+.channelNow{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.82;margin-top:.2rem}
+.livePlayer{position:relative;overflow:hidden}
+.livePlayer video{width:100%;background:#000;display:block;min-height:260px}
+.liveOverlay{position:absolute;left:0;right:0;top:0;display:grid;grid-template-columns:auto 1fr auto;gap:.8rem;align-items:center;padding:1rem 1.1rem;background:linear-gradient(to bottom,rgba(0,0,0,.82),rgba(0,0,0,0));color:white;pointer-events:none}
+.liveOverlayLogo img{width:54px;height:54px;object-fit:contain;background:rgba(255,255,255,.92);border-radius:10px;padding:4px}
+.liveOverlayTop{display:flex;align-items:center;gap:.55rem}
+.liveBadge{font-size:.68rem;font-weight:800;letter-spacing:.08em;background:#d62828;color:#fff;padding:.18rem .4rem;border-radius:.3rem}
+.liveNow{font-size:1rem;margin-top:.18rem}
+.liveNext{font-size:.8rem;opacity:.76;margin-top:.12rem}
+.liveClock{font-variant-numeric:tabular-nums;font-weight:700}
+.liveControls{display:flex;gap:.5rem;flex-wrap:wrap;padding:.7rem .85rem .25rem}
+.livePlaybackStatus{padding:.25rem .85rem .65rem;font-size:.86rem}
+.livePlaybackStatus.loading{opacity:.75}
+.livePlaybackStatus.ready{font-weight:700}
+.livePlaybackStatus.error{font-weight:700}
+.playerCard:fullscreen{background:#000;width:100vw;height:100vh;display:flex;flex-direction:column;justify-content:center}
+.playerCard:fullscreen video{max-height:100vh;height:100%;object-fit:contain}
+.playerCard:fullscreen .liveControls,.playerCard:fullscreen .livePlaybackStatus,.playerCard:fullscreen .nowPlaying{position:relative;z-index:3}
+@media (max-width:700px){
+  .liveHelp{display:none}
+  .liveOverlay{padding:.6rem;gap:.5rem}
+  .liveOverlayLogo img{width:38px;height:38px}
+  .liveNext{display:none}
+}

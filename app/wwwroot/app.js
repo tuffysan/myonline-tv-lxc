@@ -105,28 +105,119 @@ function providerSelect(type){
   return `<select id=provider>${rows.map(p=>`<option value="${p.id}" ${p.id===currentProvider?'selected':''}>${esc(p.name)}</option>`).join('')}</select>`;
 }
 
+
+const LIVE_RECENTS_KEY='myonline-live-recents-v1';
+let liveSelectedIndex=0;
+let liveVisibleRows=[];
+let liveCurrentChannel=null;
+
+function getLiveRecents(){
+  try{return JSON.parse(localStorage.getItem(LIVE_RECENTS_KEY)||'[]')}catch{return []}
+}
+function rememberLiveChannel(c){
+  const rows=getLiveRecents().filter(x=>x.providerId!==currentProvider||x.key!==c.key);
+  rows.unshift({providerId:currentProvider,key:c.key,name:c.name,group:c.group||'',logo:c.logo||'',id:c.id||'',number:c.number||''});
+  localStorage.setItem(LIVE_RECENTS_KEY,JSON.stringify(rows.slice(0,20)));
+}
+function liveProgramFor(c){
+  if(!Array.isArray(epg)||!epg.length)return {now:null,next:null};
+  const now=Date.now();
+  const rows=epg.filter(p=>p.channel===c.id||p.channel===c.epgId).sort((a,b)=>new Date(a.start)-new Date(b.start));
+  const current=rows.find(p=>new Date(p.start).getTime()<=now&&new Date(p.stop).getTime()>now)||null;
+  const next=rows.find(p=>new Date(p.start).getTime()>now)||null;
+  return {now:current,next};
+}
+function liveStatus(text,kind=''){
+  const el=document.querySelector('#livePlaybackStatus');
+  if(el){el.textContent=text;el.className='livePlaybackStatus '+kind}
+}
+function channelByKey(key){return channels.find(c=>String(c.key)===String(key))}
+function stepLiveChannel(delta){
+  if(!liveVisibleRows.length)return;
+  let i=liveCurrentChannel?liveVisibleRows.findIndex(c=>c.key===liveCurrentChannel.key):liveSelectedIndex;
+  if(i<0)i=0;
+  i=(i+delta+liveVisibleRows.length)%liveVisibleRows.length;
+  liveSelectedIndex=i;
+  const c=liveVisibleRows[i];
+  playLive(c.key,c.name);
+}
+function toggleLiveFullscreen(){
+  const el=document.querySelector('.playerCard');
+  if(!el)return;
+  if(document.fullscreenElement)document.exitFullscreen?.();
+  else el.requestFullscreen?.();
+}
+function liveOverlay(c){
+  const pg=liveProgramFor(c);
+  const now=pg.now?esc(pg.now.title):'Live TV';
+  const next=pg.next?`Next: ${esc(pg.next.title)}`:'';
+  return `<div class="liveOverlay">
+    <div class="liveOverlayLogo">${c.logo?`<img src="${escAttr(c.logo)}">`:''}</div>
+    <div><div class="liveOverlayTop"><span class="liveBadge">LIVE</span><b>${esc(c.name)}</b></div>
+    <div class="liveNow">${now}</div><div class="liveNext">${next}</div></div>
+    <div class="liveClock">${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>
+  </div>`;
+}
+async function loadLiveEpgQuiet(){
+  try{epg=await api('/api/epg/'+currentProvider+'?hours=6')}catch(_){}
+}
+
 async function live(){
   if(!await ensureProvider()){content.innerHTML=noProvider();return}
   content.innerHTML='<div class=card>Loading channels…</div>';
-  try{channels=await api('/api/channels/'+currentProvider);renderChannels()}
+  try{channels=await api('/api/channels/'+currentProvider);await loadLiveEpgQuiet();renderChannels()}
   catch(e){content.innerHTML=errorCard(e)}
 }
 function renderChannels(){
-  content.innerHTML=`<div class=toolbar>${providerSelect()}<input id=q placeholder="Search channels"><select id=group><option value="">All groups</option>${[...new Set(channels.map(x=>x.group))].sort().map(g=>`<option>${esc(g)}</option>`).join('')}</select></div>
-  <div id=playerWrap></div><div id=chan class=channelGrid></div>`;
+  const recents=getLiveRecents().filter(x=>x.providerId===currentProvider).map(r=>channelByKey(r.key)).filter(Boolean);
+  content.innerHTML=`<div class=toolbar>${providerSelect()}<input id=q placeholder="Search channels"><select id=group><option value="">All groups</option><option value="__favorites">★ Favourites</option><option value="__recent">↻ Recently watched</option>${[...new Set(channels.map(x=>x.group).filter(Boolean))].sort().map(g=>`<option>${esc(g)}</option>`).join('')}</select></div>
+  <div class="liveHelp">Remote/keyboard: ↑ ↓ select · Enter play · ← → previous/next channel · F fullscreen · Esc exit</div>
+  <div id=playerWrap></div><div id=chan class=channelGrid tabindex="0"></div>`;
   $('#provider').onchange=async e=>{currentProvider=e.target.value;await live()};
-  $('#q').oninput=renderFilter;$('#group').onchange=renderFilter;renderFilter();
+  $('#q').oninput=renderFilter;$('#group').onchange=renderFilter;
+  $('#chan').addEventListener('keydown',liveKeyHandler);
+  renderFilter();
 }
 function renderFilter(){
   const q=($('#q')?.value||'').toLowerCase(),g=$('#group')?.value||'';
-  const rows=channels.filter(c=>(!q||c.name.toLowerCase().includes(q))&&(!g||c.group===g)).slice(0,800);
-  $('#chan').innerHTML=rows.map(c=>`<article class=channelCard>
-    <div class=logoBox>${c.logo?`<img loading=lazy src="${escAttr(c.logo)}" onerror="this.style.display='none'">`:''}</div>
-    <div class=channelInfo><b>${esc(c.number?c.number+' · ':'')}${esc(c.name)}</b><small>${esc(c.group)}</small></div>
-    <button class=round onclick='playLive(${JSON.stringify(c.key)},${JSON.stringify(c.name)})'>▶</button>
-    <button class=round onclick="toggleFav('${escAttr(c.id)}')">${fav.has(c.id)?'★':'☆'}</button>
-  </article>`).join('');
+  let rows=channels.filter(c=>(!q||c.name.toLowerCase().includes(q)));
+  if(g==='__favorites')rows=rows.filter(c=>fav.has(c.id));
+  else if(g==='__recent'){
+    const order=getLiveRecents().filter(x=>x.providerId===currentProvider).map(x=>x.key);
+    rows=order.map(k=>channelByKey(k)).filter(Boolean).filter(c=>!q||c.name.toLowerCase().includes(q));
+  } else if(g) rows=rows.filter(c=>c.group===g);
+  liveVisibleRows=rows.slice(0,800);
+  liveSelectedIndex=Math.min(liveSelectedIndex,Math.max(0,liveVisibleRows.length-1));
+  $('#chan').innerHTML=liveVisibleRows.map((c,i)=>{
+    const pg=liveProgramFor(c);
+    return `<article class="channelCard ${i===liveSelectedIndex?'selectedChannel':''}" data-live-index="${i}">
+      <div class=logoBox>${c.logo?`<img loading=lazy src="${escAttr(c.logo)}" onerror="this.style.display='none'">`:''}</div>
+      <div class=channelInfo><b>${esc(c.number?c.number+' · ':'')}${esc(c.name)}</b><small>${esc(c.group)}</small>${pg.now?`<small class=channelNow>${esc(pg.now.title)}</small>`:''}</div>
+      <button class=round title="Play" onclick='playLive(${JSON.stringify(c.key)},${JSON.stringify(c.name)})'>▶</button>
+      <button class=round title="Favourite" onclick="toggleFav('${escAttr(c.id)}')">${fav.has(c.id)?'★':'☆'}</button>
+    </article>`}).join('');
+  document.querySelectorAll('[data-live-index]').forEach(el=>el.onclick=e=>{
+    if(e.target.closest('button'))return;
+    liveSelectedIndex=Number(el.dataset.liveIndex)||0;renderFilter();
+  });
 }
+function liveKeyHandler(e){
+  if(!liveVisibleRows.length)return;
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+    e.preventDefault();liveSelectedIndex=(liveSelectedIndex+(e.key==='ArrowDown'?1:-1)+liveVisibleRows.length)%liveVisibleRows.length;renderFilter();
+    document.querySelector(`[data-live-index="${liveSelectedIndex}"]`)?.scrollIntoView({block:'nearest'});
+  }else if(e.key==='Enter'){
+    e.preventDefault();const c=liveVisibleRows[liveSelectedIndex];if(c)playLive(c.key,c.name);
+  }else if(e.key==='ArrowLeft'){e.preventDefault();stepLiveChannel(-1)}
+  else if(e.key==='ArrowRight'){e.preventDefault();stepLiveChannel(1)}
+  else if(e.key.toLowerCase()==='f'){e.preventDefault();toggleLiveFullscreen()}
+}
+document.addEventListener('keydown',e=>{
+  if(currentView!=='live'||['INPUT','SELECT','TEXTAREA'].includes(document.activeElement?.tagName))return;
+  if(e.key==='ArrowLeft'){e.preventDefault();stepLiveChannel(-1)}
+  else if(e.key==='ArrowRight'){e.preventDefault();stepLiveChannel(1)}
+  else if(e.key.toLowerCase()==='f'){e.preventDefault();toggleLiveFullscreen()}
+});
 async function toggleFav(id){fav=new Set(await api('/api/favourites/'+encodeURIComponent(id),{method:'POST'}));if(currentView==='live')renderFilter()}
 
 let activeLiveSession=null;
@@ -137,7 +228,10 @@ async function playLive(channelKey,name,forceTranscode=false){
   destroyPlayer();
   const wrap=$('#playerWrap')||$('#mediaPlayer');
   if(!wrap)return;
-  wrap.innerHTML=`<div class=playerCard><video id=video controls autoplay playsinline></video><div class=nowPlaying>${esc(name)} · Starting Live TV…</div></div>`;
+  const selected=channelByKey(channelKey)||{key:channelKey,name};liveCurrentChannel=selected;rememberLiveChannel(selected);
+  wrap.innerHTML=`<div class="playerCard livePlayer"><video id=video controls autoplay playsinline></video>${liveOverlay(selected)}
+    <div class="liveControls"><button class=btn onclick="stepLiveChannel(-1)">← Previous</button><button class=btn onclick="stepLiveChannel(1)">Next →</button><button class=btn onclick="toggleLiveFullscreen()">⛶ Fullscreen</button></div>
+    <div id=livePlaybackStatus class=livePlaybackStatus>Connecting to channel…</div><div class=nowPlaying>${esc(name)}</div></div>`;
   wrap.scrollIntoView({behavior:'smooth',block:'start'});
   try{
     const info=await api('/api/live/start/'+encodeURIComponent(currentProvider)+'/'+encodeURIComponent(channelKey)+(forceTranscode?'?transcode=true':''),{method:'POST'});
@@ -149,7 +243,7 @@ async function playLive(channelKey,name,forceTranscode=false){
       state=await api(info.statusUrl||('/api/live/status/'+encodeURIComponent(info.sessionId)));
       if(state.status==='ready')break;
       if(state.status==='failed')throw new Error(state.error||'FFmpeg could not prepare this channel.');
-      const np=wrap.querySelector('.nowPlaying');if(np)np.textContent=name+' · Preparing browser stream…';
+      liveStatus('Preparing browser stream…','loading');
       await new Promise(r=>setTimeout(r,500));
     }
     if(!state||state.status!=='ready')throw new Error('Live TV startup timed out.');
@@ -177,9 +271,9 @@ async function playLive(channelKey,name,forceTranscode=false){
     }else if(video.canPlayType('application/vnd.apple.mpegurl')){
       video.src=playbackUrl;await video.play().catch(()=>{});
     }else throw new Error('This browser does not support HLS playback.');
-    const np=wrap.querySelector('.nowPlaying');if(np)np.textContent=name+' · Live';
+    liveStatus('Playing','ready');
   }catch(e){
-    const np=wrap.querySelector('.nowPlaying');if(np)np.textContent=name+' · '+friendlyError(e);
+    liveStatus(friendlyError(e),'error');const np=wrap.querySelector('.nowPlaying');if(np)np.textContent=name;
   }
 }
 
