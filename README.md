@@ -1,4 +1,4 @@
-# MyOnline TV Web v0.8.1 — Proxmox LXC
+# MyOnline TV Web v0.8.3 — Proxmox LXC
 
 MyOnline TV Web is a self-hosted entertainment appliance for Proxmox VE.
 
@@ -381,3 +381,27 @@ v0.8.0 introduces the first DVR milestone:
 - Keeps the browser's own duration as a fallback when ffprobe cannot determine the source length.
 - Continue Watching and resume behavior from v0.8.0 is unchanged.
 - Live TV remains treated as a live stream and does not show a fixed total length.
+
+## v0.8.2 — Continue Watching & Recently Watched fixes
+
+- Continue Watching for IPTV Movies now stores provider + movie ID and can resume the exact movie.
+- Continue Watching for IPTV Episodes now stores provider + episode ID + extension and can resume the exact episode.
+- Existing unified Plex/Jellyfin Continue Watching remains supported.
+- Recently Watched movie cards now open the exact movie detail instead of only navigating to Movies.
+- Recently Watched episode cards retain exact playback metadata for new history entries.
+- Added remove button on every Continue Watching item.
+- Added Clear all for Continue Watching.
+- Added remove button on every Recently Watched item.
+- Added Clear all for Recently Watched.
+- Legacy entries that lack enough metadata are handled gracefully and can be removed.
+
+## v0.8.3 — Poster rails & modern scrollbars
+
+- Continue Watching now stores and displays poster artwork for newly played Movies and Episodes.
+- Recently Watched now displays poster artwork instead of text-only cards.
+- IPTV episode history uses the episode poster when available and falls back to the series cover.
+- Plex/Jellyfin unified playback stores poster artwork in Continue Watching and Recently Watched.
+- Existing legacy entries try to reuse matching poster artwork from local history or unified libraries.
+- Added polished poster cards with hover/focus effects and overlay remove buttons.
+- Replaced the old browser-looking horizontal scrollbar with a thin, rounded media-center style scrollbar.
+- Modern scrollbar styling applies to Continue Watching, Recently Watched and other horizontal poster rails.

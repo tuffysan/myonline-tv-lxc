@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.8.3 — Poster rails & modern scrollbars
+- Added poster persistence to Continue Watching.
+- Added poster artwork to Continue Watching and Recently Watched cards.
+- Added IPTV episode fallback from episode poster to series cover.
+- Added poster persistence for Plex/Jellyfin unified playback.
+- Added best-effort artwork recovery for compatible legacy entries.
+- Redesigned history cards for a TV/media-center layout.
+- Added thin rounded custom horizontal scrollbars for Chromium/Edge/Safari and Firefox.
+
+
+## v0.8.2 — Continue Watching & Recently Watched
+- Fixed IPTV Movie Continue Watching by persisting provider and exact movie ID in the resume key.
+- Fixed IPTV Episode Continue Watching by persisting provider, exact episode ID and extension.
+- Added backward compatibility for v0.8.1 movie resume entries.
+- Recently Watched movie cards now open the exact title.
+- New episode history entries preserve exact playback metadata.
+- Added individual and Clear all actions for Continue Watching.
+- Added individual and Clear all actions for Recently Watched.
+
+
 ## v0.8.1 — Movie & Series duration
 - Added server-side ffprobe duration detection for VOD/episode playback.
 - Media session responses now include `durationSeconds`.

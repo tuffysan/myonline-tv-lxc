@@ -139,6 +139,8 @@ async function home(){
     ]);
   }catch{}
   const cont=await api('/api/continue');
+  const homeHistory=getMediaHistory();
+  const continueItems=cont.map(x=>({...x,poster:findLegacyPoster(x,homeHistory,unifiedMovies,unifiedSeries)}));
 
   const recentlyAdded=[...unifiedMovies,...unifiedSeries]
     .filter(x=>x.addedAt)
@@ -153,7 +155,7 @@ async function home(){
     <div class=stat><b>${fav.size}</b><span>Favourites</span></div>
     <div class=stat><b>${cont.length}</b><span>Continue watching</span></div>
   </div>
-  ${cont.length?`<h2>Continue watching</h2><div class=continueRow>${cont.slice(0,12).map(x=>`<button class=continueCard onclick='resumeContinueItem(${JSON.stringify(x)})'><span>▶</span><b>${esc(x.title)}</b><small>Resume around ${Math.floor((x.positionSeconds||0)/60)} min</small></button>`).join('')}</div><div id=mediaPlayer></div>`:''}
+  ${continueItems.length?`<div class=sectionHead><h2>Continue watching</h2><button class=linkButton onclick="clearContinueWatching()">Clear all</button></div><div class="continueRow mediaHistoryRail">${continueItems.slice(0,12).map(x=>`<div class="continueCard historyCard"><button class=historyMain onclick='resumeContinueItem(${JSON.stringify(x)})'>${mediaPosterMarkup(x.poster,x.title)}<div class=historyCardBody><b>${esc(x.title)}</b><small>${formatMediaTime(x.positionSeconds||0)} watched</small></div></button><button class=historyRemove title="Remove from Continue Watching" aria-label="Remove from Continue Watching" onclick='removeContinueWatching(${JSON.stringify(x.id)})'>×</button></div>`).join('')}</div><div id=mediaPlayer></div>`:''}
   ${recentlyAdded.length?`<div class=sectionHead><h2>Recently added</h2><button class=linkButton onclick="show('search')">Browse all</button></div><div class=posterRail>${recentlyAdded.map(x=>`<button class=posterCard onclick='playUnifiedItem(${JSON.stringify(x)})'>${x.poster?`<img loading=lazy decoding=async src="${escAttr(x.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(x.name)}</b><small><span class=sourceBadge>${esc(x.source||'media')}</span> ${esc(x.year||'')}</small></div></button>`).join('')}</div>`:''}
   ${homeMediaRails()}
   <h2>Quick access</h2><div class=grid>
@@ -390,6 +392,27 @@ let pendingResumeSeconds=0;
 let nextUnifiedEpisode=null;
 let unifiedEpisodeContext=[];
 
+function mediaPosterMarkup(poster,alt=''){
+  if(poster){
+    return `<div class=historyPoster><img loading=lazy decoding=async src="${escAttr(poster)}" alt="${escAttr(alt)}" onerror="this.closest('.historyPoster').classList.add('posterFailed');this.remove()"><span class=historyPosterFallback>▶</span></div>`;
+  }
+  return `<div class="historyPoster posterFailed"><span class=historyPosterFallback>▶</span></div>`;
+}
+
+function normalizeHistoryTitle(value){
+  return String(value||'').toLowerCase().replace(/\s+/g,' ').trim();
+}
+
+function findLegacyPoster(item,history,unifiedMovies,unifiedSeries){
+  if(item?.poster)return item.poster;
+  const title=normalizeHistoryTitle(item?.title||item?.name);
+  if(!title)return '';
+  const h=(history||[]).find(x=>normalizeHistoryTitle(x.name)===title&&x.poster);
+  if(h?.poster)return h.poster;
+  const u=[...(unifiedMovies||[]),...(unifiedSeries||[])].find(x=>normalizeHistoryTitle(x.name)===title&&x.poster);
+  return u?.poster||'';
+}
+
 function formatMediaTime(seconds){
   const s=Math.max(0,Math.floor(Number(seconds)||0));
   const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
@@ -414,7 +437,7 @@ function installMediaDurationDisplay(video,totalSeconds){
   refresh();
 }
 
-async function playServerMedia(token,name,mediaId=null,forceTranscode=false){
+async function playServerMedia(token,name,mediaId=null,forceTranscode=false,poster=''){
   if(!forceTranscode)mediaFallbackTried=false;
   destroyPlayer();
   const wrap=$('#playerWrap')||$('#mediaPlayer');
@@ -463,7 +486,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false){
         const sec=Math.floor(video.currentTime||0);
         if(sec===last)return;
         last=sec;
-        jpost('/api/continue',{id:String(mediaId),title:name,url:'',positionSeconds:sec,updated:new Date().toISOString()}).catch(()=>{});
+        jpost('/api/continue',{id:String(mediaId),title:name,url:'',positionSeconds:sec,updated:new Date().toISOString(),poster:poster||''}).catch(()=>{});
       };
       video.addEventListener('timeupdate',()=>{if(Math.floor(video.currentTime)%15===0)save()});
       video.addEventListener('pause',save);
@@ -494,7 +517,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false){
         if(!forceTranscode&&!mediaFallbackTried){
           mediaFallbackTried=true;
           const st=$('#mediaPlaybackStatus');if(st)st.textContent='Codec not browser-compatible · retrying with H.264/AAC…';
-          await playServerMedia(token,name,mediaId,true);
+          await playServerMedia(token,name,mediaId,true,poster);
           return;
         }
         const st=$('#mediaPlaybackStatus');if(st){st.textContent='Playback error: '+(d.details||d.type||'HLS error');st.className='livePlaybackStatus error'}
@@ -649,7 +672,7 @@ async function openSeries(id){
     const s=await api(`/api/series/${currentProvider}/${encodeURIComponent(id)}`);
     const by={};s.episodes.forEach(e=>(by[e.season]??=[]).push(e));
     $('#seriesContent').innerHTML=`<div class=seriesHero>${s.cover?`<img src="${escAttr(s.cover)}">`:''}<div><button class=btn onclick=filterSeries()>← Back</button><h2>${esc(s.name)}</h2><p>${esc(s.plot||'')}</p></div></div>
-    ${Object.keys(by).sort((a,b)=>Number(a)-Number(b)).map(season=>`<section><h3>Season ${esc(season)}</h3><div class=episodeList>${by[season].map(e=>`<div class=episode><span><b>E${esc(e.episode)}</b> ${esc(e.title||'Episode')}</span><div class=row><button class=btn onclick='playEpisode(${JSON.stringify(e.id)},${JSON.stringify(e.extension||'mp4')},${JSON.stringify(e.title||'Episode')},${JSON.stringify('episode:'+s.name+':'+season+':'+e.episode)})'>Play</button><button class=btn onclick='downloadEpisode(${JSON.stringify(e.id)},${JSON.stringify(e.extension||'mp4')},${JSON.stringify((s.name||'Series')+' - S'+season+'E'+e.episode)})'>↓</button></div></div>`).join('')}</div></section>`).join('')}`;
+    ${Object.keys(by).sort((a,b)=>Number(a)-Number(b)).map(season=>`<section><h3>Season ${esc(season)}</h3><div class=episodeList>${by[season].map(e=>`<div class=episode><span><b>E${esc(e.episode)}</b> ${esc(e.title||'Episode')}</span><div class=row><button class=btn onclick='playEpisode(${JSON.stringify(e.id)},${JSON.stringify(e.extension||'mp4')},${JSON.stringify(e.title||'Episode')},${JSON.stringify('iptv-episode:'+currentProvider+':'+e.id+':'+(e.extension||'mp4'))},${JSON.stringify(e.poster||s.cover||'')},${JSON.stringify(s.id||id)},${JSON.stringify(s.name||'')},${JSON.stringify(season)},${JSON.stringify(e.episode)})'>Play</button><button class=btn onclick='downloadEpisode(${JSON.stringify(e.id)},${JSON.stringify(e.extension||'mp4')},${JSON.stringify((s.name||'Series')+' - S'+season+'E'+e.episode)})'>↓</button></div></div>`).join('')}</div></section>`).join('')}`;
   }catch(e){$('#seriesContent').innerHTML=errorCard(e)}
 }
 
@@ -657,7 +680,12 @@ async function movieToken(id){
   return await api(`/api/vod/${currentProvider}/${encodeURIComponent(id)}/token`,{method:'POST'});
 }
 async function playMovie(id,name){
-  try{const item=mediaItems.find(x=>String(x.id)===String(id))||{id,name};rememberMediaHistory('movie',item);const t=await movieToken(id);await playServerMedia(t.playToken,name,'movie:'+id)}catch(e){alert(e.message)}
+  try{
+    const item=mediaItems.find(x=>String(x.id)===String(id))||{id,name};
+    rememberMediaHistory('movie',{...item,providerId:currentProvider});
+    const t=await movieToken(id);
+    await playServerMedia(t.playToken,name,`iptv-movie:${currentProvider}:${id}`,false,item.poster||'');
+  }catch(e){alert(e.message)}
 }
 async function downloadMovie(id,name){
   try{const t=await movieToken(id);await startMediaDownload(t.downloadToken,name)}catch(e){alert(e.message)}
@@ -665,8 +693,18 @@ async function downloadMovie(id,name){
 async function episodeToken(id,ext){
   return await api(`/api/series/${currentProvider}/episode/${encodeURIComponent(id)}/token?ext=${encodeURIComponent(ext||'mp4')}`,{method:'POST'});
 }
-async function playEpisode(id,ext,name,mediaId){
-  try{rememberMediaHistory('episode',{id,name});const t=await episodeToken(id,ext);await playServerMedia(t.playToken,name,mediaId)}catch(e){alert(e.message)}
+async function playEpisode(id,ext,name,mediaId,poster='',seriesId=null,seriesName=null,season=null,episode=null){
+  try{
+    rememberMediaHistory('episode',{id,name,extension:ext,providerId:currentProvider,poster,seriesId,seriesName,season,episode});
+    const t=await episodeToken(id,ext);
+    await playServerMedia(
+      t.playToken,
+      name,
+      mediaId&&mediaId.startsWith('iptv-episode:')?mediaId:`iptv-episode:${currentProvider}:${id}:${ext||'mp4'}`,
+      false,
+      poster||''
+    );
+  }catch(e){alert(e.message)}
 }
 async function downloadEpisode(id,ext,name){
   try{const t=await episodeToken(id,ext);await startMediaDownload(t.downloadToken,name)}catch(e){alert(e.message)}
@@ -920,7 +958,19 @@ function historyKey(){return `myonline-media-history-v2:${currentProfile||'defau
 function getMediaHistory(){try{return JSON.parse(localStorage.getItem(historyKey())||'[]')}catch{return []}}
 function rememberMediaHistory(type,item){
   let rows=getMediaHistory().filter(x=>!(x.type===type&&String(x.id)===String(item.id)));
-  rows.unshift({type,id:String(item.id),name:item.name||item.title||'Untitled',poster:item.poster||'',providerId:currentProvider,updated:Date.now()});
+  rows.unshift({
+    type,
+    id:String(item.id),
+    name:item.name||item.title||'Untitled',
+    poster:item.poster||'',
+    providerId:item.providerId||currentProvider,
+    seriesId:item.seriesId||null,
+    seriesName:item.seriesName||null,
+    extension:item.extension||null,
+    season:item.season??null,
+    episode:item.episode??null,
+    updated:Date.now()
+  });
   localStorage.setItem(historyKey(),JSON.stringify(rows.slice(0,100)));
 }
 
@@ -928,7 +978,69 @@ function rememberMediaHistory(type,item){
 function homeMediaRails(){
   const favs=getMediaFavs().slice(0,12),hist=getMediaHistory().slice(0,12);
   return `${favs.length?`<h2>Media favourites</h2><div class=continueRow>${favs.map(x=>`<button class=continueCard onclick="show('${x.type==='movie'?'movies':'series'}')"><span>★</span><b>${esc(x.name)}</b><small>${esc(x.type)}</small></button>`).join('')}</div>`:''}
-  ${hist.length?`<h2>Recently watched</h2><div class=continueRow>${hist.map(x=>`<button class=continueCard onclick="show('${x.type==='movie'?'movies':'series'}')"><span>↻</span><b>${esc(x.name)}</b><small>${new Date(x.updated).toLocaleString()}</small></button>`).join('')}</div>`:''}`;
+  ${hist.length?`<div class=sectionHead><h2>Recently watched</h2><button class=linkButton onclick="clearRecentlyWatched()">Clear all</button></div><div class="continueRow mediaHistoryRail">${hist.map(x=>`<div class="continueCard historyCard"><button class=historyMain onclick='openRecentlyWatched(${JSON.stringify(x)})'>${mediaPosterMarkup(x.poster,x.name)}<div class=historyCardBody><b>${esc(x.name)}</b><small>${new Date(x.updated).toLocaleString()}</small></div></button><button class=historyRemove title="Remove from Recently Watched" aria-label="Remove from Recently Watched" onclick='removeRecentlyWatched(${JSON.stringify(x.type)},${JSON.stringify(x.id)})'>×</button></div>`).join('')}</div>`:''}`;
+}
+
+function saveMediaHistory(rows){
+  localStorage.setItem(historyKey(),JSON.stringify(rows.slice(0,100)));
+}
+async function removeRecentlyWatched(type,id){
+  saveMediaHistory(getMediaHistory().filter(x=>!(x.type===type&&String(x.id)===String(id))));
+  await home();
+}
+async function clearRecentlyWatched(){
+  if(!confirm('Remove all Recently Watched items?'))return;
+  localStorage.removeItem(historyKey());
+  await home();
+}
+async function removeContinueWatching(id){
+  try{await api('/api/continue/'+encodeURIComponent(id),{method:'DELETE'});await home()}catch(e){alert(friendlyError(e))}
+}
+async function clearContinueWatching(){
+  if(!confirm('Remove all Continue Watching items?'))return;
+  try{await api('/api/continue',{method:'DELETE'});await home()}catch(e){alert(friendlyError(e))}
+}
+
+async function openRecentlyWatched(item){
+  try{
+    if(item.providerId)currentProvider=item.providerId;
+
+    if(item.type==='movie'){
+      await show('movies');
+      const match=mediaItems.find(x=>String(x.id)===String(item.id));
+      if(match){
+        movieDetails(match.id);
+        return;
+      }
+      const q=$('#mediaq');
+      if(q){q.value=item.name||'';filterMedia()}
+      return;
+    }
+
+    if(item.type==='episode'){
+      // New v0.8.2 entries retain exact episode metadata and can start directly.
+      if(item.extension){
+        await show('series');
+        await playEpisode(item.id,item.extension,item.name||'Episode',
+          `iptv-episode:${item.providerId||currentProvider}:${item.id}:${item.extension}`,
+          item.poster||'',item.seriesId||null,item.seriesName||null,item.season??null,item.episode??null);
+        return;
+      }
+      // Legacy history items did not store extension/series id. Fall back to exact title search.
+      await show('series');
+      const q=$('#seriesq');
+      if(q){q.value=item.seriesName||item.name||'';filterSeries()}
+      return;
+    }
+
+    if(item.type==='series'&&item.id){
+      await show('series');
+      await openSeries(item.id);
+      return;
+    }
+
+    await show(item.type==='movie'?'movies':'series');
+  }catch(e){alert(friendlyError(e))}
 }
 
 // v0.7.0 quick search
@@ -1386,7 +1498,18 @@ async function playUnifiedItem(item){
     }
 
     const r=await api(`/api/unified/${encodeURIComponent(source)}/${encodeURIComponent(providerId)}/${encodeURIComponent(itemId)}/play`);
-    await playServerMedia(r.playToken,item.name||'Media','unified:'+String(item.id||''));
+    rememberMediaHistory(item?.kind==='episode'?'episode':'movie',{
+      id:item.id,
+      name:item.name||'Media',
+      poster:item.poster||'',
+      providerId,
+      extension:null,
+      seriesId:item.seriesId||null,
+      seriesName:item.seriesName||null,
+      season:item.seasonNumber??null,
+      episode:item.episodeNumber??null
+    });
+    await playServerMedia(r.playToken,item.name||'Media','unified:'+String(item.id||''),false,item.poster||'');
     return true;
   }catch(e){alert(friendlyError(e));return true}
 }
@@ -1415,12 +1538,46 @@ async function unifiedSeriesDetails(item){
 
 async function resumeContinueItem(item){
   pendingResumeSeconds=Math.max(0,Number(item?.positionSeconds)||0);
-  if(item?.id?.startsWith('unified:')){
-    const unifiedId=item.id.substring('unified:'.length);
+  const id=String(item?.id||'');
+
+  if(id.startsWith('unified:')){
+    const unifiedId=id.substring('unified:'.length);
     const parts=unifiedId.split(':');
     if(parts.length>=3)return playUnifiedItem({id:unifiedId,kind:'episode',name:item.title||'Media'});
   }
+
+  if(id.startsWith('iptv-movie:')){
+    const parts=id.split(':');
+    if(parts.length>=3){
+      currentProvider=parts[1];
+      const movieId=parts.slice(2).join(':');
+      const t=await api(`/api/vod/${currentProvider}/${encodeURIComponent(movieId)}/token`,{method:'POST'});
+      return playServerMedia(t.playToken,item.title||'Movie',id,false,item.poster||'');
+    }
+  }
+
+  if(id.startsWith('iptv-episode:')){
+    const parts=id.split(':');
+    if(parts.length>=4){
+      currentProvider=parts[1];
+      const ext=parts.pop()||'mp4';
+      const episodeId=parts.slice(2).join(':');
+      const t=await api(`/api/series/${currentProvider}/episode/${encodeURIComponent(episodeId)}/token?ext=${encodeURIComponent(ext)}`,{method:'POST'});
+      return playServerMedia(t.playToken,item.title||'Episode',id,false,item.poster||'');
+    }
+  }
+
+  // Backward compatibility for v0.8.1 movie entries.
+  if(id.startsWith('movie:')){
+    const movieId=id.substring('movie:'.length);
+    if(currentProvider&&movieId){
+      const t=await api(`/api/vod/${currentProvider}/${encodeURIComponent(movieId)}/token`,{method:'POST'});
+      return playServerMedia(t.playToken,item.title||'Movie',id,false,item.poster||'');
+    }
+  }
+
   if(item?.url)return playMedia(item.url,item.title,item.id);
   pendingResumeSeconds=0;
+  alert('This older Continue Watching entry does not contain enough playback information. Remove it and play the item once again to create a new resumable entry.');
   return false;
 }

@@ -90,7 +90,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.8.1");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.8.3");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
@@ -563,7 +563,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "0.8.1",
+    version = "0.8.3",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -601,14 +601,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = AuthConfigured();
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "0.8.1", checks })
-        : Results.Json(new { status = "not-ready", version = "0.8.1", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "0.8.3", checks })
+        : Results.Json(new { status = "not-ready", version = "0.8.3", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "0.8.1",
+    version = "0.8.3",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = AuthConfigured(),
@@ -1678,6 +1678,21 @@ app.MapPost("/api/continue", (ContinueItem item) =>
     return Results.Ok();
 }).RequireAuthorization();
 
+app.MapDelete("/api/continue/{id}", (string id) =>
+{
+    var list = LoadContinue();
+    var removed = list.RemoveAll(x => x.Id == id);
+    if (removed == 0) return Results.NotFound();
+    Save(continueFile, list);
+    return Results.NoContent();
+}).RequireAuthorization();
+
+app.MapDelete("/api/continue", () =>
+{
+    Save(continueFile, new List<ContinueItem>());
+    return Results.NoContent();
+}).RequireAuthorization();
+
 app.MapGet("/api/downloads", () =>
     Results.Ok(downloads.Values.OrderByDescending(x => x.Created).Select(x => x.Safe())))
     .RequireAuthorization();
@@ -2068,7 +2083,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "0.8.1",
+        version = "0.8.3",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -2426,7 +2441,7 @@ async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, TimeSpa
     var url = BuildXtreamPlayerApiUrl(c, action, extra);
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.8.1");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.8.3");
     using var cts = new CancellationTokenSource(timeout);
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -2592,7 +2607,7 @@ async Task<List<LiveChannel>> LoadM3uChannels(string url)
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/x-mpegURL,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.8.1");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.8.3");
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -2611,7 +2626,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.8.1");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.8.3");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }
@@ -2886,7 +2901,7 @@ record Channel(string Id, string Name, string Group, string Logo, string Url, st
 record ProviderProbe(bool Ok, int? StatusCode, string Message, string ContentType, long LatencyMs, string Host);
 record LiveChannel(string Key, string Id, string Name, string Group, string Number, string LogoUrl, string SourceUrl);
 record ChannelCacheEntry(List<LiveChannel> Channels, DateTimeOffset Loaded);
-record ContinueItem(string Id, string Title, string Url, double PositionSeconds, DateTimeOffset Updated);
+record ContinueItem(string Id, string Title, string Url, double PositionSeconds, DateTimeOffset Updated, string? Poster = null);
 record ChannelPreferences(HashSet<string> HiddenGroups, HashSet<string> HiddenChannels, Dictionary<string,string> Aliases);
 record ViewerProfile(string Id, string Name, bool IsKids, string Icon);
 record ViewerProfileInput(string? Id, string? Name, bool IsKids, string? Icon);

@@ -253,3 +253,136 @@ img{content-visibility:auto}
 /* v0.8.1 media duration display */
 .mediaTimeBar{display:flex;align-items:center;gap:6px;padding:8px 12px 0;font-variant-numeric:tabular-nums;font-size:.95rem;opacity:.9}
 .mediaTimeBar #mediaTotalTime{font-weight:600}
+
+
+/* v0.8.2 history / continue controls */
+.historyCard{position:relative;padding:0;overflow:visible}
+.historyMain{display:flex;flex-direction:column;gap:5px;width:100%;height:100%;padding:14px 38px 14px 14px;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer}
+.historyMain span{font-size:1.1rem}
+.historyRemove{position:absolute;right:7px;top:7px;width:28px;height:28px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:inherit;font-size:1.2rem;line-height:1;cursor:pointer}
+.historyRemove:hover,.historyRemove:focus{transform:scale(1.08);outline:2px solid currentColor}
+
+
+/* v0.8.3 poster history cards + modern horizontal scrolling */
+.mediaHistoryRail{
+  grid-auto-columns:minmax(190px,230px);
+  gap:14px;
+  overflow-x:auto;
+  overflow-y:hidden;
+  padding:8px 3px 14px;
+  scroll-snap-type:x proximity;
+  scrollbar-width:thin;
+  scrollbar-color:var(--accent) rgba(255,255,255,.06);
+}
+.mediaHistoryRail .historyCard{scroll-snap-align:start}
+.historyCard{
+  min-height:0;
+  border-radius:16px;
+  overflow:hidden;
+  background:linear-gradient(180deg,rgba(18,40,58,.98),rgba(11,27,39,.98));
+  box-shadow:0 8px 24px rgba(0,0,0,.18);
+  transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;
+}
+.historyCard:hover{
+  transform:translateY(-3px);
+  border-color:rgba(76,188,255,.55);
+  box-shadow:0 12px 30px rgba(0,0,0,.28);
+}
+.historyMain{
+  padding:0;
+  gap:0;
+  overflow:hidden;
+  border-radius:inherit;
+}
+.historyPoster{
+  position:relative;
+  width:100%;
+  aspect-ratio:16/9;
+  overflow:hidden;
+  background:linear-gradient(135deg,#17364d,#0b1d2b);
+}
+.historyPoster img{
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  transition:transform .22s ease;
+}
+.historyCard:hover .historyPoster img{transform:scale(1.035)}
+.historyPosterFallback{
+  display:none;
+  position:absolute;
+  inset:0;
+  place-items:center;
+  font-size:34px!important;
+  opacity:.65;
+}
+.historyPoster.posterFailed .historyPosterFallback{display:grid}
+.historyCardBody{
+  display:grid;
+  gap:5px;
+  padding:11px 13px 13px;
+  min-width:0;
+}
+.historyCardBody b{
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.historyCardBody small{
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.historyRemove{
+  z-index:3;
+  right:8px;
+  top:8px;
+  width:30px;
+  height:30px;
+  border:1px solid rgba(255,255,255,.28);
+  background:rgba(5,17,26,.82);
+  backdrop-filter:blur(8px);
+  box-shadow:0 3px 10px rgba(0,0,0,.28);
+}
+.historyRemove:hover,.historyRemove:focus{
+  background:rgba(24,56,78,.96);
+  border-color:rgba(255,255,255,.55);
+}
+
+/* Chromium / Edge / Safari */
+.mediaHistoryRail::-webkit-scrollbar,
+.posterRail::-webkit-scrollbar,
+.continueRow::-webkit-scrollbar{
+  height:9px;
+}
+.mediaHistoryRail::-webkit-scrollbar-track,
+.posterRail::-webkit-scrollbar-track,
+.continueRow::-webkit-scrollbar-track{
+  background:rgba(255,255,255,.045);
+  border-radius:999px;
+}
+.mediaHistoryRail::-webkit-scrollbar-thumb,
+.posterRail::-webkit-scrollbar-thumb,
+.continueRow::-webkit-scrollbar-thumb{
+  background:linear-gradient(90deg,var(--accent),#5bc8ff);
+  border-radius:999px;
+  border:2px solid transparent;
+  background-clip:padding-box;
+}
+.mediaHistoryRail::-webkit-scrollbar-thumb:hover,
+.posterRail::-webkit-scrollbar-thumb:hover,
+.continueRow::-webkit-scrollbar-thumb:hover{
+  background:linear-gradient(90deg,#65cfff,#9ce4ff);
+  background-clip:padding-box;
+}
+
+/* Firefox */
+.posterRail,.continueRow{
+  scrollbar-width:thin;
+  scrollbar-color:var(--accent) rgba(255,255,255,.06);
+}
+
+@media(max-width:700px){
+  .mediaHistoryRail{grid-auto-columns:minmax(170px,72vw)}
+}
