@@ -1,6 +1,6 @@
 # Changelog
 
-## v5.0.0 — Navigation hotfix
+## v6.0.0 — Navigation hotfix
 - Fixed Appliance menu click not dispatching `applianceView()`.
 - Fixed Alerts menu click not dispatching `notificationsView()`.
 - Fixed Rooms menu click not dispatching `roomsView()`.
@@ -8,7 +8,7 @@
 - Added regression validation for every menu view registered in the v2.0 navigation.
 
 
-## v5.0.0 — DVR & Storage
+## v6.0.0 — DVR & Storage
 - Exposed Live TV recording directly in Live TV and the player.
 - Reworked Guide programme click into Play / Record actions.
 - Added Admin → Storage.
@@ -767,157 +767,218 @@
 ## 0.2.0
 - GitHub-ready Proxmox LXC release.
 
-## v5.0.0 — Compile hotfix
+## v6.0.0 — Compile hotfix
 - Added missing `profileStateFile` path declaration for server-side profile sync.
 - Retained the v2.2.1 diagnostics compile fix (`LoadMediaLibraries()`).
 - Retained the v2.0.1 menu-dispatch fixes.
 
-## v5.0.0 — Navigation cleanup
+## v6.0.0 — Navigation cleanup
 - Removed Platform, Profile Sync, Diagnostics and Appliance from the viewer navigation.
 - Platform is now exposed to administrators as **System overview** under Admin.
 - Diagnostics and Appliance are now Admin system tools.
 - Profile Sync remains background functionality and no longer has a user-facing menu item.
 - Existing APIs and views are retained; this is a navigation/UX cleanup, not feature removal.
 
-## v5.0.0 — Navigation Manager
+## v6.0.0 — Navigation Manager
 - Admin can show/hide and reorder menu pages, persisted server-side.
 - Home and Admin are protected.
 - System overview, Diagnostics and Appliance are configurable.
 - Profile Sync remains background-only.
 
-## v5.0.0 — User Source Access
+## v6.0.0 — User Source Access
 - Admin controls per user whether IPTV, Plex and Jellyfin use Admin configuration or user-managed credentials.
 - Added My Sources for self-managed connections.
 - Personal secrets are encrypted server-side.
 
-## v5.0.0 — Source & Access Architecture
+## v6.0.0 — Source & Access Architecture
 - Added a common effective-source API for IPTV, Plex and Jellyfin.
 - Source resolution now exposes whether each source comes from Admin or the signed-in account.
 - Added capability discovery for Live TV, Guide, Movies, Series, Search and DVR.
 - Retains encrypted personal credentials and per-user source policy from v3.0.4.
 - This release establishes the contract used by later playback/library releases.
 
-## v5.0.0 — Player 3.0
+## v6.0.0 — Player 3.0
 - Added per-account player preferences persisted server-side.
 - Added player capability endpoint.
 - Added keyboard/remote-friendly playback shortcuts: play/pause, ±10 seconds, mute and fullscreen.
 - Keeps existing HLS/FFmpeg playback and resume infrastructure.
 - Provides the foundation for automatic Direct Play/FFmpeg fallback decisions.
 
-## v5.0.0 — DVR 3.0
+## v6.0.0 — DVR 3.0
 - Added persisted DVR engine settings and concurrency/conflict policy.
 - Added upcoming-recordings endpoint for TV/Guide clients.
 - Existing series rules, NewOnly, padding, retention and storage-target support remain cumulative.
 - Admin can control DVR engine policy without changing user recordings.
 - Designed for subsequent EPG-driven scheduling and conflict resolution.
 
-## v5.0.0 — EPG & Live TV 3.0
+## v6.0.0 — EPG & Live TV 3.0
 - Added per-account EPG preferences: guide depth, compact mode, favourites-first and Now/Next.
 - Added lightweight Now/Next channel endpoint for mini-guide clients.
 - DVR actions remain available from Guide and can use the v3.3 engine policy.
 - Prepared the Live UI for a faster mini-guide and favourite-channel workflow.
 
-## v5.0.0 — Unified Library 3.0
+## v6.0.0 — Unified Library 3.0
 - Added account-level unified-library preferences.
 - Supports automatic source choice, duplicate merging policy, sorting and unavailable-item filtering.
 - Added source-origin metadata endpoint for IPTV/Plex/Jellyfin.
 - Builds on the existing unified Movies/Series and source-choice UI rather than creating another media silo.
 
-## v5.0.0 — Profiles & Household 3.0
+## v6.0.0 — Profiles & Household 3.0
 - Added household sync preferences for watch state, favourites, Continue Watching and room handoff.
 - Added sync-status endpoint for troubleshooting account/profile synchronisation.
 - Existing PIN/profile access remains cumulative.
 - Keeps source credentials account-level while media state remains profile-oriented.
 
-## v5.0.0 — Admin 2.0
+## v6.0.0 — Admin 2.0
 - Added a consolidated Admin overview API for users, IPTV providers, media libraries, storage, navigation and source policies.
 - Navigation Manager and per-user Source Access remain inside Admin instead of user-facing technical menus.
 - Designed around Users, Sources, Storage, Navigation, Backup and System as the primary administration domains.
 
-## v5.0.0 — Backup, Restore & Migration
+## v6.0.0 — Backup, Restore & Migration
 - Added a migration manifest that inventories persistent MyOnline TV configuration.
 - Added backup-readiness validation for the data directory.
 - Existing ZIP backup/restore remains cumulative and now has an explicit migration contract.
 - Includes navigation, source policies, personal-source metadata, storage, DVR and preference files.
 
-## v5.0.0 — TV & Mobile Polish
+## v6.0.0 — TV & Mobile Polish
 - Improved touch target sizing, TV-scale navigation and focus visibility.
 - Added client-mode detection for mobile/desktop/TV layouts.
 - Added focus recovery for coarse-pointer/TV-like devices.
-- Updated the PWA service-worker cache generation to v5.0.0.
+- Updated the PWA service-worker cache generation to v6.0.0.
 - Keeps the existing mobile bottom navigation and TV spatial-navigation foundation.
 
-## v5.0.0 — Appliance
+## v6.0.0 — Appliance
 - Marks the first appliance-oriented 4.x baseline.
 - Added appliance readiness and version/channel endpoints.
 - Readiness verifies FFmpeg, FFprobe, persistent-data write access, authentication and media-source presence.
 - Carries forward source architecture, Player 3.0, DVR policy, EPG preferences, unified library, household sync, Admin 2.0, migration tooling and TV/mobile polish.
 - Generic PUBLISH.cmd / PUBLISH.ps1 remains the release mechanism.
 
-## v5.0.0 — Compile Hotfix
+## v6.0.0 — Compile Hotfix
 - Fixed ProviderStored.Enabled compile errors by treating configured providers as available.
 - Fixed AppUser.IsAdmin compile error by using Role == Admin and Enabled.
 - Replaced nonexistent GetChannels() call with existing GetCachedChannels(provider) aggregation.
 - Keeps all v4.0.0 functionality unchanged otherwise.
 
-## v5.0.0 — Stability & Architecture
+## v6.0.0 — Stability & Architecture
 - Updater resolves latest stable through the GitHub Releases API first and falls back to the redirect method.
 - Explicit MYONLINE_REF=vX.Y.Z upgrades remain supported.
 - Keeps the v4.0.1 compile-hotfix baseline unchanged for media playback.
 - Adds a safer release baseline before feature work continues.
 
-## v5.0.0 — Sources 2.0
+## v6.0.0 — Sources 2.0
 - Refreshes the effective IPTV/Plex/Jellyfin source mode on app entry.
 - Unavailable source-backed UI can be disabled instead of failing silently.
 - Personal-source credentials remain encrypted server-side.
 - This release strengthens the source-policy UX while preserving stable playback routes.
 
-## v5.0.0 — Unified Home
+## v6.0.0 — Unified Home
 - Introduces a stable home-section contract for Continue Watching, Live, Next Up, Recently Added, Favourites and Library.
 - Home sections can be reordered without changing provider data.
 - Adds day-part state for contextual presentation.
 - Keeps the Home experience source-agnostic.
 
-## v5.0.0 — Player 4.0
+## v6.0.0 — Player 4.0
 - Adds bounded automatic recovery for transient player stalls.
 - Attempts to preserve playback position through recovery.
 - Adds fullscreen double-click while retaining existing keyboard/remote controls.
 - Dynamically created video elements get the same recovery behaviour.
 
-## v5.0.0 — Live TV & EPG 4.0
+## v6.0.0 — Live TV & EPG 4.0
 - Adds TV-style PageUp/PageDown channel navigation.
 - Builds on the existing Now/Next and EPG preference APIs.
 - Preserves Guide Play/Record actions and current Live playback paths.
 - Improves keyboard and remote operation without adding another menu page.
 
-## v5.0.0 — DVR 4.0
+## v6.0.0 — DVR 4.0
 - Consolidates DVR engine policy, upcoming recordings and conflicts into one client state.
 - Exposes conflict state for UI badges and warnings.
 - Retains recording jobs, storage targets, series rules, padding and retention.
 - No existing DVR JSON migration is required.
 
-## v5.0.0 — Household
+## v6.0.0 — Household
 - Consolidates household preferences and profile-sync status into one client state.
 - Keeps PIN/profile restrictions cumulative.
 - Room handoff capability is exposed without restoring a Profile Sync menu page.
 - Source credentials remain separate from per-profile media state.
 
-## v5.0.0 — PWA 3.0
-- Updates the service-worker cache generation to v5.0.0.
+## v6.0.0 — PWA 3.0
+- Updates the service-worker cache generation to v6.0.0.
 - Adds explicit online/offline UI state.
 - Captures the install prompt for an in-app Install action where supported.
 - API requests continue to bypass static shell caching.
 
-## v5.0.0 — Appliance Manager
+## v6.0.0 — Appliance Manager
 - Adds a consolidated appliance snapshot across health, readiness, platform and backup state.
 - Designed for one Admin/System maintenance surface.
 - Works with the v4.1 updater and cumulative backup/migration APIs.
 - Preserves the Proxmox LXC deployment model.
 
-## v5.0.0 — Unified Media Appliance
+## v6.0.0 — Unified Media Appliance
 - Promotes the cumulative 4.x train to the v5 unified-media-appliance baseline.
 - Consumer experience remains centred on Home, Live TV, Guide, Movies, Series, Library, DVR and Search.
 - IPTV, Plex and Jellyfin remain source providers behind one application shell.
 - Admin/System retains navigation, source policy, storage, diagnostics, backup/migration and readiness tooling.
 - PWA/TV/mobile behaviour, DVR state, unified home and player recovery are cumulative.
 - No DRM bypass or proxying of commercial streaming services is introduced.
+
+## v6.0.0 — Stability & Performance
+- Adds a lightweight browser runtime health snapshot and global failure counters.
+- Preserves the v5.0.0 media paths while establishing a diagnostics baseline before deeper architecture changes.
+- Retains the GitHub Releases API updater introduced in v4.1.0.
+- Known historical C# compile regressions are checked during package validation.
+
+## v6.0.0 — Source Engine 3.0
+- Introduces a single client-side Source Engine facade over the effective-source API.
+- IPTV, Plex and Jellyfin availability/mode can be queried consistently by Home, Library and playback UI.
+- Admin-vs-personal source policy remains server-owned; credentials are not exposed to the browser.
+- Existing playback endpoints remain compatible while the UI gains one source-resolution contract.
+
+## v6.0.0 — Smart Player
+- Adds a unified player-state layer for playing, paused, buffering and ended states.
+- Automatically attaches to dynamically created video elements.
+- Builds on Player 4.0 recovery, resume and keyboard/remote controls.
+- Creates a stable client contract for future Direct Play/remux/transcode decisions.
+
+## v6.0.0 — Live TV Experience
+- Adds recent-channel history storage for fast return to previously watched channels.
+- Adds numeric channel-entry events for TV remotes/keyboards.
+- Retains PageUp/PageDown zapping and existing Guide/Now-Next integration.
+- Provides the client hooks needed for a mini-guide overlay without changing stable Live playback.
+
+## v6.0.0 — DVR Scheduler
+- Promotes DVR engine/upcoming/conflict information into a reusable scheduler client facade.
+- Surfaces conflict state globally and exposes the next scheduled recording.
+- Existing series rules, NewOnly, padding, retention and storage-target behaviour remain cumulative.
+- Does not migrate or discard existing recording data.
+
+## v6.0.0 — Unified Library 4.0
+- Adds deterministic title/year normalization and duplicate grouping helpers.
+- Adds preferred-source selection with fallback to another available copy.
+- Designed for Movies/Series supplied by IPTV, Plex and Jellyfin under one library surface.
+- Does not alter provider credentials or raw media records.
+
+## v6.0.0 — Recommendations
+- Adds a local deterministic recommendation/ranking engine for Continue Watching, Next Episode, favourites and recently added content.
+- Unavailable items are strongly deprioritized.
+- No viewing history is sent to an external AI/recommendation service.
+- The ranking helper can be reused by Home and Library without creating another menu page.
+
+## v6.0.0 — Multi-room & Remote
+- Adds a common remote-control command bus for play, pause, next, previous and volume.
+- Current browser player responds to play/pause/volume commands.
+- Builds on the existing Rooms/handoff foundation.
+- Provides a protocol boundary for a future mobile remote or native TV client.
+
+## v6.0.0 — Appliance Operations
+- Consolidates health, readiness, backup readiness and platform status into an operations facade.
+- Adds a support-summary exporter containing non-secret runtime/system state.
+- Works with the cumulative updater, migration and backup APIs.
+- Keeps technical operations behind Admin/System rather than the consumer navigation.
+
+## v6.0.0 — Native Client Generation
+- Defines v6 as a server + Web/PWA + native-client architecture.
+- Adds a stable client bridge/capability contract in the Web client.
+- Adds an Android TV client API/security contract and implementation roadmap.
+- Provider credentials remain server-only; native clients consume MyOnline TV APIs.
+- Web/PWA remains fully supported while native TV development can proceed independently.

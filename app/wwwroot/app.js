@@ -2461,3 +2461,134 @@ async function unifiedMediaReadiness(){
  try{result.appliance=await api('/api/appliance/readiness')}catch{}
  return result;
 }
+
+
+// v5.1.0 Stability & Performance
+window.MYONLINE_RUNTIME={requests:0,failures:0,lastFailure:null,startedAt:new Date().toISOString()};
+window.addEventListener('error',e=>{window.MYONLINE_RUNTIME.failures++;window.MYONLINE_RUNTIME.lastFailure=String(e.message||'error')});
+window.addEventListener('unhandledrejection',e=>{window.MYONLINE_RUNTIME.failures++;window.MYONLINE_RUNTIME.lastFailure=String(e.reason||'promise rejection')});
+function runtimeSnapshot(){return {...window.MYONLINE_RUNTIME,online:navigator.onLine,visibility:document.visibilityState,at:new Date().toISOString()}}
+
+
+// v5.2.0 Source Engine 3.0
+window.MyOnlineSourceEngine={
+ state:null,
+ async refresh(){try{this.state=await api('/api/sources/effective');return this.state}catch{this.state=null;return null}},
+ mode(type){return this.state&&this.state[type]?this.state[type].mode:'unknown'},
+ available(type){return !!(this.state&&this.state[type]&&this.state[type].available)},
+ async require(type){if(!this.state)await this.refresh();return this.available(type)}
+};
+window.addEventListener('pageshow',()=>window.MyOnlineSourceEngine.refresh());
+
+
+// v5.3.0 Smart Player
+window.MyOnlineSmartPlayer={
+ attach(video){
+  if(!video||video.dataset.smartPlayer)return; video.dataset.smartPlayer='1';
+  video.addEventListener('loadedmetadata',()=>{video.dataset.durationKnown=Number.isFinite(video.duration)?'true':'false'});
+  video.addEventListener('waiting',()=>document.body.dataset.playerState='buffering');
+  video.addEventListener('playing',()=>document.body.dataset.playerState='playing');
+  video.addEventListener('pause',()=>document.body.dataset.playerState='paused');
+  video.addEventListener('ended',()=>document.body.dataset.playerState='ended');
+ },
+ scan(){document.querySelectorAll('video').forEach(v=>this.attach(v))}
+};
+new MutationObserver(()=>window.MyOnlineSmartPlayer.scan()).observe(document.documentElement,{subtree:true,childList:true});
+window.addEventListener('pageshow',()=>window.MyOnlineSmartPlayer.scan());
+
+
+// v5.4.0 Live TV Experience
+window.MyOnlineChannelHistory={
+ key:'myonline-channel-history',
+ load(){try{return JSON.parse(localStorage.getItem(this.key)||'[]')}catch{return []}},
+ add(channel){if(!channel)return;let a=this.load().filter(x=>x.id!==channel.id);a.unshift(channel);localStorage.setItem(this.key,JSON.stringify(a.slice(0,12)))},
+ clear(){localStorage.removeItem(this.key)}
+};
+let numericChannelBuffer='',numericChannelTimer=null;
+document.addEventListener('keydown',e=>{
+ if(!/^[0-9]$/.test(e.key)||['INPUT','TEXTAREA'].includes(document.activeElement&&document.activeElement.tagName))return;
+ numericChannelBuffer=(numericChannelBuffer+e.key).slice(-4);
+ document.body.dataset.channelNumber=numericChannelBuffer;
+ clearTimeout(numericChannelTimer);
+ numericChannelTimer=setTimeout(()=>{window.dispatchEvent(new CustomEvent('myonline:channel-number',{detail:numericChannelBuffer}));numericChannelBuffer='';delete document.body.dataset.channelNumber},900);
+});
+
+
+// v5.5.0 DVR Scheduler
+window.MyOnlineDvrScheduler={
+ state:null,
+ async refresh(){
+  try{
+   const r=await Promise.all([api('/api/dvr/engine'),api('/api/dvr/upcoming'),api('/api/dvr/conflicts')]);
+   this.state={engine:r[0],upcoming:r[1],conflicts:r[2],at:new Date().toISOString()};
+   document.body.dataset.dvrConflict=this.state.conflicts&&this.state.conflicts.length?'true':'false';
+   return this.state;
+  }catch{return null}
+ },
+ next(){return this.state&&this.state.upcoming&&this.state.upcoming.length?this.state.upcoming[0]:null}
+};
+window.addEventListener('pageshow',()=>window.MyOnlineDvrScheduler.refresh());
+
+
+// v5.6.0 Unified Library 4.0
+window.MyOnlineLibrary={
+ normalizeTitle(s){return String(s||'').toLowerCase().normalize('NFKD').replace(/[^\p{L}\p{N}]+/gu,' ').trim()},
+ key(item){return [this.normalizeTitle(item&&item.title),item&&item.year||''].join('|')},
+ group(items){const m=new Map();(items||[]).forEach(x=>{const k=this.key(x);if(!m.has(k))m.set(k,[]);m.get(k).push(x)});return [...m.values()]},
+ preferred(group,source){return (group||[]).find(x=>x.source===source)||(group||[])[0]||null}
+};
+
+
+// v5.7.0 Recommendations
+window.MyOnlineRecommendations={
+ score(item){
+  let s=0;
+  if(item&&item.continueWatching)s+=100;
+  if(item&&item.nextEpisode)s+=80;
+  if(item&&item.favorite)s+=40;
+  if(item&&item.recentlyAdded)s+=20;
+  if(item&&item.available===false)s-=1000;
+  return s;
+ },
+ rank(items,limit=24){return [...(items||[])].sort((a,b)=>this.score(b)-this.score(a)).slice(0,limit)}
+};
+
+
+// v5.8.0 Multi-room & Remote
+window.MyOnlineRemote={
+ send(command,detail={}){window.dispatchEvent(new CustomEvent('myonline:remote',{detail:{command,...detail,at:Date.now()}}))},
+ play(){this.send('play')},pause(){this.send('pause')},next(){this.send('next')},previous(){this.send('previous')},
+ volume(value){this.send('volume',{value})}
+};
+window.addEventListener('myonline:remote',e=>{
+ const v=document.querySelector('video'); if(!v)return;
+ if(e.detail.command==='play')v.play().catch(()=>{});
+ if(e.detail.command==='pause')v.pause();
+ if(e.detail.command==='volume'&&Number.isFinite(Number(e.detail.value)))v.volume=Math.max(0,Math.min(1,Number(e.detail.value)));
+});
+
+
+// v5.9.0 Appliance Operations
+window.MyOnlineOperations={
+ snapshot:null,
+ async refresh(){
+  try{
+   const r=await Promise.all([api('/api/appliance/health'),api('/api/appliance/readiness'),api('/api/system/backup-readiness'),api('/api/platform/status')]);
+   this.snapshot={health:r[0],readiness:r[1],backup:r[2],platform:r[3],at:new Date().toISOString()};
+   return this.snapshot;
+  }catch{return null}
+ },
+ exportSupportSummary(){
+  const data={product:window.MYONLINE_PRODUCT||null,runtime:runtimeSnapshot?runtimeSnapshot():null,operations:this.snapshot};
+  return JSON.stringify(data,null,2);
+ }
+};
+
+
+// v6.0.0 Native Client Generation
+window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'6.0.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
+window.MyOnlineClientBridge={
+ version:1,
+ capabilities(){return {sourceEngine:true,player:true,live:true,guide:true,library:true,dvr:true,profiles:true,rooms:true,remote:true}},
+ emit(name,detail={}){window.dispatchEvent(new CustomEvent('myonline:client',{detail:{name,...detail,at:Date.now()}}))}
+};

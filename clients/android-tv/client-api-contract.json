@@ -1,0 +1,23 @@
+{
+  "contractVersion": 1,
+  "serverMinimum": "6.0.0",
+  "authentication": "cookie/session via MyOnline TV server",
+  "capabilities": [
+    "sources",
+    "home",
+    "live",
+    "guide",
+    "movies",
+    "series",
+    "library",
+    "player",
+    "dvr",
+    "profiles",
+    "rooms",
+    "remote"
+  ],
+  "security": {
+    "providerCredentials": "server-only",
+    "tlsRecommended": true
+  }
+}
