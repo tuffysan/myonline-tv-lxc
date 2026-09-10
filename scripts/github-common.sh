@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
 
 release_asset_error() {
   local ref="$1"
@@ -7,8 +9,6 @@ release_asset_error() {
   echo "A valid release must contain the prebuilt linux-x64 archive, source archive, SHA256SUMS-RELEASE.txt and release.json." >&2
 }
 
-#!/usr/bin/env bash
-set -euo pipefail
 
 MYONLINE_REPO="${MYONLINE_REPO:-tuffysan/myonline-tv-lxc}"
 MYONLINE_CHANNEL="${MYONLINE_CHANNEL:-stable}"
@@ -58,27 +58,47 @@ download_release_artifact() {
   version="${version#.}"
   local name="myonline-tv-web-v${version}-linux-x64.tar.gz"
   local sums="SHA256SUMS-RELEASE.txt"
+  local base="https://github.com/${repo}/releases/download/${ref}"
+
   mkdir -p "$target"
 
-  local base="https://github.com/${repo}/releases/download/${ref}"
   echo "Downloading prebuilt ${name}..." >&2
-  if ! curl -fL --retry 3 "${base}/${name}" -o "${target}/${name}" || { release_asset_error "${ref}" "${name}"; return 1; }; then
-    echo "ERROR: Release ${ref} exists but prebuilt artifact ${name} was not found." >&2
-    echo "Check GitHub Actions -> Release and confirm the build completed successfully." >&2
+  if ! curl -fL --retry 3 --connect-timeout 15 \
+      "${base}/${name}" -o "${target}/${name}"; then
+    release_asset_error "${ref}" "${name}"
     return 1
   fi
-  if ! curl -fL --retry 3 "${base}/${sums}" -o "${target}/${sums}" || { release_asset_error "${ref}" "${sums}"; return 1; }; then
-    echo "ERROR: Release checksum file ${sums} was not found for ${ref}." >&2
+
+  if [[ ! -s "${target}/${name}" ]]; then
+    echo "ERROR: Downloaded release asset '${name}' is empty." >&2
+    return 1
+  fi
+
+  echo "Downloading ${sums}..." >&2
+  if ! curl -fL --retry 3 --connect-timeout 15 \
+      "${base}/${sums}" -o "${target}/${sums}"; then
+    release_asset_error "${ref}" "${sums}"
+    return 1
+  fi
+
+  if [[ ! -s "${target}/${sums}" ]]; then
+    echo "ERROR: Downloaded checksum file '${sums}' is empty." >&2
     return 1
   fi
 
   (
     cd "$target"
-    grep "  ${name}$" "$sums" | sha256sum -c - >&2
+    local checksum_line
+    checksum_line="$(grep -F "  ${name}" "$sums" | tail -n 1 || true)"
+    if [[ -z "$checksum_line" ]]; then
+      echo "ERROR: ${sums} does not contain a checksum for ${name}." >&2
+      exit 1
+    fi
+    printf '%s\n' "$checksum_line" | sha256sum -c - >&2
   )
+
   printf '%s\n' "${target}/${name}"
 }
-
 
 write_nginx_config() {
   local ctid="$1"
