@@ -211,3 +211,16 @@ img{content-visibility:auto}
 
 /* v0.7.0 unified sources */
 .sourceBadge{text-transform:uppercase;font-size:.68rem;border:1px solid var(--line);border-radius:999px;padding:2px 6px;margin-right:4px;opacity:.85}
+
+
+/* v0.7.1 Plex/Jellyfin completion */
+.libraryPicker{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.libraryChoice{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:9px 4px;border-bottom:1px solid var(--line)}
+.libraryChoice:last-of-type{border-bottom:0}
+.libraryChoice small{opacity:.72}
+.episodeGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin:10px 0 24px}
+.episodeCard{display:grid;grid-template-columns:110px 1fr;gap:12px;text-align:left;align-items:center;padding:0;overflow:hidden;border:1px solid var(--line);border-radius:14px;background:var(--panel);color:inherit}
+.episodeCard img,.episodeCard .posterPlaceholder{width:110px;height:72px;object-fit:cover;border-radius:0}
+.episodeCard span{padding:8px 10px 8px 0}
+.episodeCard small{display:block;margin-top:5px;opacity:.72}
+@media(max-width:700px){.episodeGrid{grid-template-columns:1fr}.episodeCard{grid-template-columns:96px 1fr}.episodeCard img,.episodeCard .posterPlaceholder{width:96px;height:68px}}

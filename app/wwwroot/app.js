@@ -139,7 +139,7 @@ async function home(){
     <div class=stat><b>${fav.size}</b><span>Favourites</span></div>
     <div class=stat><b>${cont.length}</b><span>Continue watching</span></div>
   </div>
-  ${cont.length?`<h2>Continue watching</h2><div class=continueRow>${cont.slice(0,12).map(x=>`<button class=continueCard onclick='playMedia(${JSON.stringify(x.url)},${JSON.stringify(x.title)},${JSON.stringify(x.id)})'><span>▶</span><b>${esc(x.title)}</b><small>Resume around ${Math.floor((x.positionSeconds||0)/60)} min</small></button>`).join('')}</div><div id=mediaPlayer></div>`:''}
+  ${cont.length?`<h2>Continue watching</h2><div class=continueRow>${cont.slice(0,12).map(x=>`<button class=continueCard onclick='resumeContinueItem(${JSON.stringify(x)})'><span>▶</span><b>${esc(x.title)}</b><small>Resume around ${Math.floor((x.positionSeconds||0)/60)} min</small></button>`).join('')}</div><div id=mediaPlayer></div>`:''}
   ${homeMediaRails()}<h2>Quick access</h2><div class=grid>
     <button class="card actionCard" onclick="show('live')"><h3>Live TV</h3><p>Channels and groups</p></button>
     <button class="card actionCard" onclick="show('guide')"><h3>TV Guide</h3><p>Timeline EPG</p></button>
@@ -656,7 +656,7 @@ async function adminView(){
   const users=await api('/api/admin/users');const accessCfg=await api('/api/admin/profile-access');const mediaLibraries=await api('/api/media-libraries');
 
   content.innerHTML=`
-  <div class=hero><h2>Administration</h2><p class=muted>Manage users, IPTV providers and viewer profiles.</p></div>
+  <div class=hero><h2>Administration</h2><p class=muted>Manage users, IPTV providers, Plex/Jellyfin libraries and viewer profiles.</p></div>
 
   <h2>Users</h2>
   <div class=card>
@@ -1136,31 +1136,97 @@ async function runGlobalSearch(){
 }
 
 let editingMediaLibraryId=null;
+let editingMediaLibraryIds=[];
 async function editMediaLibrary(id){
   const x=await api('/api/media-libraries/'+encodeURIComponent(id)+'/edit');editingMediaLibraryId=id;
+  editingMediaLibraryIds=Array.isArray(x.libraryIds)?x.libraryIds:[];
   $('#mlname').value=x.name;$('#mltype').value=x.type;$('#mlbase').value=x.baseUrl;$('#mltoken').value='';$('#mltoken').placeholder=x.tokenStored?'Leave blank to keep existing token':'Token/API key';$('#mlenabled').checked=x.enabled;
   $('#mlsave').textContent='Save media library';$('#mlcancel').disabled=false;$('#mlname').focus();
 }
 async function saveMediaLibrary(){
-  try{await jpost('/api/media-libraries',{id:editingMediaLibraryId||'',name:$('#mlname').value,type:$('#mltype').value,baseUrl:$('#mlbase').value,token:$('#mltoken').value,enabled:$('#mlenabled').checked,libraryIds:[],keepExistingToken:!!editingMediaLibraryId&&!$('#mltoken').value});editingMediaLibraryId=null;adminView()}catch(e){alert(friendlyError(e))}
+  try{
+    await jpost('/api/media-libraries',{
+      id:editingMediaLibraryId||'',
+      name:$('#mlname').value,
+      type:$('#mltype').value,
+      baseUrl:$('#mlbase').value,
+      token:$('#mltoken').value,
+      enabled:$('#mlenabled').checked,
+      libraryIds:editingMediaLibraryId?editingMediaLibraryIds:[],
+      keepExistingToken:!!editingMediaLibraryId&&!$('#mltoken').value
+    });
+    editingMediaLibraryId=null;editingMediaLibraryIds=[];adminView()
+  }catch(e){alert(friendlyError(e))}
 }
 async function testMediaLibrary(id){try{const r=await jpost('/api/media-libraries/'+id+'/test',{});$('#mlstat-'+id).textContent=r.ok?'Connection OK':'Connection failed: '+(r.error||r.status)}catch(e){$('#mlstat-'+id).textContent=friendlyError(e)}}
 async function removeMediaLibrary(id){if(!confirm('Remove media library?'))return;try{await api('/api/media-libraries/'+id,{method:'DELETE'});adminView()}catch(e){alert(friendlyError(e))}}
 async function chooseMediaLibraries(id){
   try{
-    const rows=await api('/api/media-libraries/'+id+'/libraries');
-    const names=rows.map(x=>`${x.name} (${x.type||'library'})`).join('\n');
-    alert(names||'No libraries returned. Library selection UI will be used by unified Movies/Series.');
+    const [rows,current]=await Promise.all([
+      api('/api/media-libraries/'+id+'/libraries'),
+      api('/api/media-libraries/'+id+'/edit')
+    ]);
+    const host=$('#mlstat-'+id);
+    if(!host)return;
+    if(!rows.length){host.innerHTML='<div class="libraryPicker empty">No libraries returned by the server.</div>';return}
+    const selected=new Set(current.libraryIds||[]);
+    host.innerHTML=`<div class=libraryPicker>
+      <b>Select libraries</b>
+      ${rows.map((x,i)=>`<label class=libraryChoice><input type=checkbox data-library-id="${escAttr(x.id||'')}" ${selected.has(x.id)?'checked':''}> <span>${esc(x.name||'Unnamed')}</span><small>${esc(x.type||'library')}</small></label>`).join('')}
+      <div class=row><button class=btn id="mlselect-${id}">Save selection</button><button class=btn onclick="$('#mlstat-${id}').innerHTML=''">Cancel</button></div>
+    </div>`;
+    $('#mlselect-'+id).onclick=async()=>{
+      const ids=[...host.querySelectorAll('input[data-library-id]:checked')].map(x=>x.dataset.libraryId).filter(Boolean);
+      await jpost('/api/media-libraries/'+id+'/libraries/selection',{libraryIds:ids});
+      host.innerHTML=`<span class=ok>${ids.length} librar${ids.length===1?'y':'ies'} selected.</span>`;
+    };
   }catch(e){alert(friendlyError(e))}
 }
 
 async function playUnifiedItem(item){
   try{
+    if(item?.kind==='series'){
+      await unifiedSeriesDetails(item);
+      return true;
+    }
     const parts=String(item.id||'').split(':');
     if(parts.length<3)return false;
     const source=parts[0],providerId=parts[1],itemId=parts.slice(2).join(':');
     const r=await api(`/api/unified/${encodeURIComponent(source)}/${encodeURIComponent(providerId)}/${encodeURIComponent(itemId)}/play`);
-    await startMediaToken(r.playToken,item.name||'Media');
+    await startMediaToken(r.playToken,item.name||'Media','unified:'+String(item.id||''));
     return true;
   }catch(e){alert(friendlyError(e));return true}
+}
+
+async function unifiedSeriesDetails(item){
+  const parts=String(item.id||'').split(':');
+  if(parts.length<3)return;
+  const source=parts[0],providerId=parts[1],seriesId=parts.slice(2).join(':');
+  content.innerHTML=`<div class=hero><button class=btn onclick="show('series')">← Series</button><h2>${esc(item.name||'Series')}</h2><p class=muted><span class=sourceBadge>${esc(source)}</span> Loading episodes…</p></div><div id=unifiedEpisodeList></div><div id=mediaPlayer></div>`;
+  try{
+    const episodes=await api(`/api/unified/${encodeURIComponent(source)}/${encodeURIComponent(providerId)}/${encodeURIComponent(seriesId)}/episodes`,{timeoutMs:65000});
+    const host=$('#unifiedEpisodeList');
+    if(!episodes.length){host.innerHTML='<div class=empty>No episodes found.</div>';return}
+    let lastSeason=null,html='';
+    for(const e of episodes){
+      if(e.seasonNumber!==lastSeason){lastSeason=e.seasonNumber;html+=`<h3>Season ${e.seasonNumber||'Specials'}</h3><div class=episodeGrid>`}
+      const label=e.seasonNumber>0&&e.episodeNumber>0?`S${String(e.seasonNumber).padStart(2,'0')}E${String(e.episodeNumber).padStart(2,'0')}`:'Episode';
+      html+=`<button class=episodeCard onclick='playUnifiedItem(${JSON.stringify({...e,kind:"episode",id:e.id})})'>${e.poster?`<img loading=lazy decoding=async src="${escAttr(e.poster)}">`:posterPlaceholder()}<span><b>${esc(label+' · '+e.name)}</b><small>${esc(e.year||'')} ${e.rating?'· '+esc(e.rating):''}</small></span></button>`;
+      const next=episodes[episodes.indexOf(e)+1];
+      if(!next||next.seasonNumber!==lastSeason)html+='</div>';
+    }
+    host.innerHTML=html;
+  }catch(e){const host=$('#unifiedEpisodeList');if(host)host.innerHTML=`<div class=error>${esc(friendlyError(e))}</div>`}
+}
+
+async function resumeContinueItem(item){
+  if(item?.id?.startsWith('unified:')){
+    const unifiedId=item.id.substring('unified:'.length);
+    const parts=unifiedId.split(':');
+    if(parts.length>=3){
+      return playUnifiedItem({id:unifiedId,kind:'episode',name:item.title||'Media'});
+    }
+  }
+  if(item?.url)return playMedia(item.url,item.title,item.id);
+  return false;
 }

@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.7.1 — Plex/Jellyfin completion & stability
+- Added persistent Plex/Jellyfin library selection in Admin.
+- Preserves selected libraries when editing a media-library connection.
+- Jellyfin catalogue queries now respect selected libraries, matching Plex behavior.
+- Routes Plex/Jellyfin artwork through MyOnline TV proxy tokens so media-server credentials are not exposed in browser image URLs.
+- Added unified series episode discovery for Plex and Jellyfin.
+- Unified series now opens an episode list rather than trying to play the series container.
+- Added stable unified Continue Watching identifiers and resume handling.
+- Keeps the v0.7.0 Live TV, Guide, IPTV Movies and IPTV Series baseline unchanged.
+
+
 ## v0.7.0 — Unified Media Center
 - Promotes IPTV + Plex + Jellyfin integration to the v0.7.0 unified media-center milestone.
 - Includes media-library administration, unified catalogues, playback, Search and Home discovery.

@@ -1,4 +1,4 @@
-# MyOnline TV Web v0.7.0 — Proxmox LXC
+# MyOnline TV Web v0.7.1 — Proxmox LXC
 
 MyOnline TV Web is a self-hosted entertainment appliance for Proxmox VE.
 
@@ -335,3 +335,15 @@ release.json
 v0.7.0 fixes a false "required asset is missing" error in `scripts/github-common.sh`.
 The updater now treats a successful `curl` as success, verifies that the file is non-empty,
 downloads `SHA256SUMS-RELEASE.txt`, and validates the release archive checksum before installation.
+
+## v0.7.1 — Plex/Jellyfin completion
+
+v0.7.1 keeps the working v0.7.0 baseline and finishes the first media-library integration pass:
+
+- Admin can discover and select which Plex/Jellyfin libraries are enabled.
+- Existing library selections are preserved while editing connection settings.
+- Plex/Jellyfin artwork is exposed through short-lived MyOnline TV proxy URLs instead of putting server tokens/API keys in browser image URLs.
+- Series items open an episode browser instead of being treated as directly playable media.
+- Episodes can be started through the existing server-side playback pipeline.
+- Unified-media playback gets stable Continue Watching IDs so Plex/Jellyfin items can be resumed through the app.
+- `PUBLISH.ps1` retains the local .NET build preflight when the SDK is installed.

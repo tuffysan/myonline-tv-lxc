@@ -87,7 +87,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.7.0");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.7.1");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
@@ -439,7 +439,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "0.7.0",
+    version = "0.7.1",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -477,14 +477,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = AuthConfigured();
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "0.7.0", checks })
-        : Results.Json(new { status = "not-ready", version = "0.7.0", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "0.7.1", checks })
+        : Results.Json(new { status = "not-ready", version = "0.7.1", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "0.7.0",
+    version = "0.7.1",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = AuthConfigured(),
@@ -1103,18 +1103,28 @@ app.MapGet("/api/unified/movies", async () =>
             using var client=new HttpClient{Timeout=TimeSpan.FromSeconds(60)};
             if(lib.Type=="jellyfin")
             {
-                var url=c.BaseUrl+"/Items?Recursive=true&IncludeItemTypes=Movie&Fields=PrimaryImageAspectRatio,PremiereDate,CommunityRating,DateCreated&Limit=5000";
-                var req=new HttpRequestMessage(HttpMethod.Get,url);req.Headers.TryAddWithoutValidation("X-Emby-Token",c.Token);
-                var r=await client.SendAsync(req);if(!r.IsSuccessStatusCode)continue;
-                using var doc=JsonDocument.Parse(await r.Content.ReadAsStringAsync());
-                foreach(var x in doc.RootElement.GetProperty("Items").EnumerateArray())
+                var scopes = lib.LibraryIds.Length > 0
+                    ? lib.LibraryIds.Cast<string?>().ToArray()
+                    : new string?[] { null };
+
+                foreach (var libraryId in scopes)
                 {
-                    var id=x.GetProperty("Id").GetString()??"";
-                    result.Add(new UnifiedMediaItem("jellyfin:"+lib.Id+":"+id,"jellyfin",lib.Id,"movie",
-                        x.GetProperty("Name").GetString()??"", x.TryGetProperty("ProductionYear",out var y)?y.ToString():null,
-                        x.TryGetProperty("CommunityRating",out var cr)?cr.ToString():null,
-                        c.BaseUrl+"/Items/"+id+"/Images/Primary?api_key="+Uri.EscapeDataString(c.Token),null,null,null,
-                        x.TryGetProperty("DateCreated",out var dc)&&DateTimeOffset.TryParse(dc.GetString(),out var dto)?dto:null));
+                    var url=c.BaseUrl+"/Items?Recursive=true&IncludeItemTypes=Movie&Fields=PrimaryImageAspectRatio,PremiereDate,CommunityRating,DateCreated&Limit=5000";
+                    if(!string.IsNullOrWhiteSpace(libraryId))
+                        url += "&ParentId=" + Uri.EscapeDataString(libraryId);
+
+                    var req=new HttpRequestMessage(HttpMethod.Get,url);req.Headers.TryAddWithoutValidation("X-Emby-Token",c.Token);
+                    var r=await client.SendAsync(req);if(!r.IsSuccessStatusCode)continue;
+                    using var doc=JsonDocument.Parse(await r.Content.ReadAsStringAsync());
+                    foreach(var x in doc.RootElement.GetProperty("Items").EnumerateArray())
+                    {
+                        var id=x.GetProperty("Id").GetString()??"";
+                        result.Add(new UnifiedMediaItem("jellyfin:"+lib.Id+":"+id,"jellyfin",lib.Id,"movie",
+                            x.GetProperty("Name").GetString()??"", x.TryGetProperty("ProductionYear",out var y)?y.ToString():null,
+                            x.TryGetProperty("CommunityRating",out var cr)?cr.ToString():null,
+                            ProxyUrl(c.BaseUrl+"/Items/"+id+"/Images/Primary?api_key="+Uri.EscapeDataString(c.Token), "artwork"),null,null,null,
+                            x.TryGetProperty("DateCreated",out var dc)&&DateTimeOffset.TryParse(dc.GetString(),out var dto)?dto:null));
+                    }
                 }
             }
             else if(lib.Type=="plex")
@@ -1135,7 +1145,7 @@ app.MapGet("/api/unified/movies", async () =>
                             x.TryGetProperty("title",out var t)?t.GetString()??"":"",
                             x.TryGetProperty("year",out var yr)?yr.ToString():null,
                             x.TryGetProperty("rating",out var ra)?ra.ToString():null,
-                            string.IsNullOrWhiteSpace(thumb)?null:c.BaseUrl+thumb+"?X-Plex-Token="+Uri.EscapeDataString(c.Token),null,null,null,null));
+                            string.IsNullOrWhiteSpace(thumb)?null:ProxyUrl(c.BaseUrl+thumb+"?X-Plex-Token="+Uri.EscapeDataString(c.Token), "artwork"),null,null,null,null));
                     }
                 }
             }
@@ -1155,17 +1165,28 @@ app.MapGet("/api/unified/series", async () =>
             using var client=new HttpClient{Timeout=TimeSpan.FromSeconds(60)};
             if(lib.Type=="jellyfin")
             {
-                var req=new HttpRequestMessage(HttpMethod.Get,c.BaseUrl+"/Items?Recursive=true&IncludeItemTypes=Series&Fields=ProductionYear,CommunityRating&Limit=5000");
-                req.Headers.TryAddWithoutValidation("X-Emby-Token",c.Token);
-                var r=await client.SendAsync(req);if(!r.IsSuccessStatusCode)continue;
-                using var doc=JsonDocument.Parse(await r.Content.ReadAsStringAsync());
-                foreach(var x in doc.RootElement.GetProperty("Items").EnumerateArray())
+                var scopes = lib.LibraryIds.Length > 0
+                    ? lib.LibraryIds.Cast<string?>().ToArray()
+                    : new string?[] { null };
+
+                foreach (var libraryId in scopes)
                 {
-                    var id=x.GetProperty("Id").GetString()??"";
-                    result.Add(new UnifiedMediaItem("jellyfin:"+lib.Id+":"+id,"jellyfin",lib.Id,"series",
-                        x.GetProperty("Name").GetString()??"",x.TryGetProperty("ProductionYear",out var y)?y.ToString():null,
-                        x.TryGetProperty("CommunityRating",out var rr)?rr.ToString():null,
-                        c.BaseUrl+"/Items/"+id+"/Images/Primary?api_key="+Uri.EscapeDataString(c.Token),null,null,null,null));
+                    var url=c.BaseUrl+"/Items?Recursive=true&IncludeItemTypes=Series&Fields=ProductionYear,CommunityRating&Limit=5000";
+                    if(!string.IsNullOrWhiteSpace(libraryId))
+                        url += "&ParentId=" + Uri.EscapeDataString(libraryId);
+
+                    var req=new HttpRequestMessage(HttpMethod.Get,url);
+                    req.Headers.TryAddWithoutValidation("X-Emby-Token",c.Token);
+                    var r=await client.SendAsync(req);if(!r.IsSuccessStatusCode)continue;
+                    using var doc=JsonDocument.Parse(await r.Content.ReadAsStringAsync());
+                    foreach(var x in doc.RootElement.GetProperty("Items").EnumerateArray())
+                    {
+                        var id=x.GetProperty("Id").GetString()??"";
+                        result.Add(new UnifiedMediaItem("jellyfin:"+lib.Id+":"+id,"jellyfin",lib.Id,"series",
+                            x.GetProperty("Name").GetString()??"",x.TryGetProperty("ProductionYear",out var y)?y.ToString():null,
+                            x.TryGetProperty("CommunityRating",out var rr)?rr.ToString():null,
+                            ProxyUrl(c.BaseUrl+"/Items/"+id+"/Images/Primary?api_key="+Uri.EscapeDataString(c.Token), "artwork"),null,null,null,null));
+                    }
                 }
             }
             else if(lib.Type=="plex")
@@ -1190,7 +1211,7 @@ app.MapGet("/api/unified/series", async () =>
                             x.TryGetProperty("title",out var t)?t.GetString()??"": "",
                             x.TryGetProperty("year",out var y)?y.ToString():null,
                             x.TryGetProperty("rating",out var ra)?ra.ToString():null,
-                            string.IsNullOrWhiteSpace(thumb)?null:c.BaseUrl+thumb+"?X-Plex-Token="+Uri.EscapeDataString(c.Token),
+                            string.IsNullOrWhiteSpace(thumb)?null:ProxyUrl(c.BaseUrl+thumb+"?X-Plex-Token="+Uri.EscapeDataString(c.Token), "artwork"),
                             null,
                             null,
                             null,
@@ -1201,6 +1222,95 @@ app.MapGet("/api/unified/series", async () =>
         }catch(Exception ex){RecordError("unified-series:"+lib.Id,ex);}
     }
     return Results.Ok(result);
+}).RequireAuthorization();
+
+
+app.MapGet("/api/unified/{source}/{providerId}/{seriesId}/episodes", async (string source, string providerId, string seriesId) =>
+{
+    var lib = LoadMediaLibraries().FirstOrDefault(x => x.Id == providerId && x.Enabled);
+    if (lib is null) return Results.NotFound();
+
+    var c = MediaConnection(lib);
+    var result = new List<UnifiedEpisodeItem>();
+
+    try
+    {
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+
+        if (source == "jellyfin" && lib.Type == "jellyfin")
+        {
+            var url = c.BaseUrl + "/Items?ParentId=" + Uri.EscapeDataString(seriesId) +
+                "&Recursive=true&IncludeItemTypes=Episode&Fields=ParentIndexNumber,IndexNumber,ProductionYear,CommunityRating&Limit=5000";
+            var req = new HttpRequestMessage(HttpMethod.Get, url);
+            req.Headers.TryAddWithoutValidation("X-Emby-Token", c.Token);
+            var r = await client.SendAsync(req);
+            if (!r.IsSuccessStatusCode) return Results.StatusCode((int)r.StatusCode);
+
+            using var doc = JsonDocument.Parse(await r.Content.ReadAsStringAsync());
+            if (!doc.RootElement.TryGetProperty("Items", out var items)) return Results.Ok(result);
+
+            foreach (var x in items.EnumerateArray())
+            {
+                var id = x.TryGetProperty("Id", out var ix) ? ix.GetString() ?? "" : "";
+                var season = x.TryGetProperty("ParentIndexNumber", out var sx) && sx.TryGetInt32(out var s) ? s : 0;
+                var episode = x.TryGetProperty("IndexNumber", out var ex) && ex.TryGetInt32(out var e) ? e : 0;
+                var name = x.TryGetProperty("Name", out var nx) ? nx.GetString() ?? "Episode" : "Episode";
+                var poster = ProxyUrl(c.BaseUrl + "/Items/" + id + "/Images/Primary?api_key=" + Uri.EscapeDataString(c.Token), "artwork");
+                result.Add(new UnifiedEpisodeItem(
+                    "jellyfin:" + lib.Id + ":" + id, "jellyfin", lib.Id, id, seriesId,
+                    season, episode, name,
+                    x.TryGetProperty("ProductionYear", out var y) ? y.ToString() : null,
+                    x.TryGetProperty("CommunityRating", out var rr) ? rr.ToString() : null,
+                    poster));
+            }
+        }
+        else if (source == "plex" && lib.Type == "plex")
+        {
+            var req = new HttpRequestMessage(HttpMethod.Get,
+                c.BaseUrl + "/library/metadata/" + Uri.EscapeDataString(seriesId) + "/allLeaves");
+            req.Headers.TryAddWithoutValidation("X-Plex-Token", c.Token);
+            req.Headers.TryAddWithoutValidation("Accept", "application/json");
+            var r = await client.SendAsync(req);
+            if (!r.IsSuccessStatusCode) return Results.StatusCode((int)r.StatusCode);
+
+            using var doc = JsonDocument.Parse(await r.Content.ReadAsStringAsync());
+            var root = doc.RootElement.GetProperty("MediaContainer");
+            if (!root.TryGetProperty("Metadata", out var items)) return Results.Ok(result);
+
+            foreach (var x in items.EnumerateArray())
+            {
+                var id = x.TryGetProperty("ratingKey", out var ix) ? ix.GetString() ?? "" : "";
+                var season = x.TryGetProperty("parentIndex", out var sx) && sx.TryGetInt32(out var s) ? s : 0;
+                var episode = x.TryGetProperty("index", out var ex) && ex.TryGetInt32(out var e) ? e : 0;
+                var name = x.TryGetProperty("title", out var nx) ? nx.GetString() ?? "Episode" : "Episode";
+                var thumb = x.TryGetProperty("thumb", out var th) ? th.GetString() : null;
+                var poster = string.IsNullOrWhiteSpace(thumb)
+                    ? null
+                    : ProxyUrl(c.BaseUrl + thumb + "?X-Plex-Token=" + Uri.EscapeDataString(c.Token), "artwork");
+
+                result.Add(new UnifiedEpisodeItem(
+                    "plex:" + lib.Id + ":" + id, "plex", lib.Id, id, seriesId,
+                    season, episode, name,
+                    x.TryGetProperty("year", out var y) ? y.ToString() : null,
+                    x.TryGetProperty("rating", out var rr) ? rr.ToString() : null,
+                    poster));
+            }
+        }
+        else
+        {
+            return Results.BadRequest("Source does not match the configured media library type.");
+        }
+
+        return Results.Ok(result
+            .OrderBy(x => x.SeasonNumber)
+            .ThenBy(x => x.EpisodeNumber)
+            .ThenBy(x => x.Name));
+    }
+    catch (Exception ex)
+    {
+        RecordError("unified-episodes:" + providerId, ex);
+        return Results.Problem(ex.Message);
+    }
 }).RequireAuthorization();
 
 app.MapGet("/api/media-libraries", () =>
@@ -1228,7 +1338,8 @@ app.MapPost("/api/media-libraries", (MediaLibraryInput input) =>
     var oldConn = old is null ? null : MediaConnection(old);
     var token = old is not null && input.KeepExistingToken && string.IsNullOrWhiteSpace(input.Token) ? oldConn?.Token ?? "" : input.Token ?? "";
     var conn = new MediaLibraryConnection((input.BaseUrl ?? "").Trim().TrimEnd('/'), token);
-    var row = new MediaLibraryProvider(id, input.Name.Trim(), input.Type.Trim().ToLowerInvariant(), input.Enabled, secretBox.Encrypt(JsonSerializer.Serialize(conn, jsonOptions)), input.LibraryIds ?? Array.Empty<string>());
+    var selectedLibraries = input.LibraryIds ?? old?.LibraryIds ?? Array.Empty<string>();
+    var row = new MediaLibraryProvider(id, input.Name.Trim(), input.Type.Trim().ToLowerInvariant(), input.Enabled, secretBox.Encrypt(JsonSerializer.Serialize(conn, jsonOptions)), selectedLibraries);
     var idx = rows.FindIndex(x => x.Id == id); if (idx >= 0) rows[idx]=row; else rows.Add(row);
     Save(mediaLibrariesFile, rows);
     return Results.Ok(new { row.Id, row.Name, row.Type, row.Enabled, row.LibraryIds });
@@ -1309,6 +1420,22 @@ app.MapGet("/api/media-libraries/{id}/libraries", async (string id) =>
         return Results.BadRequest();
     }
     catch(Exception ex){RecordError("media-libraries:"+id,ex);return Results.Problem(ex.Message);}
+}).RequireAuthorization(p=>p.RequireRole("Admin"));
+
+app.MapPost("/api/media-libraries/{id}/libraries/selection", (string id, MediaLibrarySelectionInput input) =>
+{
+    var rows = LoadMediaLibraries();
+    var idx = rows.FindIndex(x => x.Id == id);
+    if (idx < 0) return Results.NotFound();
+
+    var selected = (input.LibraryIds ?? Array.Empty<string>())
+        .Where(x => !string.IsNullOrWhiteSpace(x))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
+    rows[idx] = rows[idx] with { LibraryIds = selected };
+    Save(mediaLibrariesFile, rows);
+    return Results.Ok(new { id, libraryIds = selected });
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
 
 app.MapGet("/api/access/me", (HttpContext ctx) =>
@@ -1808,7 +1935,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "0.7.0",
+        version = "0.7.1",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -2084,7 +2211,7 @@ async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, TimeSpa
     var url = BuildXtreamPlayerApiUrl(c, action, extra);
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.7.0");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.7.1");
     using var cts = new CancellationTokenSource(timeout);
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -2250,7 +2377,7 @@ async Task<List<LiveChannel>> LoadM3uChannels(string url)
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/x-mpegURL,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.7.0");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.7.1");
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -2269,7 +2396,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.7.0");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.7.1");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }
@@ -2517,7 +2644,9 @@ record ProfilePolicyInput(bool Live, bool Movies, bool Series, bool Downloads, s
 record PinRequest(string? Pin);
 record MediaLibraryProvider(string Id, string Name, string Type, bool Enabled, string EncryptedConnection, string[] LibraryIds);
 record MediaLibraryInput(string? Id, string Name, string Type, string? BaseUrl, string? Token, bool Enabled, string[]? LibraryIds, bool KeepExistingToken = false);
+record MediaLibrarySelectionInput(string[]? LibraryIds);
 record MediaLibraryConnection(string BaseUrl, string Token);
+record UnifiedEpisodeItem(string Id, string Source, string SourceProviderId, string ItemId, string SeriesId, int SeasonNumber, int EpisodeNumber, string Name, string? Year, string? Rating, string? Poster);
 record UnifiedMediaItem(string Id, string Source, string SourceProviderId, string Kind, string Name, string? Year, string? Rating, string? Poster, string? ParentId, string? StreamUrl, double? Progress, DateTimeOffset? AddedAt);
 record MediaDownloadRequest(string Token, string? Title);
 record ProxyTarget(string Url, string Kind, DateTimeOffset Created);
