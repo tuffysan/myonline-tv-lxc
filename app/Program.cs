@@ -84,7 +84,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.5.4");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.5.5");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
@@ -95,6 +95,8 @@ var vodCategoryCache = new ConcurrentDictionary<string, TimedJsonCache>();
 var vodItemCache = new ConcurrentDictionary<string, TimedJsonCache>();
 var seriesCategoryCache = new ConcurrentDictionary<string, TimedJsonCache>();
 var seriesItemCache = new ConcurrentDictionary<string, TimedJsonCache>();
+var lastCatalogueSuccess = new ConcurrentDictionary<string, DateTimeOffset>();
+var recentErrors = new ConcurrentQueue<RecentError>();
 var channelLocks = new ConcurrentDictionary<string, SemaphoreSlim>();
 var liveHlsRoot = Path.Combine(dataDir, "live-hls");
 Directory.CreateDirectory(liveHlsRoot);
@@ -109,6 +111,24 @@ void Save<T>(string path, T value)
     var tmp = path + ".tmp";
     File.WriteAllText(tmp, JsonSerializer.Serialize(value, jsonOptions));
     File.Move(tmp, path, true);
+}
+
+void RecordError(string area, Exception ex)
+{
+    recentErrors.Enqueue(new RecentError(DateTimeOffset.UtcNow, area, ex.GetBaseException().Message));
+    while (recentErrors.Count > 20 && recentErrors.TryDequeue(out _)) { }
+}
+
+long DirectorySize(string path)
+{
+    try
+    {
+        if (!Directory.Exists(path)) return 0;
+        return Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories)
+            .Select(f => { try { return new FileInfo(f).Length; } catch { return 0L; } })
+            .Sum();
+    }
+    catch { return 0; }
 }
 
 string CatalogueCacheFile(string kind, string key)
@@ -309,7 +329,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "0.5.4",
+    version = "0.5.5",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -347,14 +367,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = File.Exists(adminFile);
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "0.5.4", checks })
-        : Results.Json(new { status = "not-ready", version = "0.5.4", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "0.5.5", checks })
+        : Results.Json(new { status = "not-ready", version = "0.5.5", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "0.5.4",
+    version = "0.5.5",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = File.Exists(adminFile),
@@ -1273,7 +1293,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "0.5.4",
+        version = "0.5.5",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -1289,6 +1309,10 @@ app.MapGet("/api/system", () =>
         processWorkingSetBytes = Environment.WorkingSet,
         processorCount = Environment.ProcessorCount,
         profiles = LoadProfiles().Count,
+        catalogueCacheBytes = DirectorySize(catalogueCacheDir),
+        catalogueCacheFiles = Directory.Exists(catalogueCacheDir) ? Directory.EnumerateFiles(catalogueCacheDir, "*.json").Count() : 0,
+        lastCatalogueRefreshes = lastCatalogueSuccess.OrderBy(x => x.Key).ToDictionary(x => x.Key, x => x.Value),
+        recentErrors = recentErrors.Reverse().Take(10).ToArray(),
         disk = new
         {
             totalBytes = drive.TotalSize,
@@ -1325,6 +1349,7 @@ app.MapGet("/api/providers/health", async () =>
         catch (Exception ex)
         {
             message = ex.GetBaseException().Message;
+            RecordError("provider-health:" + provider.Id, ex);
         }
         sw.Stop();
         rows.Add(new
@@ -1401,6 +1426,43 @@ app.MapPost("/api/system/restore/{fileName}", (string fileName) =>
     }
     channelCache.Clear();
     return Results.Ok(new { restored = safe, restartRecommended = true });
+}).RequireAuthorization();
+
+app.MapPost("/api/system/recover", async () =>
+{
+    var removed = 0;
+    foreach (var pair in liveSessions.ToArray())
+    {
+        try
+        {
+            if (pair.Value.Process.HasExited)
+            {
+                await StopLiveSession(pair.Key);
+                removed++;
+            }
+        }
+        catch (Exception ex)
+        {
+            RecordError("live-recovery:" + pair.Key, ex);
+        }
+    }
+
+    // Clean abandoned HLS directories older than 12 hours that are not active sessions.
+    var activeDirs = liveSessions.Values.Select(x => Path.GetFullPath(x.Directory))
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    try
+    {
+        foreach (var dir in Directory.EnumerateDirectories(liveHlsRoot))
+        {
+            var full = Path.GetFullPath(dir);
+            if (activeDirs.Contains(full)) continue;
+            if (DateTime.UtcNow - Directory.GetLastWriteTimeUtc(dir) < TimeSpan.FromHours(12)) continue;
+            try { Directory.Delete(dir, true); removed++; } catch { }
+        }
+    }
+    catch (Exception ex) { RecordError("hls-recovery", ex); }
+
+    return Results.Ok(new { recovered = true, cleaned = removed, activeLiveStreams = liveSessions.Count });
 }).RequireAuthorization();
 
 app.MapFallbackToFile("index.html");
@@ -1507,7 +1569,7 @@ async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, TimeSpa
     var url = BuildXtreamPlayerApiUrl(c, action, extra);
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.4");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.5");
     using var cts = new CancellationTokenSource(timeout);
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -1553,9 +1615,11 @@ async Task<JsonDocument> CachedXtreamJson(
                 var refreshedJson = refreshed.RootElement.GetRawText();
                 cache[key] = new TimedJsonCache(refreshedJson, DateTimeOffset.UtcNow);
                 SaveDiskJsonCache(diskKind, diskKey, refreshedJson);
+                lastCatalogueSuccess[action] = DateTimeOffset.UtcNow;
             }
             catch (Exception ex)
             {
+                RecordError("catalogue:" + action, ex);
                 app.Logger.LogInformation(ex, "Background refresh failed for {Action}; stale disk cache retained.", action);
             }
         });
@@ -1566,6 +1630,7 @@ async Task<JsonDocument> CachedXtreamJson(
     var json = doc.RootElement.GetRawText();
     cache[key] = new TimedJsonCache(json, DateTimeOffset.UtcNow);
     SaveDiskJsonCache(diskKind, diskKey, json);
+    lastCatalogueSuccess[action] = DateTimeOffset.UtcNow;
     return JsonDocument.Parse(json);
 }
 
@@ -1670,7 +1735,7 @@ async Task<List<LiveChannel>> LoadM3uChannels(string url)
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/x-mpegURL,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.4");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.5");
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -1689,7 +1754,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.4");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.5");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }
@@ -1928,6 +1993,7 @@ record LoginRequest(string Username, string Password);
 record MediaDownloadRequest(string Token, string? Title);
 record ProxyTarget(string Url, string Kind, DateTimeOffset Created);
 record LiveSession(string Id, string Directory, Process Process, StringBuilder ErrorLog, string SourceUrl, DateTimeOffset Started);
+record RecentError(DateTimeOffset At, string Area, string Message);
 
 record DownloadJob(string Id, string Title, string SourceUrl, string Path, string Status, double Progress, string? Error, DateTimeOffset Created)
 {

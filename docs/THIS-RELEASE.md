@@ -1,12 +1,21 @@
-# MyOnline TV v0.5.4 — Stability & Cache Foundation
+# MyOnline TV v0.5.5 — Reliability & Recovery
 
-This release focuses on resilience rather than new media features.
+## Reliability
+GET requests retry up to three times for transient network errors and HTTP 429/502/503/504. Retries use progressive delays. Long-running Movies catalogue requests keep their existing custom timeout.
 
-## Catalogue cache
-Movies and Series catalogue JSON is now persisted to disk. Cached data can be served immediately for up to six hours while the provider is refreshed in the background.
+## Recovery
+System → Run recovery cleans exited Live/FFmpeg sessions and stale HLS folders older than 12 hours. Active streams are not touched.
 
-## Manual refresh
-Movies and Series each include a Refresh button. Refresh clears browser and server catalogue cache for the active provider and reloads the catalogue.
+## Diagnostics
+System now displays:
+- catalogue cache size and file count
+- latest successful catalogue refreshes
+- recent tracked provider/catalogue errors
+- active Live streams and existing runtime information
 
-## Publish helper
-Run `PUBLISH-v0.5.4.cmd` from the repository root. It commits, pushes main, safely recreates the v0.5.4 tag only when needed, and triggers the GitHub Actions release workflow.
+## Publishing
+From this release onward use only:
+
+    PUBLISH.cmd
+
+The script reads VERSION, commits changes, pushes main, safely handles the release tag and pushes it to trigger GitHub Actions. The same script is intended for all future versions.

@@ -3,31 +3,43 @@ let providers=[], currentProvider=null, channels=[], epg=[], fav=new Set(), hls=
 
 async function api(url,opt={}){
   const method=(opt.method||'GET').toUpperCase();
-  const attempts=method==='GET'?2:1;
+  const attempts=Number(opt.attempts||((method==='GET')?3:1));
   let lastError=null;
   for(let attempt=1;attempt<=attempts;attempt++){
     try{
       const controller=new AbortController();
       const timeoutMs=Number(opt.timeoutMs||30000);
       const timer=setTimeout(()=>controller.abort(),timeoutMs);
-      const {timeoutMs:_,...fetchOpt}=opt;
+      const {timeoutMs:_,attempts:__,...fetchOpt}=opt;
       const r=await fetch(url,{credentials:'same-origin',...fetchOpt,signal:opt.signal||controller.signal}).finally(()=>clearTimeout(timer));
       if(r.status===401){await authGate();throw new Error('Authentication required');}
       if(!r.ok){
         const body=await r.text();
-        if(attempt<attempts&&[429,502,503,504].includes(r.status)){await new Promise(x=>setTimeout(x,500));continue}
-        throw new Error(body||`HTTP ${r.status}`);
+        const err=new Error(body||`HTTP ${r.status}`);
+        err.status=r.status;err.url=url;
+        if(attempt<attempts&&[429,502,503,504].includes(r.status)){
+          await new Promise(x=>setTimeout(x,attempt*750));
+          continue;
+        }
+        throw err;
       }
       if(r.status===204)return null;
       const t=r.headers.get('content-type')||'';
       return t.includes('json')?r.json():r.text();
     }catch(e){
       lastError=e;
-      if(attempt<attempts&&(e.name==='AbortError'||e instanceof TypeError)){await new Promise(x=>setTimeout(x,500));continue}
-      throw e;
+      if(e?.name==='AbortError'){
+        const err=new Error(`Timeout after ${Number(opt.timeoutMs||30000)/1000}s: ${url}`);
+        err.url=url;err.timeout=true;lastError=err;
+      }
+      if(attempt<attempts&&(e?.name==='AbortError'||e instanceof TypeError)){
+        await new Promise(x=>setTimeout(x,attempt*750));
+        continue;
+      }
+      throw lastError;
     }
   }
-  throw lastError||new Error('Request failed');
+  throw lastError||new Error(`Request failed: ${url}`);
 }
 const jpost=(url,obj)=>api(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(obj)});
 
@@ -577,22 +589,27 @@ async function systemView(){
     const uptime=Math.floor(sys.uptimeSeconds/3600);
     content.innerHTML=`<div class=hero><span class=kicker>APPLIANCE STATUS</span><h2>MyOnline TV System</h2>
       <p class=muted>Version ${esc(sys.version)} · schema ${sys.dataSchemaVersion} · uptime ${uptime} h</p>
-      <div class=row><button class=btn id=createBackup>Create backup</button><button class=btn id=refreshSystem>Refresh</button><button class=btn id=copyDiag>Copy diagnostics</button></div></div>
+      <div class=row><button class=btn id=createBackup>Create backup</button><button class=btn id=refreshSystem>Refresh</button><button class=btn id=recoverSystem>Run recovery</button><button class=btn id=copyDiag>Copy diagnostics</button></div></div>
       <div class=stats>
         <div class=stat><b>${sys.providers}</b><span>Providers</span></div>
         <div class=stat><b>${sys.downloads}</b><span>Downloaded files</span></div>
-        <div class=stat><b>${sys.backups}</b><span>Backups</span></div><div class=stat><b>${sys.activeLiveStreams}</b><span>Live streams</span></div><div class=stat><b>${sys.profiles}</b><span>Profiles</span></div><div class=stat><b>${(sys.processWorkingSetBytes/1024/1024).toFixed(0)} MB</b><span>App memory</span></div>
+        <div class=stat><b>${sys.backups}</b><span>Backups</span></div><div class=stat><b>${sys.activeLiveStreams}</b><span>Live streams</span></div><div class=stat><b>${sys.profiles}</b><span>Profiles</span></div><div class=stat><b>${sys.catalogueCacheFiles||0}</b><span>Catalogue cache files</span></div><div class=stat><b>${((sys.catalogueCacheBytes||0)/1024/1024).toFixed(1)} MB</b><span>Catalogue cache</span></div><div class=stat><b>${(sys.processWorkingSetBytes/1024/1024).toFixed(0)} MB</b><span>App memory</span></div>
       </div>
       <div class=grid>
         <div class=card><h3>Runtime</h3><p>${esc(sys.framework)}</p><p class=muted>${esc(sys.os)}</p><p>FFmpeg: <b>${sys.ffmpeg?'OK':'Missing'}</b></p></div>
         <div class=card><h3>Disk</h3><p><b>${gb(sys.disk.usedBytes)} GB</b> used of ${gb(sys.disk.totalBytes)} GB</p><p>${gb(sys.disk.freeBytes)} GB free</p></div>
+      </div>
+      <h2>Recovery diagnostics</h2>
+      <div class=grid>
+        <div class=card><h3>Latest catalogue refresh</h3>${Object.keys(sys.lastCatalogueRefreshes||{}).length?Object.entries(sys.lastCatalogueRefreshes).map(([k,v])=>`<p><b>${esc(k)}</b><br><small>${new Date(v).toLocaleString()}</small></p>`).join(''):'<p class=muted>No catalogue refresh recorded since startup.</p>'}</div>
+        <div class=card><h3>Recent errors</h3>${(sys.recentErrors||[]).length?sys.recentErrors.map(e=>`<p><b>${esc(e.area)}</b><br><small>${new Date(e.at).toLocaleString()} · ${esc(e.message)}</small></p>`).join(''):'<p class=muted>No recent tracked errors.</p>'}</div>
       </div>
       <h2>Provider health</h2>
       <div class=downloadList>${health.length?health.map(h=>`<article class=downloadCard><div class=row><span class="healthDot ${h.ok?'ok':'fail'}"></span><h3>${esc(h.name)}</h3></div><p>${esc(h.type)} · ${h.latencyMs} ms</p><small>${esc(h.message)}</small></article>`).join(''):'<div class=card>No providers configured.</div>'}</div>
       <h2>Backups</h2>
       <div class=downloadList>${backs.length?backs.map(b=>`<article class=downloadCard><b>${esc(b.fileName)}</b><small>${(b.sizeBytes/1024).toFixed(1)} KiB · ${new Date(b.created).toLocaleString()}</small><button class=btn onclick='restoreBackup(${JSON.stringify(b.fileName)})'>Restore data</button></article>`).join(''):'<div class=card>No backups yet.</div>'}</div>`;
     $('#createBackup').onclick=async()=>{try{const b=await api('/api/system/backup',{method:'POST'});alert('Backup created: '+b.fileName);systemView()}catch(e){alert(e.message)}};
-    $('#refreshSystem').onclick=systemView;$('#copyDiag').onclick=()=>navigator.clipboard?.writeText(JSON.stringify({system:sys,providers:health},null,2)).then(()=>alert('Diagnostics copied.')).catch(()=>alert('Could not copy diagnostics.'));
+    $('#refreshSystem').onclick=systemView;$('#recoverSystem').onclick=async()=>{try{const r=await api('/api/system/recover',{method:'POST'});alert(`Recovery complete. Cleaned ${r.cleaned} stale item(s).`);systemView()}catch(e){alert(friendlyError(e))}};$('#copyDiag').onclick=()=>navigator.clipboard?.writeText(JSON.stringify({system:sys,providers:health},null,2)).then(()=>alert('Diagnostics copied.')).catch(()=>alert('Could not copy diagnostics.'));
   }catch(e){content.innerHTML=errorCard(e)}
 }
 
@@ -656,7 +673,7 @@ function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 function escAttr(s){return esc(s)}
 boot().catch(e=>{$('#auth').classList.remove('hidden');$('#auth').innerHTML=`<div class=authCard><h2>Startup error</h2><pre>${esc(e.message)}</pre></div>`});
 
-// v0.5.4 catalogue cache
+// v0.5.5 catalogue cache
 const CATALOG_CACHE_PREFIX='myonline-catalog-v1:';
 function catalogueCacheKey(kind,provider,category){return `${CATALOG_CACHE_PREFIX}${kind}:${provider}:${category||'all'}`}
 function readCatalogueCache(key,maxAgeMs=10*60*1000){
@@ -666,11 +683,11 @@ function writeCatalogueCache(key,items){
   try{sessionStorage.setItem(key,JSON.stringify({saved:Date.now(),items}))}catch{}
 }
 
-// v0.5.4 player cleanup
+// v0.5.5 player cleanup
 window.addEventListener('pagehide',()=>destroyPlayer());
 window.addEventListener('beforeunload',()=>destroyPlayer());
 
-// v0.5.4 movie favourites
+// v0.5.5 movie favourites
 function mediaFavKey(){return `myonline-media-favourites-v2:${currentProfile||'default'}`}
 function getMediaFavs(){try{return JSON.parse(localStorage.getItem(mediaFavKey())||'[]')}catch{return []}}
 function isMediaFav(type,id){return getMediaFavs().some(x=>x.type===type&&String(x.id)===String(id))}
@@ -681,7 +698,7 @@ function toggleMediaFav(type,item){
   if(type==='movie')filterMedia();else filterSeries();
 }
 
-// v0.5.4 watch history
+// v0.5.5 watch history
 function historyKey(){return `myonline-media-history-v2:${currentProfile||'default'}`}
 function getMediaHistory(){try{return JSON.parse(localStorage.getItem(historyKey())||'[]')}catch{return []}}
 function rememberMediaHistory(type,item){
@@ -690,14 +707,14 @@ function rememberMediaHistory(type,item){
   localStorage.setItem(historyKey(),JSON.stringify(rows.slice(0,100)));
 }
 
-// v0.5.4 home rails
+// v0.5.5 home rails
 function homeMediaRails(){
   const favs=getMediaFavs().slice(0,12),hist=getMediaHistory().slice(0,12);
   return `${favs.length?`<h2>Media favourites</h2><div class=continueRow>${favs.map(x=>`<button class=continueCard onclick="show('${x.type==='movie'?'movies':'series'}')"><span>★</span><b>${esc(x.name)}</b><small>${esc(x.type)}</small></button>`).join('')}</div>`:''}
   ${hist.length?`<h2>Recently watched</h2><div class=continueRow>${hist.map(x=>`<button class=continueCard onclick="show('${x.type==='movie'?'movies':'series'}')"><span>↻</span><b>${esc(x.name)}</b><small>${new Date(x.updated).toLocaleString()}</small></button>`).join('')}</div>`:''}`;
 }
 
-// v0.5.4 quick search
+// v0.5.5 quick search
 function homeQuickSearch(){
   const q=($('#homeSearch')?.value||'').trim();
   if(!q)return;
@@ -705,7 +722,7 @@ function homeQuickSearch(){
   show('movies').then(()=>{const x=$('#mediaq');if(x){x.value=q;filterMedia()}});
 }
 
-// v0.5.4 TV focus navigation
+// v0.5.5 TV focus navigation
 function tvFocusables(){return [...document.querySelectorAll('button,a[href],input,select,[tabindex]:not([tabindex="-1"])')].filter(x=>!x.disabled&&x.offsetParent!==null)}
 function moveTvFocus(delta){
   const rows=tvFocusables();if(!rows.length)return;
@@ -718,7 +735,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='ArrowUp'){moveTvFocus(-1);e.preventDefault()}
 });
 
-// v0.5.4 remote playback controls
+// v0.5.5 remote playback controls
 document.addEventListener('keydown',e=>{
   const v=$('#video');
   if(!v)return;
@@ -729,13 +746,13 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&document.fullscreenElement){document.exitFullscreen?.()}
 });
 
-// v0.5.4 profiles polish
+// v0.5.5 profiles polish
 document.addEventListener('click',e=>{if(!e.target.closest?.('#profilePicker')&&!e.target.closest?.('.profileBadge'))$('#profilePicker')?.remove()});
 
-// v0.5.4 debounce
+// v0.5.5 debounce
 function debounce(fn,ms=180){let t;return (...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms)}}
 
-// v0.5.4 player recovery
+// v0.5.5 player recovery
 function installVideoRecovery(video){
   if(!video||video.dataset.recoveryInstalled)return;
   video.dataset.recoveryInstalled='1';
@@ -746,10 +763,10 @@ function installVideoRecovery(video){
 }
 document.addEventListener('play',e=>{if(e.target?.tagName==='VIDEO')installVideoRecovery(e.target)},true);
 
-// v0.5.4 system auto refresh
+// v0.5.5 system auto refresh
 let systemRefreshTimer=null;document.addEventListener('visibilitychange',()=>{if(!document.hidden&&currentView==='system')systemView().catch(()=>{})});
 
-// v0.5.4 accessibility
+// v0.5.5 accessibility
 function syncNavAria(){
   document.querySelectorAll('nav button[data-view]').forEach(b=>b.setAttribute('aria-current',b.dataset.view===currentView?'page':'false'));
 }

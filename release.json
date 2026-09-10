@@ -1,8 +1,8 @@
 {
-  "version": "0.5.4",
+  "version": "0.5.5",
   "minimumUpgradeVersion": "0.2.0",
   "dataSchemaVersion": 3,
   "requiresRestart": true,
-  "artifact": "myonline-tv-web-v0.5.4-linux-x64.tar.gz",
+  "artifact": "myonline-tv-web-v0.5.5-linux-x64.tar.gz",
   "sha256": "SHA256SUMS-RELEASE.txt"
 }
