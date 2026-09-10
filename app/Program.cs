@@ -265,8 +265,19 @@ bool HasEnabledAdmin(IEnumerable<AppUser> users) =>
 
 List<MediaLibraryProvider> LoadMediaLibraries() => Load<List<MediaLibraryProvider>>(mediaLibrariesFile) ?? new();
 
-MediaLibraryConnection MediaConnection(MediaLibraryProvider provider) =>
-    Decrypt<MediaLibraryConnection>(provider.Connection) ?? new MediaLibraryConnection("", "");
+MediaLibraryConnection MediaConnection(MediaLibraryProvider provider)
+{
+    try
+    {
+        var json = secretBox.Decrypt(provider.EncryptedConnection);
+        return JsonSerializer.Deserialize<MediaLibraryConnection>(json, jsonOptions)
+            ?? new MediaLibraryConnection("", "");
+    }
+    catch
+    {
+        return new MediaLibraryConnection("", "");
+    }
+}
 
 string PlexHeaders(string token) => token;
 
@@ -1202,7 +1213,7 @@ app.MapPost("/api/media-libraries", (MediaLibraryInput input) =>
     var oldConn = old is null ? null : MediaConnection(old);
     var token = old is not null && input.KeepExistingToken && string.IsNullOrWhiteSpace(input.Token) ? oldConn?.Token ?? "" : input.Token ?? "";
     var conn = new MediaLibraryConnection((input.BaseUrl ?? "").Trim().TrimEnd('/'), token);
-    var row = new MediaLibraryProvider(id, input.Name.Trim(), input.Type.Trim().ToLowerInvariant(), input.Enabled, Encrypt(conn), input.LibraryIds ?? Array.Empty<string>());
+    var row = new MediaLibraryProvider(id, input.Name.Trim(), input.Type.Trim().ToLowerInvariant(), input.Enabled, secretBox.Encrypt(JsonSerializer.Serialize(conn, jsonOptions)), input.LibraryIds ?? Array.Empty<string>());
     var idx = rows.FindIndex(x => x.Id == id); if (idx >= 0) rows[idx]=row; else rows.Add(row);
     Save(mediaLibrariesFile, rows);
     return Results.Ok(new { row.Id, row.Name, row.Type, row.Enabled, row.LibraryIds });
@@ -2489,7 +2500,7 @@ record UserProfileAccess(string[] AllowedProfileIds, string DefaultProfileId);
 record ProfilePolicy(bool Live, bool Movies, bool Series, bool Downloads, string[] AllowedProviderIds, PasswordCredential? PinCredential);
 record ProfilePolicyInput(bool Live, bool Movies, bool Series, bool Downloads, string[]? AllowedProviderIds, string? Pin, bool ClearPin = false);
 record PinRequest(string? Pin);
-record MediaLibraryProvider(string Id, string Name, string Type, bool Enabled, EncryptedBlob Connection, string[] LibraryIds);
+record MediaLibraryProvider(string Id, string Name, string Type, bool Enabled, string EncryptedConnection, string[] LibraryIds);
 record MediaLibraryInput(string? Id, string Name, string Type, string? BaseUrl, string? Token, bool Enabled, string[]? LibraryIds, bool KeepExistingToken = false);
 record MediaLibraryConnection(string BaseUrl, string Token);
 record UnifiedMediaItem(string Id, string Source, string SourceProviderId, string Kind, string Name, string? Year, string? Rating, string? Poster, string? ParentId, string? StreamUrl, double? Progress, DateTimeOffset? AddedAt);

@@ -1,8 +1,6 @@
 # Changelog
 
 ## v0.7.0 — Unified Media Center
-- MediaLibraryProvider encryption compile fix: uses the existing SecretBox string payload format.
-- Adds SafeHost helper used by Media Library admin responses.
 - Promotes IPTV + Plex + Jellyfin integration to the v0.7.0 unified media-center milestone.
 - Includes media-library administration, unified catalogues, playback, Search and Home discovery.
 - Includes all prior authentication, provider editing, profile permissions, TV remote UX, caching and recovery functionality.
