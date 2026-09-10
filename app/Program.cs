@@ -88,7 +88,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.6.1");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.7.0");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
@@ -422,7 +422,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "0.6.1",
+    version = "0.7.0",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -460,14 +460,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = AuthConfigured();
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "0.6.1", checks })
-        : Results.Json(new { status = "not-ready", version = "0.6.1", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "0.7.0", checks })
+        : Results.Json(new { status = "not-ready", version = "0.7.0", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "0.6.1",
+    version = "0.7.0",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = AuthConfigured(),
@@ -1041,6 +1041,141 @@ app.MapPost("/api/series/{providerId}/episode/{episodeId}/token", (string provid
 }).RequireAuthorization();
 
 
+
+
+
+app.MapGet("/api/unified/{source}/{providerId}/{itemId}/play", async (string source,string providerId,string itemId) =>
+{
+    var lib=LoadMediaLibraries().FirstOrDefault(x=>x.Id==providerId&&x.Enabled); if(lib is null)return Results.NotFound();
+    var c=MediaConnection(lib);
+    try
+    {
+        if(source=="jellyfin")
+        {
+            var url=c.BaseUrl+"/Videos/"+Uri.EscapeDataString(itemId)+"/stream?static=true&api_key="+Uri.EscapeDataString(c.Token);
+            var token=RegisterProxy(url,"media");
+            return Results.Ok(new{playToken=token,source="jellyfin"});
+        }
+        if(source=="plex")
+        {
+            using var client=new HttpClient{Timeout=TimeSpan.FromSeconds(30)};
+            var req=new HttpRequestMessage(HttpMethod.Get,c.BaseUrl+"/library/metadata/"+Uri.EscapeDataString(itemId));
+            req.Headers.TryAddWithoutValidation("X-Plex-Token",c.Token);req.Headers.TryAddWithoutValidation("Accept","application/json");
+            var r=await client.SendAsync(req);if(!r.IsSuccessStatusCode)return Results.StatusCode((int)r.StatusCode);
+            using var doc=JsonDocument.Parse(await r.Content.ReadAsStringAsync());
+            var md=doc.RootElement.GetProperty("MediaContainer").GetProperty("Metadata")[0];
+            if(!md.TryGetProperty("Media",out var medias)||medias.GetArrayLength()==0)return Results.NotFound();
+            var parts=medias[0].GetProperty("Part"); if(parts.GetArrayLength()==0)return Results.NotFound();
+            var key=parts[0].GetProperty("key").GetString()??"";
+            var url=c.BaseUrl+key+"?X-Plex-Token="+Uri.EscapeDataString(c.Token);
+            var token=RegisterProxy(url,"media");
+            return Results.Ok(new{playToken=token,source="plex"});
+        }
+        return Results.BadRequest();
+    }catch(Exception ex){RecordError("unified-play:"+providerId,ex);return Results.Problem(ex.Message);}
+}).RequireAuthorization();
+
+app.MapGet("/api/unified/movies", async () =>
+{
+    var result=new List<UnifiedMediaItem>();
+    foreach(var lib in LoadMediaLibraries().Where(x=>x.Enabled))
+    {
+        var c=MediaConnection(lib);
+        try
+        {
+            using var client=new HttpClient{Timeout=TimeSpan.FromSeconds(60)};
+            if(lib.Type=="jellyfin")
+            {
+                var url=c.BaseUrl+"/Items?Recursive=true&IncludeItemTypes=Movie&Fields=PrimaryImageAspectRatio,PremiereDate,CommunityRating,DateCreated&Limit=5000";
+                var req=new HttpRequestMessage(HttpMethod.Get,url);req.Headers.TryAddWithoutValidation("X-Emby-Token",c.Token);
+                var r=await client.SendAsync(req);if(!r.IsSuccessStatusCode)continue;
+                using var doc=JsonDocument.Parse(await r.Content.ReadAsStringAsync());
+                foreach(var x in doc.RootElement.GetProperty("Items").EnumerateArray())
+                {
+                    var id=x.GetProperty("Id").GetString()??"";
+                    result.Add(new UnifiedMediaItem("jellyfin:"+lib.Id+":"+id,"jellyfin",lib.Id,"movie",
+                        x.GetProperty("Name").GetString()??"", x.TryGetProperty("ProductionYear",out var y)?y.ToString():null,
+                        x.TryGetProperty("CommunityRating",out var cr)?cr.ToString():null,
+                        c.BaseUrl+"/Items/"+id+"/Images/Primary?api_key="+Uri.EscapeDataString(c.Token),null,null,null,
+                        x.TryGetProperty("DateCreated",out var dc)&&DateTimeOffset.TryParse(dc.GetString(),out var dto)?dto:null));
+                }
+            }
+            else if(lib.Type=="plex")
+            {
+                foreach(var section in lib.LibraryIds)
+                {
+                    var req=new HttpRequestMessage(HttpMethod.Get,c.BaseUrl+"/library/sections/"+section+"/all?type=1");
+                    req.Headers.TryAddWithoutValidation("X-Plex-Token",c.Token);req.Headers.TryAddWithoutValidation("Accept","application/json");
+                    var r=await client.SendAsync(req);if(!r.IsSuccessStatusCode)continue;
+                    using var doc=JsonDocument.Parse(await r.Content.ReadAsStringAsync());
+                    var root=doc.RootElement.GetProperty("MediaContainer");
+                    if(!root.TryGetProperty("Metadata",out var arr))continue;
+                    foreach(var x in arr.EnumerateArray())
+                    {
+                        var rk=x.TryGetProperty("ratingKey",out var rkx)?rkx.GetString()??"":"";
+                        var thumb=x.TryGetProperty("thumb",out var th)?th.GetString():null;
+                        result.Add(new UnifiedMediaItem("plex:"+lib.Id+":"+rk,"plex",lib.Id,"movie",
+                            x.TryGetProperty("title",out var t)?t.GetString()??"":"",
+                            x.TryGetProperty("year",out var yr)?yr.ToString():null,
+                            x.TryGetProperty("rating",out var ra)?ra.ToString():null,
+                            string.IsNullOrWhiteSpace(thumb)?null:c.BaseUrl+thumb+"?X-Plex-Token="+Uri.EscapeDataString(c.Token),null,null,null,null));
+                    }
+                }
+            }
+        }catch(Exception ex){RecordError("unified-movies:"+lib.Id,ex);}
+    }
+    return Results.Ok(result);
+}).RequireAuthorization();
+
+app.MapGet("/api/unified/series", async () =>
+{
+    var result=new List<UnifiedMediaItem>();
+    foreach(var lib in LoadMediaLibraries().Where(x=>x.Enabled))
+    {
+        var c=MediaConnection(lib);
+        try
+        {
+            using var client=new HttpClient{Timeout=TimeSpan.FromSeconds(60)};
+            if(lib.Type=="jellyfin")
+            {
+                var req=new HttpRequestMessage(HttpMethod.Get,c.BaseUrl+"/Items?Recursive=true&IncludeItemTypes=Series&Fields=ProductionYear,CommunityRating&Limit=5000");
+                req.Headers.TryAddWithoutValidation("X-Emby-Token",c.Token);
+                var r=await client.SendAsync(req);if(!r.IsSuccessStatusCode)continue;
+                using var doc=JsonDocument.Parse(await r.Content.ReadAsStringAsync());
+                foreach(var x in doc.RootElement.GetProperty("Items").EnumerateArray())
+                {
+                    var id=x.GetProperty("Id").GetString()??"";
+                    result.Add(new UnifiedMediaItem("jellyfin:"+lib.Id+":"+id,"jellyfin",lib.Id,"series",
+                        x.GetProperty("Name").GetString()??"",x.TryGetProperty("ProductionYear",out var y)?y.ToString():null,
+                        x.TryGetProperty("CommunityRating",out var rr)?rr.ToString():null,
+                        c.BaseUrl+"/Items/"+id+"/Images/Primary?api_key="+Uri.EscapeDataString(c.Token),null,null,null,null));
+                }
+            }
+            else if(lib.Type=="plex")
+            {
+                foreach(var section in lib.LibraryIds)
+                {
+                    var req=new HttpRequestMessage(HttpMethod.Get,c.BaseUrl+"/library/sections/"+section+"/all?type=2");
+                    req.Headers.TryAddWithoutValidation("X-Plex-Token",c.Token);req.Headers.TryAddWithoutValidation("Accept","application/json");
+                    var r=await client.SendAsync(req);if(!r.IsSuccessStatusCode)continue;
+                    using var doc=JsonDocument.Parse(await r.Content.ReadAsStringAsync());
+                    var root=doc.RootElement.GetProperty("MediaContainer");
+                    if(!root.TryGetProperty("Metadata",out var arr))continue;
+                    foreach(var x in arr.EnumerateArray())
+                    {
+                        var rk=x.TryGetProperty("ratingKey",out var rkx)?rkx.GetString()??"":"";
+                        var thumb=x.TryGetProperty("thumb",out var th)?th.GetString():null;
+                        result.Add(new UnifiedMediaItem("plex:"+lib.Id+":"+rk,"plex",lib.Id,"series",
+                            x.TryGetProperty("title",out var t)?t.GetString()??"":x.TryGetProperty("year",out var y)?y.ToString():null,
+                            x.TryGetProperty("rating",out var ra)?ra.ToString():null,
+                            string.IsNullOrWhiteSpace(thumb)?null:c.BaseUrl+thumb+"?X-Plex-Token="+Uri.EscapeDataString(c.Token),null,null,null,null));
+                    }
+                }
+            }
+        }catch(Exception ex){RecordError("unified-series:"+lib.Id,ex);}
+    }
+    return Results.Ok(result);
+}).RequireAuthorization();
 
 app.MapGet("/api/media-libraries", () =>
 {
@@ -1647,7 +1782,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "0.6.1",
+        version = "0.7.0",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -1923,7 +2058,7 @@ async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, TimeSpa
     var url = BuildXtreamPlayerApiUrl(c, action, extra);
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.6.1");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.7.0");
     using var cts = new CancellationTokenSource(timeout);
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -2089,7 +2224,7 @@ async Task<List<LiveChannel>> LoadM3uChannels(string url)
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/x-mpegURL,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.6.1");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.7.0");
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -2108,7 +2243,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.6.1");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.7.0");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }

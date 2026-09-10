@@ -78,7 +78,7 @@ async function enterApp(st){
   document.querySelectorAll('[data-admin-only]').forEach(x=>x.classList.toggle('hidden',authState.role!=='Admin'));
   $('#userBadge').textContent=authState.user||'user';
   const s=await api('/api/status');$('#status').textContent=`${s.version} · ${s.platform}`;
-  const brandVersion=$('#brandVersion');if(brandVersion)brandVersion.textContent=`Web v${s.version} · Stable Feature Release`;
+  const brandVersion=$('#brandVersion');if(brandVersion)brandVersion.textContent=`Web v${s.version} · Unified Media Center`;
   providers=await api('/api/providers');fav=new Set(await api('/api/favourites'));profiles=await api('/api/profiles');try{accessState=await api('/api/access/me')}catch{accessState={allowedProfileIds:profiles.map(p=>p.id),defaultProfileId:profiles[0]?.id||'default',policies:{}}}profiles=profiles.filter(p=>authState.role==='Admin'||(accessState.allowedProfileIds||[]).includes(p.id));if(!profiles.some(p=>p.id===currentProfile))currentProfile=accessState.defaultProfileId||profiles[0]?.id||'default';applyPermissions();renderProfileBadge();
   if(!currentProvider&&providers.length)currentProvider=providers[0].id;
   show('home');
@@ -130,6 +130,7 @@ async function selectProfile(id){
 }
 
 async function home(){
+  let unifiedMovies=[],unifiedSeries=[];try{[unifiedMovies,unifiedSeries]=await Promise.all([api('/api/unified/movies',{timeoutMs:65000}),api('/api/unified/series',{timeoutMs:65000})])}catch{}
   const cont=await api('/api/continue');
   content.innerHTML=`<div class=hero><div><span class=kicker>MYONLINE TV WEB</span><h2>Everything. One interface.</h2>
   <p class=muted>Self-hosted on Proxmox. IPTV, EPG, movies, series, secure provider storage, favourites, downloads and browser playback.</p><div class=row><input id=homeSearch placeholder="Search Live, Movies and Series"><button class=btn onclick=homeQuickSearch()>Search</button></div></div></div>
@@ -152,7 +153,10 @@ async function home(){
     <a class=service href="https://www.max.com" target=_blank>Max</a>
     <a class=service href="https://www.primevideo.com" target=_blank>Prime Video</a>
     <a class=service href="https://www.svtplay.se" target=_blank>SVT Play</a>
-  </div>`;
+  </div>
+    ${unifiedMovies.length?`<h2>From Plex & Jellyfin</h2><div class=posterGrid>${unifiedMovies.slice(0,12).map(m=>`<button class=posterCard onclick='playUnifiedItem(${JSON.stringify(m)})'>${m.poster?`<img loading=lazy src="${escAttr(m.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(m.name)}</b><small><span class=sourceBadge>${esc(m.source)}</span> ${esc(m.year||'')}</small></div></button>`).join('')}</div>`:''}
+    ${unifiedSeries.length?`<h2>Series from media libraries</h2><div class=posterGrid>${unifiedSeries.slice(0,12).map(s=>`<button class=posterCard onclick='playUnifiedItem(${JSON.stringify(s)})'>${s.poster?`<img loading=lazy src="${escAttr(s.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(s.name)}</b><small><span class=sourceBadge>${esc(s.source)}</span> ${esc(s.year||'')}</small></div></button>`).join('')}</div>`:''}
+`;
 }
 
 async function ensureProvider(type){
@@ -812,7 +816,7 @@ function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 function escAttr(s){return esc(s)}
 boot().catch(e=>{$('#auth').classList.remove('hidden');$('#auth').innerHTML=`<div class=authCard><h2>Startup error</h2><pre>${esc(e.message)}</pre></div>`});
 
-// v0.6.1 catalogue cache
+// v0.7.0 catalogue cache
 const CATALOG_CACHE_PREFIX='myonline-catalog-v1:';
 function catalogueCacheKey(kind,provider,category){return `${CATALOG_CACHE_PREFIX}${kind}:${provider}:${category||'all'}`}
 function readCatalogueCache(key,maxAgeMs=10*60*1000){
@@ -822,11 +826,11 @@ function writeCatalogueCache(key,items){
   try{sessionStorage.setItem(key,JSON.stringify({saved:Date.now(),items}))}catch{}
 }
 
-// v0.6.1 player cleanup
+// v0.7.0 player cleanup
 window.addEventListener('pagehide',()=>destroyPlayer());
 window.addEventListener('beforeunload',()=>destroyPlayer());
 
-// v0.6.1 movie favourites
+// v0.7.0 movie favourites
 function mediaFavKey(){return `myonline-media-favourites-v2:${currentProfile||'default'}`}
 function getMediaFavs(){try{return JSON.parse(localStorage.getItem(mediaFavKey())||'[]')}catch{return []}}
 function isMediaFav(type,id){return getMediaFavs().some(x=>x.type===type&&String(x.id)===String(id))}
@@ -837,7 +841,7 @@ function toggleMediaFav(type,item){
   if(type==='movie')filterMedia();else filterSeries();
 }
 
-// v0.6.1 watch history
+// v0.7.0 watch history
 function historyKey(){return `myonline-media-history-v2:${currentProfile||'default'}`}
 function getMediaHistory(){try{return JSON.parse(localStorage.getItem(historyKey())||'[]')}catch{return []}}
 function rememberMediaHistory(type,item){
@@ -846,14 +850,14 @@ function rememberMediaHistory(type,item){
   localStorage.setItem(historyKey(),JSON.stringify(rows.slice(0,100)));
 }
 
-// v0.6.1 home rails
+// v0.7.0 home rails
 function homeMediaRails(){
   const favs=getMediaFavs().slice(0,12),hist=getMediaHistory().slice(0,12);
   return `${favs.length?`<h2>Media favourites</h2><div class=continueRow>${favs.map(x=>`<button class=continueCard onclick="show('${x.type==='movie'?'movies':'series'}')"><span>★</span><b>${esc(x.name)}</b><small>${esc(x.type)}</small></button>`).join('')}</div>`:''}
   ${hist.length?`<h2>Recently watched</h2><div class=continueRow>${hist.map(x=>`<button class=continueCard onclick="show('${x.type==='movie'?'movies':'series'}')"><span>↻</span><b>${esc(x.name)}</b><small>${new Date(x.updated).toLocaleString()}</small></button>`).join('')}</div>`:''}`;
 }
 
-// v0.6.1 quick search
+// v0.7.0 quick search
 function homeQuickSearch(){
   const q=($('#homeSearch')?.value||'').trim();
   if(!q)return;
@@ -861,7 +865,7 @@ function homeQuickSearch(){
   show('movies').then(()=>{const x=$('#mediaq');if(x){x.value=q;filterMedia()}});
 }
 
-// v0.6.1 TV & Remote UX
+// v0.7.0 TV & Remote UX
 let tvRemoteMode=false;
 let tvLastFocusByView={};
 
@@ -1007,13 +1011,13 @@ document.addEventListener('keydown',e=>{
 });
 
 
-// v0.6.1 profiles polish
+// v0.7.0 profiles polish
 document.addEventListener('click',e=>{if(!e.target.closest?.('#profilePicker')&&!e.target.closest?.('.profileBadge'))$('#profilePicker')?.remove()});
 
-// v0.6.1 debounce
+// v0.7.0 debounce
 function debounce(fn,ms=180){let t;return (...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms)}}
 
-// v0.6.1 player recovery
+// v0.7.0 player recovery
 function installVideoRecovery(video){
   if(!video||video.dataset.recoveryInstalled)return;
   video.dataset.recoveryInstalled='1';
@@ -1024,10 +1028,10 @@ function installVideoRecovery(video){
 }
 document.addEventListener('play',e=>{if(e.target?.tagName==='VIDEO')installVideoRecovery(e.target)},true);
 
-// v0.6.1 system auto refresh
+// v0.7.0 system auto refresh
 let systemRefreshTimer=null;document.addEventListener('visibilitychange',()=>{if(!document.hidden&&currentView==='system')systemView().catch(()=>{})});
 
-// v0.6.1 accessibility
+// v0.7.0 accessibility
 function syncNavAria(){
   document.querySelectorAll('nav button[data-view]').forEach(b=>b.setAttribute('aria-current',b.dataset.view===currentView?'page':'false'));
 }
@@ -1113,18 +1117,18 @@ async function runGlobalSearch(){
     const p=currentPolicy();
     const tasks=[];
     if(p.live!==false)tasks.push(api('/api/channels/'+currentProvider).then(x=>({kind:'live',rows:x})).catch(()=>({kind:'live',rows:[]})));
-    if(p.movies!==false)tasks.push(api('/api/vod/'+currentProvider+'/items?categoryId=',{timeoutMs:125000}).then(x=>({kind:'movies',rows:x})).catch(()=>({kind:'movies',rows:[]})));
-    if(p.series!==false)tasks.push(api('/api/series/'+currentProvider+'/items?categoryId=',{timeoutMs:60000}).then(x=>({kind:'series',rows:x})).catch(()=>({kind:'series',rows:[]})));
+    if(p.movies!==false){tasks.push(api('/api/vod/'+currentProvider+'/items?categoryId=',{timeoutMs:125000}).then(x=>({kind:'movies',rows:x})).catch(()=>({kind:'movies',rows:[]})));tasks.push(api('/api/unified/movies',{timeoutMs:65000}).then(x=>({kind:'movies-extra',rows:x})).catch(()=>({kind:'movies-extra',rows:[]})))}
+    if(p.series!==false){tasks.push(api('/api/series/'+currentProvider+'/items?categoryId=',{timeoutMs:60000}).then(x=>({kind:'series',rows:x})).catch(()=>({kind:'series',rows:[]})));tasks.push(api('/api/unified/series',{timeoutMs:65000}).then(x=>({kind:'series-extra',rows:x})).catch(()=>({kind:'series-extra',rows:[]})))}
     const groups=await Promise.all(tasks),result={live:[],movies:[],series:[]};
     for(const g of groups){
-      result[g.kind]=(g.rows||[]).filter(x=>String(x.name||x.title||'').toLowerCase().includes(q)).slice(0,80);
+      const rk=g.kind==='movies-extra'?'movies':g.kind==='series-extra'?'series':g.kind;result[rk]=[...(result[rk]||[]),...(g.rows||[]).filter(x=>String(x.name||x.title||'').toLowerCase().includes(q)).slice(0,80)];
     }
     const total=result.live.length+result.movies.length+result.series.length;
     $('#globalSearchStatus').textContent=`${total} result${total===1?'':'s'} for “${$('#globalSearchBox').value.trim()}”`;
     $('#globalSearchResults').innerHTML=`
       ${result.live.length?`<h2>Live TV</h2><div class=grid>${result.live.map(c=>`<button class="card actionCard" onclick="show('live').then(()=>{const q=$('#q');if(q){q.value=${JSON.stringify('')} }})"><h3>${esc(c.name||c.title||'Channel')}</h3><p>${esc(c.group||'')}</p></button>`).join('')}</div>`:''}
-      ${result.movies.length?`<h2>Movies</h2><div class=posterGrid>${result.movies.map(m=>`<button class=posterCard onclick="window.__searchSeed=this.querySelector('b').textContent;show('movies').then(()=>{const q=$('#mediaq');if(q){q.value=window.__searchSeed;filterMedia()}})">${m.poster?`<img loading=lazy src="${escAttr(m.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(m.name)}</b><small>${esc(m.year||'')} ${esc(m.rating||'')}</small></div></button>`).join('')}</div>`:''}
-      ${result.series.length?`<h2>Series</h2><div class=posterGrid>${result.series.map(s=>`<button class=posterCard onclick="window.__searchSeed=this.querySelector('b').textContent;show('series').then(()=>{const q=$('#seriesq');if(q){q.value=window.__searchSeed;filterSeries()}})">${s.poster?`<img loading=lazy src="${escAttr(s.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(s.name)}</b><small>${esc(s.year||'')} ${esc(s.rating||'')}</small></div></button>`).join('')}</div>`:''}
+      ${result.movies.length?`<h2>Movies</h2><div class=posterGrid>${result.movies.map(m=>`<button class=posterCard onclick="window.__searchSeed=this.querySelector('b').textContent;show('movies').then(()=>{const q=$('#mediaq');if(q){q.value=window.__searchSeed;filterMedia()}})">${m.poster?`<img loading=lazy src="${escAttr(m.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(m.name)}</b><small>${m.source?`<span class=sourceBadge>${esc(m.source)}</span> `:''}${esc(m.year||'')} ${esc(m.rating||'')}</small></div></button>`).join('')}</div>`:''}
+      ${result.series.length?`<h2>Series</h2><div class=posterGrid>${result.series.map(s=>`<button class=posterCard onclick="window.__searchSeed=this.querySelector('b').textContent;show('series').then(()=>{const q=$('#seriesq');if(q){q.value=window.__searchSeed;filterSeries()}})">${s.poster?`<img loading=lazy src="${escAttr(s.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(s.name)}</b><small>${s.source?`<span class=sourceBadge>${esc(s.source)}</span> `:''}${esc(s.year||'')} ${esc(s.rating||'')}</small></div></button>`).join('')}</div>`:''}
       ${!total?'<div class=card>No matching channels, movies or series were found.</div>':''}`;
   }catch(e){
     $('#globalSearchStatus').textContent='Search failed: '+friendlyError(e);
@@ -1148,4 +1152,15 @@ async function chooseMediaLibraries(id){
     const names=rows.map(x=>`${x.name} (${x.type||'library'})`).join('\n');
     alert(names||'No libraries returned. Library selection UI will be used by unified Movies/Series.');
   }catch(e){alert(friendlyError(e))}
+}
+
+async function playUnifiedItem(item){
+  try{
+    const parts=String(item.id||'').split(':');
+    if(parts.length<3)return false;
+    const source=parts[0],providerId=parts[1],itemId=parts.slice(2).join(':');
+    const r=await api(`/api/unified/${encodeURIComponent(source)}/${encodeURIComponent(providerId)}/${encodeURIComponent(itemId)}/play`);
+    await startMediaToken(r.playToken,item.name||'Media');
+    return true;
+  }catch(e){alert(friendlyError(e));return true}
 }

@@ -1,2 +1,2 @@
-# MyOnline TV v0.6.1 — Media Libraries
-Adds Plex and Jellyfin connection management in Admin, secure tokens/API keys, test connection and library discovery.
+# MyOnline TV v0.7.0 — Unified Media Center
+Milestone release combining IPTV, Plex and Jellyfin in one MyOnline TV experience.
