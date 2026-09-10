@@ -5,6 +5,18 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+Write-Host "[LOCAL BUILD PREFLIGHT] Checking .NET build when SDK is available..."
+$dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
+if ($dotnet) {
+    dotnet restore app/MyOnlineTV.Web.csproj
+    if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed. Release not published." }
+    dotnet build app/MyOnlineTV.Web.csproj -c Release --no-restore
+    if ($LASTEXITCODE -ne 0) { throw "dotnet build failed. Release not published." }
+} else {
+    Write-Warning ".NET SDK not found locally; GitHub Actions will perform the compile gate."
+}
+
 Set-Location $RepoPath
 
 if (-not (Test-Path "VERSION")) { throw "VERSION file was not found in repository root." }

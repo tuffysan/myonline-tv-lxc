@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.HttpOverrides;
 using System.Net;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -277,6 +276,13 @@ MediaLibraryConnection MediaConnection(MediaLibraryProvider provider)
     {
         return new MediaLibraryConnection("", "");
     }
+}
+
+string SafeHost(string? url)
+{
+    if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        return uri.IsDefaultPort ? uri.Host : $"{uri.Host}:{uri.Port}";
+    return "";
 }
 
 string PlexHeaders(string token) => token;
@@ -1176,10 +1182,19 @@ app.MapGet("/api/unified/series", async () =>
                     {
                         var rk=x.TryGetProperty("ratingKey",out var rkx)?rkx.GetString()??"":"";
                         var thumb=x.TryGetProperty("thumb",out var th)?th.GetString():null;
-                        result.Add(new UnifiedMediaItem("plex:"+lib.Id+":"+rk,"plex",lib.Id,"series",
-                            x.TryGetProperty("title",out var t)?t.GetString()??"":x.TryGetProperty("year",out var y)?y.ToString():null,
+                        result.Add(new UnifiedMediaItem(
+                            "plex:"+lib.Id+":"+rk,
+                            "plex",
+                            lib.Id,
+                            "series",
+                            x.TryGetProperty("title",out var t)?t.GetString()??"": "",
+                            x.TryGetProperty("year",out var y)?y.ToString():null,
                             x.TryGetProperty("rating",out var ra)?ra.ToString():null,
-                            string.IsNullOrWhiteSpace(thumb)?null:c.BaseUrl+thumb+"?X-Plex-Token="+Uri.EscapeDataString(c.Token),null,null,null,null));
+                            string.IsNullOrWhiteSpace(thumb)?null:c.BaseUrl+thumb+"?X-Plex-Token="+Uri.EscapeDataString(c.Token),
+                            null,
+                            null,
+                            null,
+                            null));
                     }
                 }
             }
