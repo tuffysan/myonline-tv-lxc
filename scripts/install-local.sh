@@ -126,7 +126,7 @@ for i in {1..60}; do pct exec "$CTID" -- true >/dev/null 2>&1 && break; sleep 2;
 pct exec "$CTID" -- true >/dev/null 2>&1 || { echo "Container did not become ready."; exit 1; }
 
 echo "[4/9] Installing OS dependencies..."
-pct exec "$CTID" -- bash -lc 'apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl wget gnupg nginx ffmpeg tar'
+pct exec "$CTID" -- bash -lc 'apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl wget gnupg nginx ffmpeg tar rclone'
 
 echo "[5/9] Installing Microsoft .NET packages..."
 pct exec "$CTID" -- bash -lc "

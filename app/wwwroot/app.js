@@ -78,7 +78,7 @@ function toggleMobileMore(){
     ['plex','◆','Plex'],
     ['jellyfin','◇','Jellyfin'],
     ['downloads','↓','Downloads'],
-    ['recordings','●','Recordings'],
+    ['recordings','●','DVR'],
     ['search','⌕','Search'],
     ['system','◉','System'],
     ['admin','🛡','Admin']
@@ -414,6 +414,7 @@ function renderFilter(){
       <div class=logoBox>${c.logo?`<img loading=lazy decoding=async src="${escAttr(c.logo)}" onerror="this.style.display='none'">`:''}</div>
       <div class=channelInfo><b>${esc(c.number?c.number+' · ':'')}${esc(channelName(c))}</b><small>${esc(c.group)}</small>${pg.now?`<small class=channelNow>${esc(pg.now.title)}</small>`:''}</div>
       <button class=round title="Play" onclick='playLive(${JSON.stringify(c.key)},${JSON.stringify(c.name)})'>▶</button>
+      <button class="round recordRound" title="Record Live TV" onclick='recordLiveNow(${JSON.stringify(c.key)},${JSON.stringify(channelName(c))})'>●</button>
       <button class=round title="Favourite" onclick="toggleFav('${escAttr(c.id)}')">${fav.has(c.id)?'★':'☆'}</button><button class=round title="Hide channel" onclick='hideChannel(${JSON.stringify(c.key)})'>×</button>
     </article>`}).join('');
   document.querySelectorAll('[data-live-index]').forEach(el=>el.onclick=e=>{
@@ -450,7 +451,7 @@ async function playLive(channelKey,name,forceTranscode=false){
   if(!wrap)return;
   const selected=channelByKey(channelKey)||{key:channelKey,name};liveCurrentChannel=selected;rememberLiveChannel(selected);
   wrap.innerHTML=`<div class="playerCard livePlayer"><video id=video controls autoplay playsinline></video>${liveOverlay(selected)}
-    <div class="liveControls"><button class=btn onclick="stepLiveChannel(-1)">← Previous</button><button class=btn onclick="stepLiveChannel(1)">Next →</button><button class=btn onclick="toggleLiveFullscreen()">⛶ Fullscreen</button></div>
+    <div class="liveControls"><button class=btn onclick="stepLiveChannel(-1)">← Previous</button><button class=btn onclick="stepLiveChannel(1)">Next →</button><button class="btn recordBtn" onclick='recordLiveNow(${JSON.stringify(channelKey)},${JSON.stringify(name)})'>● Record</button><button class=btn onclick="toggleLiveFullscreen()">⛶ Fullscreen</button></div>
     <div id=livePlaybackStatus class=livePlaybackStatus>Connecting to channel…</div><div class=nowPlaying>${esc(name)}</div></div>`;
   wrap.scrollIntoView({behavior:'smooth',block:'start'});
   try{
@@ -850,7 +851,7 @@ function timelineRowV319(c,progs,start,end,span){
     const a=Math.max(new Date(pr.start).getTime(),start.getTime()),b=Math.min(new Date(pr.stop).getTime(),end.getTime());if(b<=a)return '';
     const left=(a-start.getTime())/span*100,width=Math.max(.8,(b-a)/span*100),isNow=a<=Date.now()&&b>Date.now();
     const payload=encodeURIComponent(JSON.stringify(pr));
-    return `<button class="prog ${isNow?'currentProgram':''}" style="left:${left}%;width:${width}%" onclick='if(event.shiftKey){event.preventDefault();scheduleGuideRecording(${JSON.stringify(c.key)},${JSON.stringify(channelName(c))},decodeURIComponent("${payload}"));return}playLive(${JSON.stringify(c.key)},${JSON.stringify(channelName(c))})' title="Play ${escAttr(pr.title)} live · Shift+click to record"><b>${esc(pr.title)}</b><small>${new Date(pr.start).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</small></button>`;
+    return `<button class="prog ${isNow?'currentProgram':''}" style="left:${left}%;width:${width}%" onclick='showGuideProgramActions(${JSON.stringify(c.key)},${JSON.stringify(channelName(c))},decodeURIComponent("${payload}"))' title="Play or record ${escAttr(pr.title)}"><b>${esc(pr.title)}</b><small>${new Date(pr.start).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</small></button>`;
   }).join('');
   return `<div class=timelineRow><button class=timelineChannel onclick='playLive(${JSON.stringify(c.key)},${JSON.stringify(channelName(c))})'>${c.logo?`<img src="${escAttr(c.logo)}">`:''}<span>${esc(channelName(c))}</span><small>▶ Live</small></button><div class=programLane>${line}${blocks}</div></div>`;
 }
@@ -1041,15 +1042,33 @@ async function downloadEpisode(id,ext,name){
 }
 
 async function startMediaDownload(token,name){
-  try{await jpost('/api/downloads/media',{token,title:name});show('downloads')}catch(e){alert(e.message)}
+  const targets=await storageTargets();
+  const box=document.createElement('div');
+  box.id='downloadDestinationSheet';box.className='programActionSheet';
+  box.innerHTML=`<div class=programActionCard><button class=dialogClose onclick="$('#downloadDestinationSheet')?.remove()">×</button><span class=kicker>DOWNLOAD</span><h3>${esc(name)}</h3><p class=muted>Choose where to save this media.</p><div class=destinationList>
+    <button class="destinationCard deviceDestination" id=downloadDevice><b>↓ This device</b><small>Browser download to your phone, tablet or computer</small></button>
+    ${targets.map(t=>`<button class=destinationCard data-target="${escAttr(t.id)}"><b>${t.type==='rclone'?'☁':'▣'} ${esc(t.name)}</b><small>${esc(t.type==='rclone'?'Cloud / rclone':'NAS / mounted path')}</small></button>`).join('')}
+  </div>${!targets.length?'<p class=muted>No server-side Storage targets configured. Device download is still available.</p>':''}</div>`;
+  document.body.appendChild(box);
+
+  $('#downloadDevice').onclick=()=>{
+    box.remove();
+    window.location.href=`/api/downloads/device/${encodeURIComponent(token)}?title=${encodeURIComponent(name)}`;
+  };
+  box.querySelectorAll('[data-target]').forEach(b=>b.onclick=async()=>{
+    const targetId=b.dataset.target;box.remove();
+    try{await jpost('/api/downloads/media',{token,title:name,storageTargetId:targetId});show('downloads')}catch(e){alert(friendlyError(e))}
+  });
 }
+
 async function downloadView(){
-  const jobs=await api('/api/downloads');
-  content.innerHTML=`<div class=hero><h2>Downloads</h2><p class=muted>Movies and episodes can be saved on the MyOnline TV server. Non-encrypted HLS is handled by FFmpeg. Protected/DRM streams are not bypassed.</p><button class=btn id=refreshDl>Refresh</button></div>
-  <div class=downloadList>${jobs.length?jobs.map(j=>`<article class=downloadCard><div><h3>${esc(j.title)}</h3><span class="status ${j.status==='Failed'?'bad':''}">${esc(j.status)}</span></div><div class=progress><div style="width:${j.progress<0?35:Math.max(0,j.progress)}%"></div></div><small>${j.progress<0?'Working…':Math.round(j.progress)+'%'} · ${esc(j.fileName||'')}</small>${j.error?`<p class=danger>${esc(j.error)}</p>`:''}<div class=row>${j.completed?`<a class=btn href="/api/downloads/${j.id}/file">Save to device</a>`:''}<button class=btn onclick="deleteDownload('${j.id}')">Remove</button></div></article>`).join(''):'<div class=card>No downloads yet. Open Movies or Series and click ↓.</div>'}</div>`;
+  const [jobs,targets]=await Promise.all([api('/api/downloads'),storageTargets()]);
+  content.innerHTML=`<div class=hero><h2>Downloads</h2><p class=muted>Downloads are saved to your device or to a configured Storage target. The LXC is only used for temporary transfer files when a cloud/rclone target requires it.</p><div class=row><button class=btn id=refreshDl>Refresh</button>${authState.role==='Admin'?'<button class=btn onclick="show(\'admin\')">Storage settings</button>':''}</div></div>
+  <div class=storageSummary>${targets.length?targets.map(t=>`<span class=storageChip>${t.type==='rclone'?'☁':'▣'} ${esc(t.name)}${t.defaultDownload?' · default':''}</span>`).join(''):'<span class=muted>No server-side Storage targets configured.</span>'}</div>
+  <div class=downloadList>${jobs.length?jobs.map(j=>`<article class=downloadCard><div><h3>${esc(j.title)}</h3><span class="status ${j.status==='Failed'?'bad':''}">${esc(j.status)}</span></div><div class=progress><div style="width:${j.progress<0?35:Math.max(0,j.progress)}%"></div></div><small>${j.progress<0?'Working…':Math.round(j.progress)+'%'} · ${esc(j.storageTargetName||'')} ${j.fileName?'· '+esc(j.fileName):''}</small>${j.error?`<p class=danger>${esc(j.error)}</p>`:''}<div class=row>${j.completed&&j.storageType==='path'?`<a class=btn href="/api/downloads/${j.id}/file">Download copy to device</a>`:''}<button class=btn onclick="deleteDownload('${j.id}')">Remove</button></div></article>`).join(''):'<div class=card>No server-side downloads. Open Movies or Series and click ↓ to choose a destination.</div>'}</div>`;
   $('#refreshDl').onclick=downloadView;
 }
-async function deleteDownload(id){await api('/api/downloads/'+id,{method:'DELETE'});downloadView()}
+async function deleteDownload(id){if(!confirm('Remove this download and its stored file?'))return;await api('/api/downloads/'+id,{method:'DELETE'});downloadView()}
 
 
 async function systemView(){
@@ -1095,7 +1114,7 @@ let editingProviderId=null, editingUserId=null;
 async function adminView(){
   if(authState.role!=='Admin'){content.innerHTML='<div class=card>Administrator access is required.</div>';return}
   providers=await api('/api/providers');profiles=await api('/api/profiles');
-  const users=await api('/api/admin/users');const accessCfg=await api('/api/admin/profile-access');mediaLibraries=await api('/api/media-libraries');renderMediaLibraryNav();
+  const users=await api('/api/admin/users');const accessCfg=await api('/api/admin/profile-access');mediaLibraries=await api('/api/media-libraries');const adminStorage=await api('/api/admin/storage-targets');renderMediaLibraryNav();
 
   content.innerHTML=`
   <div class=hero><h2>Administration</h2><p class=muted>Manage users, IPTV providers, Plex/Jellyfin libraries and viewer profiles.</p></div>
@@ -1124,6 +1143,23 @@ async function adminView(){
     <div class=row><button class=btn id=mlsave>Add media library</button><button class=btn id=mlcancel disabled>Cancel edit</button></div>
   </div>
   <div class=grid>${mediaLibraries.map(x=>`<div class=card><h3>${esc(x.name)}</h3><p>${esc(x.type)} · ${esc(x.host||'')}</p><div class=row><button class=btn onclick="editMediaLibrary('${x.id}')">Edit</button><button class=btn onclick="testMediaLibrary('${x.id}')">Test</button><button class=btn onclick="chooseMediaLibraries('${x.id}')">Libraries</button><button class=btn onclick="removeMediaLibrary('${x.id}')">Remove</button></div><div id="mlstat-${x.id}" class=muted></div></div>`).join('')}</div>
+
+  <h2>Storage</h2>
+  <div class=card>
+    <p class=muted>Use a mounted NAS/local path, or an rclone remote for cloud storage. DVR and server-side downloads never need to remain permanently inside the LXC.</p>
+    <input id=stid type=hidden>
+    <div class=formGrid>
+      <div class=field><label>Name</label><input id=stname placeholder="NAS, OneDrive, Google Drive..."></div>
+      <div class=field><label>Type</label><select id=sttype><option value=path>Mounted path / NAS</option><option value=rclone>Cloud via rclone</option></select></div>
+      <div class=field><label>Destination</label><input id=stdest placeholder="/mnt/media or myremote:MyOnlineTV"></div>
+      <div class=field><label>Status</label><label class=checkline><input id=stenabled type=checkbox checked> Enabled</label></div>
+      <div class=field><label><input id=stdefaultdvr type=checkbox> Default for DVR</label></div>
+      <div class=field><label><input id=stdefaultdownload type=checkbox> Default for Downloads</label></div>
+    </div>
+    <div class=row><button class=btn id=stsave>Add storage target</button><button class=btn id=stcancel disabled>Cancel edit</button></div>
+    <p class=muted>For SMB/NFS, mount the share on the LXC/host and use that path. For cloud, configure the rclone remote in the LXC and use e.g. <code>onedrive:MyOnlineTV</code>.</p>
+  </div>
+  <div class=grid>${adminStorage.map(s=>`<div class=card><h3>${esc(s.name)}</h3><p>${esc(s.type)} · ${esc(s.destination)}</p><p>${s.defaultDvr?'● DVR default ':''}${s.defaultDownload?'↓ Download default':''}</p><div class=row><button class=btn onclick='editStorageTarget(${JSON.stringify(s)})'>Edit</button><button class=btn onclick="testStorageTarget('${escAttr(s.id)}')">Test</button><button class=btn onclick="removeStorageTarget('${escAttr(s.id)}')">Remove</button></div><div id="ststat-${s.id}" class=muted></div></div>`).join('')}</div>
 
   <h2>IPTV providers</h2>
   <div class=card>
@@ -1171,11 +1207,31 @@ async function adminView(){
   $('#manageChannels').onclick=manageChannels;
   $('#addProfile').onclick=async()=>{try{await jpost('/api/profiles',{id:null,name:$('#profileName').value,isKids:$('#profileKids').checked,icon:$('#profileIcon').value});profiles=await api('/api/profiles');adminView()}catch(e){alert(friendlyError(e))}};
 
+  $('#stsave').onclick=saveStorageTarget;$('#stcancel').onclick=()=>adminView();
   $('#mlsave').onclick=saveMediaLibrary;$('#mlcancel').onclick=()=>{editingMediaLibraryId=null;adminView()};
   $('#saveUser').onclick=saveAdminUser;
   $('#cancelUser').onclick=()=>{editingUserId=null;adminView()};
   $('#savep').onclick=saveProvider;
   $('#cancelProvider').onclick=()=>{editingProviderId=null;adminView()};
+}
+
+function editStorageTarget(s){
+  $('#stid').value=s.id||'';$('#stname').value=s.name||'';$('#sttype').value=s.type||'path';$('#stdest').value=s.destination||'';
+  $('#stdefaultdvr').checked=!!s.defaultDvr;$('#stdefaultdownload').checked=!!s.defaultDownload;$('#stenabled').checked=s.enabled!==false;
+  $('#stsave').textContent='Save storage target';$('#stcancel').disabled=false;$('#stname').scrollIntoView({behavior:'smooth',block:'center'});
+}
+async function saveStorageTarget(){
+  const body={id:$('#stid').value||'',name:$('#stname').value,type:$('#sttype').value,destination:$('#stdest').value,
+    defaultDvr:$('#stdefaultdvr').checked,defaultDownload:$('#stdefaultdownload').checked,enabled:$('#stenabled').checked};
+  try{await jpost('/api/admin/storage-targets',body);adminView()}catch(e){alert(friendlyError(e))}
+}
+async function testStorageTarget(id){
+  const box=$('#ststat-'+id);if(box)box.textContent='Testing…';
+  try{const r=await jpost('/api/admin/storage-targets/'+encodeURIComponent(id)+'/test',{});if(box)box.textContent=r.message||'OK'}catch(e){if(box)box.textContent=friendlyError(e)}
+}
+async function removeStorageTarget(id){
+  if(!confirm('Remove this storage target? Existing files are not deleted.'))return;
+  try{await api('/api/admin/storage-targets/'+encodeURIComponent(id),{method:'DELETE'});adminView()}catch(e){alert(friendlyError(e))}
 }
 
 async function editUser(id){
@@ -1644,16 +1700,53 @@ function toLocalInputValue(d){
   return `${x.getFullYear()}-${pad(x.getMonth()+1)}-${pad(x.getDate())}T${pad(x.getHours())}:${pad(x.getMinutes())}`;
 }
 
+async function storageTargets(){
+  try{return await api('/api/storage-targets')}catch{return []}
+}
+
+async function recordLiveNow(channelKey,channelName){
+  const targets=await storageTargets();
+  const dvrTarget=targets.find(x=>x.defaultDvr)||targets[0];
+  if(!dvrTarget){alert('No DVR storage is configured. Open Admin → Storage first.');return}
+  const minsRaw=prompt('Record Live TV for how many minutes?','60');
+  if(minsRaw===null)return;
+  const minutes=Math.max(1,Math.min(1440,Number(minsRaw)||60));
+  const start=new Date(),end=new Date(start.getTime()+minutes*60000);
+  try{
+    await jpost('/api/recordings',{
+      providerId:currentProvider,channelKey,channelName,title:channelName,
+      start:start.toISOString(),end:end.toISOString(),storageTargetId:dvrTarget.id
+    });
+    alert(`Recording started/scheduled to ${dvrTarget.name}.`);
+  }catch(e){alert(friendlyError(e))}
+}
+
+function closeProgramActions(){$('#programActionSheet')?.remove()}
+function showGuideProgramActions(channelKey,channelName,programJson){
+  closeProgramActions();
+  let pr;try{pr=JSON.parse(programJson)}catch{return}
+  const box=document.createElement('div');
+  box.id='programActionSheet';box.className='programActionSheet';
+  box.innerHTML=`<div class=programActionCard><button class=dialogClose onclick="closeProgramActions()">×</button><span class=kicker>TV GUIDE</span><h3>${esc(pr.title||channelName)}</h3><p>${esc(channelName)} · ${new Date(pr.start).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}–${new Date(pr.stop).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</p><div class=row><button class=btn id=guidePlay>▶ Play channel</button><button class="btn recordBtn" id=guideRecord>● Record programme</button></div></div>`;
+  document.body.appendChild(box);
+  $('#guidePlay').onclick=()=>{closeProgramActions();playLive(channelKey,channelName)};
+  $('#guideRecord').onclick=()=>{closeProgramActions();scheduleGuideRecording(channelKey,channelName,programJson)};
+}
+
 async function scheduleGuideRecording(channelKey,channelName,programJson){
   try{
     const pr=JSON.parse(programJson);
+    const targets=await storageTargets();
+    const dvrTarget=targets.find(x=>x.defaultDvr)||targets[0];
+    if(!dvrTarget){alert('No DVR storage is configured. Open Admin → Storage first.');return}
     await jpost('/api/recordings',{
       providerId:currentProvider,
       channelKey,
       channelName,
       title:pr.title||channelName,
       start:pr.start,
-      end:pr.stop
+      end:pr.stop,
+      storageTargetId:dvrTarget.id
     });
     alert('Recording scheduled: '+(pr.title||channelName));
   }catch(e){alert(friendlyError(e))}
@@ -1661,12 +1754,14 @@ async function scheduleGuideRecording(channelKey,channelName,programJson){
 
 async function recordingsView(){
   if(!await ensureProvider()){content.innerHTML=noProvider();return}
-  const rows=await api('/api/recordings');
+  const [rows,targets]=await Promise.all([api('/api/recordings'),storageTargets()]);
   const ch=await api('/api/channels/'+currentProvider);
   const now=new Date(),later=new Date(now.getTime()+60*60*1000);
-  content.innerHTML=`<div class=hero><h2>Recordings & DVR</h2><p class=muted>Schedule Live TV recordings on the MyOnline TV server. Tip: Shift+click a programme in Guide to schedule it directly.</p></div>
+  content.innerHTML=`<div class=hero><h2>DVR · Live TV recordings</h2><p class=muted>Record Live TV now or schedule programmes from Guide. Recordings are written to your configured Storage target, not kept permanently in the LXC.</p><div class=row><button class=btn onclick="show('live')">● Record Live TV</button><button class=btn onclick="show('guide')">▤ Schedule from Guide</button>${authState.role==='Admin'?'<button class=btn onclick="show(\'admin\')">Storage settings</button>':''}</div></div>
+  ${!targets.length?'<div class="card warningCard"><b>No DVR storage configured.</b><p>Add a Storage target in Admin → Storage before recording.</p></div>':''}
   <div class=card><h3>New recording</h3><div class=recordForm>
     ${providerSelect()}
+    <select id=recStorage>${targets.map(t=>`<option value="${escAttr(t.id)}" ${t.defaultDvr?'selected':''}>${esc(t.name)}${t.defaultDvr?' · DVR default':''}</option>`).join('')}</select>
     <select id=recChannel>${ch.map(x=>`<option value="${escAttr(x.key)}">${esc(x.name)}</option>`).join('')}</select>
     <input id=recTitle placeholder="Recording title">
     <label>Start <input id=recStart type=datetime-local value="${toLocalInputValue(now)}"></label>
@@ -1684,7 +1779,7 @@ async function recordingsView(){
       await jpost('/api/recordings',{
         providerId:currentProvider,channelKey:c.value,channelName:opt?.textContent||'Channel',
         title:$('#recTitle').value||opt?.textContent||'Recording',
-        start:start.toISOString(),end:end.toISOString()
+        start:start.toISOString(),end:end.toISOString(),storageTargetId:$('#recStorage')?.value||null
       });
       recordingsView();
     }catch(e){alert(friendlyError(e))}
@@ -1693,14 +1788,14 @@ async function recordingsView(){
 
 function recordingCard(r){
   const duration=Math.max(0,Math.round((new Date(r.end)-new Date(r.start))/60000));
-  return `<article class=recordingCard><div><span class="recordDot ${r.status==='Recording'?'active':''}">●</span><h3>${esc(r.title)}</h3><p>${esc(r.channelName)} · ${new Date(r.start).toLocaleString()} · ${duration} min</p>${r.error?`<p class=danger>${esc(r.error)}</p>`:''}</div>
+  return `<article class=recordingCard><div><span class="recordDot ${r.status==='Recording'?'active':''}">●</span><h3>${esc(r.title)}</h3><p>${esc(r.channelName)} · ${new Date(r.start).toLocaleString()} · ${duration} min</p><small class=muted>${r.storageTargetName?'Saved to '+esc(r.storageTargetName):'Storage target selected when recording starts'}</small>${r.error?`<p class=danger>${esc(r.error)}</p>`:''}</div>
   <div class=row><span class="status ${r.status==='Failed'?'bad':''}">${esc(r.status)}</span>
-  ${r.completed?`<a class=btn href="/api/recordings/${r.id}/file">Play / save</a>`:''}
+  ${r.playable?`<a class=btn href="/api/recordings/${r.id}/file">Play / save</a>`:r.completed?'<span class=muted>Stored externally</span>':''}
   ${r.status==='Scheduled'||r.status==='Recording'?`<button class=btn onclick="cancelRecording('${r.id}')">Cancel</button>`:''}
   <button class=btn onclick="deleteRecording('${r.id}')">Remove</button></div></article>`;
 }
 async function cancelRecording(id){await jpost('/api/recordings/'+id+'/cancel',{});recordingsView()}
-async function deleteRecording(id){if(!confirm('Remove recording and file?'))return;await api('/api/recordings/'+id,{method:'DELETE'});recordingsView()}
+async function deleteRecording(id){if(!confirm('Remove recording and its stored file?'))return;await api('/api/recordings/'+id,{method:'DELETE'});recordingsView()}
 
 async function searchView(){
   const initial=window.__pendingGlobalSearch||'';window.__pendingGlobalSearch='';

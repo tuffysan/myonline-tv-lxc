@@ -73,6 +73,7 @@ var profileAccessFile = Path.Combine(dataDir, "profile-access.json");
 var profilePoliciesFile = Path.Combine(dataDir, "profile-policies.json");
 var mediaLibrariesFile = Path.Combine(dataDir, "media-libraries.json");
 var recordingsFile = Path.Combine(dataDir, "recordings.json");
+var storageTargetsFile = Path.Combine(dataDir, "storage-targets.json");
 var recordingsDir = Path.Combine(dataDir, "recordings");
 var secretKeyFile = Path.Combine(dataDir, "secrets.key");
 var downloadsDir = Path.Combine(dataDir, "downloads");
@@ -90,7 +91,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/1.0.0");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/1.1.0");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
@@ -352,6 +353,55 @@ ChannelPreferences PreferencesFor(string providerId)
 }
 
 
+List<StorageTarget> LoadStorageTargets() => Load<List<StorageTarget>>(storageTargetsFile) ?? new();
+
+StorageTarget? FindStorageTarget(string? id, bool dvrDefault = false, bool downloadDefault = false)
+{
+    var rows = LoadStorageTargets().Where(x => x.Enabled).ToList();
+    if (!string.IsNullOrWhiteSpace(id))
+        return rows.FirstOrDefault(x => x.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+    if (dvrDefault) return rows.FirstOrDefault(x => x.DefaultDvr);
+    if (downloadDefault) return rows.FirstOrDefault(x => x.DefaultDownload);
+    return rows.FirstOrDefault();
+}
+
+string StorageFileName(string title, string extension)
+{
+    var safe = SafeRecordingFileName(title);
+    var ext = extension.StartsWith('.') ? extension : "." + extension;
+    return $"{DateTimeOffset.Now:yyyyMMdd-HHmmss}-{safe}{ext}";
+}
+
+string PathTargetFile(StorageTarget target, string fileName)
+{
+    var root = target.Destination.Trim();
+    if (string.IsNullOrWhiteSpace(root)) throw new InvalidOperationException("Storage destination is empty.");
+    Directory.CreateDirectory(root);
+    return Path.Combine(root, fileName);
+}
+
+async Task UploadWithRclone(string localPath, StorageTarget target, string fileName)
+{
+    var rclone = FindExecutable("rclone") ?? throw new InvalidOperationException("rclone is not installed.");
+    var destination = target.Destination.TrimEnd('/') + "/" + fileName;
+    var psi = new ProcessStartInfo
+    {
+        FileName = rclone,
+        UseShellExecute = false,
+        RedirectStandardError = true,
+        CreateNoWindow = true
+    };
+    psi.ArgumentList.Add("copyto");
+    psi.ArgumentList.Add(localPath);
+    psi.ArgumentList.Add(destination);
+    using var process = Process.Start(psi) ?? throw new InvalidOperationException("Could not start rclone.");
+    var errorTask = process.StandardError.ReadToEndAsync();
+    await process.WaitForExitAsync();
+    var error = await errorTask;
+    if (process.ExitCode != 0)
+        throw new InvalidOperationException("rclone failed: " + (error.Length > 1200 ? error[^1200..] : error));
+}
+
 List<RecordingJob> LoadRecordingJobs() => Load<List<RecordingJob>>(recordingsFile) ?? new();
 
 void SaveRecordingJobs(List<RecordingJob> jobs) => Save(recordingsFile, jobs);
@@ -374,10 +424,15 @@ async Task StartScheduledRecording(RecordingJob job)
     if (channel is null) throw new InvalidOperationException("Channel not found.");
     if (!Uri.TryCreate(channel.SourceUrl, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
         throw new InvalidOperationException("Invalid channel stream URL.");
+
+    var target = FindStorageTarget(job.StorageTargetId, dvrDefault: true)
+        ?? throw new InvalidOperationException("No DVR storage target is configured. Open Admin → Storage.");
     var ffmpeg = FindExecutable("ffmpeg") ?? throw new InvalidOperationException("FFmpeg is not installed.");
 
     var fileName = $"{job.Start.LocalDateTime:yyyyMMdd-HHmm}-{SafeRecordingFileName(job.Title)}.ts";
-    var filePath = Path.Combine(recordingsDir, fileName);
+    var isPath = target.Type.Equals("path", StringComparison.OrdinalIgnoreCase);
+    var tempPath = Path.Combine(recordingsDir, $"{job.Id}-{fileName}");
+    var filePath = isPath ? PathTargetFile(target, fileName) : tempPath;
     var duration = Math.Max(1, (int)Math.Ceiling((job.End - DateTimeOffset.Now).TotalSeconds));
 
     var psi = new ProcessStartInfo
@@ -385,13 +440,13 @@ async Task StartScheduledRecording(RecordingJob job)
         FileName = ffmpeg,
         UseShellExecute = false,
         RedirectStandardError = true,
-        RedirectStandardOutput = true,
+        RedirectStandardOutput = false,
         CreateNoWindow = true
     };
     foreach (var a in new[] {
         "-hide_banner","-loglevel","warning","-nostdin","-rw_timeout","15000000",
         "-i",channel.SourceUrl,"-map","0:v:0?","-map","0:a:0?","-t",duration.ToString(),
-        "-c","copy","-f","mpegts",filePath
+        "-c","copy","-f","mpegts","-y",filePath
     }) psi.ArgumentList.Add(a);
 
     var process = Process.Start(psi) ?? throw new InvalidOperationException("Could not start FFmpeg.");
@@ -401,7 +456,11 @@ async Task StartScheduledRecording(RecordingJob job)
     var idx = jobs.FindIndex(x => x.Id == job.Id);
     if (idx >= 0)
     {
-        jobs[idx] = jobs[idx] with { Status = "Recording", FileName = fileName, Error = null };
+        jobs[idx] = jobs[idx] with
+        {
+            Status = "Recording", FileName = fileName, StorageTargetId = target.Id,
+            StorageTargetName = target.Name, StoredPath = isPath ? filePath : null, Error = null
+        };
         SaveRecordingJobs(jobs);
     }
 
@@ -409,19 +468,50 @@ async Task StartScheduledRecording(RecordingJob job)
     {
         try
         {
+            var errorTask = process.StandardError.ReadToEndAsync();
             await process.WaitForExitAsync();
+            var ffError = await errorTask;
             var rows = LoadRecordingJobs();
             var i = rows.FindIndex(x => x.Id == job.Id);
             if (i >= 0)
             {
-                var status = process.ExitCode == 0 ? "Completed" : "Failed";
-                rows[i] = rows[i] with { Status = status, Error = process.ExitCode == 0 ? null : $"FFmpeg exited with code {process.ExitCode}." };
+                if (process.ExitCode == 0)
+                {
+                    if (target.Type.Equals("rclone", StringComparison.OrdinalIgnoreCase))
+                    {
+                        rows[i] = rows[i] with { Status = "Uploading" };
+                        SaveRecordingJobs(rows);
+                        await UploadWithRclone(tempPath, target, fileName);
+                        try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
+                        rows = LoadRecordingJobs();
+                        i = rows.FindIndex(x => x.Id == job.Id);
+                        if (i >= 0)
+                            rows[i] = rows[i] with { Status = "Completed", StoredPath = target.Destination.TrimEnd('/') + "/" + fileName, Error = null };
+                    }
+                    else rows[i] = rows[i] with { Status = "Completed", Error = null };
+                }
+                else
+                {
+                    rows[i] = rows[i] with
+                    {
+                        Status = "Failed",
+                        Error = $"FFmpeg exited with code {process.ExitCode}. " + (ffError.Length > 600 ? ffError[^600..] : ffError)
+                    };
+                }
                 SaveRecordingJobs(rows);
             }
         }
         catch (Exception ex)
         {
+            var rows = LoadRecordingJobs();
+            var i = rows.FindIndex(x => x.Id == job.Id);
+            if (i >= 0)
+            {
+                rows[i] = rows[i] with { Status = "Failed", Error = ex.GetBaseException().Message };
+                SaveRecordingJobs(rows);
+            }
             RecordError("recording:" + job.Id, ex);
+            try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
         }
         finally
         {
@@ -563,7 +653,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "1.0.0",
+    version = "1.1.0",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -601,14 +691,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = AuthConfigured();
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "1.0.0", checks })
-        : Results.Json(new { status = "not-ready", version = "1.0.0", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "1.1.0", checks })
+        : Results.Json(new { status = "not-ready", version = "1.1.0", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "1.0.0",
+    version = "1.1.0",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = AuthConfigured(),
@@ -1709,23 +1799,138 @@ app.MapGet("/api/downloads", () =>
 
 app.MapPost("/api/downloads/media", (MediaDownloadRequest req) =>
 {
-    if (!proxyTokens.TryGetValue(req.Token, out var target) || target.Kind is not ("download" or "media"))
+    if (!proxyTokens.TryGetValue(req.Token, out var source) || source.Kind is not ("download" or "media"))
         return Results.BadRequest("The media token has expired. Reload the movie or episode list and try again.");
+
+    var storage = FindStorageTarget(req.StorageTargetId, downloadDefault: true);
+    if (storage is null) return Results.BadRequest("No download storage target is configured.");
 
     var id = Guid.NewGuid().ToString("N");
     var title = SafeName(string.IsNullOrWhiteSpace(req.Title) ? "video" : req.Title);
-    var ext = SafeExt(new Uri(target.Url).AbsolutePath);
-    var path = Path.Combine(downloadsDir, $"{id}-{title}{ext}");
-    var job = new DownloadJob(id, title, target.Url, path, "Queued", 0, null, DateTimeOffset.UtcNow);
+    var ext = SafeExt(new Uri(source.Url).AbsolutePath);
+    var finalName = StorageFileName(title, ext);
+    var path = storage.Type.Equals("path", StringComparison.OrdinalIgnoreCase)
+        ? PathTargetFile(storage, finalName)
+        : Path.Combine(downloadsDir, $"{id}-{finalName}");
+
+    var job = new DownloadJob(id, title, source.Url, path, "Queued", 0, null, DateTimeOffset.UtcNow,
+        storage.Id, storage.Name, storage.Type, storage.Destination);
     downloads[id] = job;
-    _ = Task.Run(() => RunDownload(job));
+    _ = Task.Run(async () =>
+    {
+        await RunDownload(job);
+        if (storage.Type.Equals("rclone", StringComparison.OrdinalIgnoreCase) &&
+            downloads.TryGetValue(job.Id, out var completed) && completed.Status == "Completed" && File.Exists(completed.Path))
+        {
+            try
+            {
+                downloads[job.Id] = completed with { Status = "Uploading", Progress = -1 };
+                var uploadName = Path.GetFileName(completed.Path);
+                if (uploadName.StartsWith(job.Id + "-", StringComparison.OrdinalIgnoreCase))
+                    uploadName = uploadName[(job.Id.Length + 1)..];
+                await UploadWithRclone(completed.Path, storage, uploadName);
+                try { File.Delete(completed.Path); } catch { }
+                downloads[job.Id] = downloads[job.Id] with { Status = "Completed", Progress = 100 };
+            }
+            catch (Exception ex)
+            {
+                downloads[job.Id] = downloads[job.Id] with { Status = "Failed", Error = ex.GetBaseException().Message };
+            }
+        }
+    });
     return Results.Accepted($"/api/downloads/{id}", job.Safe());
 }).RequireAuthorization();
 
-app.MapDelete("/api/downloads/{id}", (string id) =>
+app.MapGet("/api/downloads/device/{token}", async (string token, string? title, HttpContext ctx) =>
+{
+    if (!proxyTokens.TryGetValue(token, out var source) || source.Kind is not ("download" or "media"))
+    {
+        ctx.Response.StatusCode = 400;
+        await ctx.Response.WriteAsync("The download token has expired.");
+        return;
+    }
+    if (!Uri.TryCreate(source.Url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
+    {
+        ctx.Response.StatusCode = 400;
+        return;
+    }
+
+    var safeTitle = SafeName(string.IsNullOrWhiteSpace(title) ? "video" : title);
+    var isHls = uri.AbsolutePath.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase);
+    if (!isHls)
+    {
+        using var response = await http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, ctx.RequestAborted);
+        if (!response.IsSuccessStatusCode) { ctx.Response.StatusCode = (int)response.StatusCode; return; }
+        var ext = SafeExt(uri.AbsolutePath);
+        ctx.Response.ContentType = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
+        ctx.Response.Headers["Content-Disposition"] = $"attachment; filename=\"{safeTitle}{ext}\"";
+        if (response.Content.Headers.ContentLength is long len) ctx.Response.ContentLength = len;
+        await using var stream = await response.Content.ReadAsStreamAsync(ctx.RequestAborted);
+        await stream.CopyToAsync(ctx.Response.Body, ctx.RequestAborted);
+        return;
+    }
+
+    var manifest = await http.GetStringAsync(uri, ctx.RequestAborted);
+    if (EncryptedHls(manifest))
+    {
+        ctx.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
+        await ctx.Response.WriteAsync("Encrypted/protected HLS download is not supported.");
+        return;
+    }
+
+    var ffmpeg = FindExecutable("ffmpeg");
+    if (ffmpeg is null) { ctx.Response.StatusCode = 503; await ctx.Response.WriteAsync("FFmpeg is not installed."); return; }
+    ctx.Response.ContentType = "video/x-matroska";
+    ctx.Response.Headers["Content-Disposition"] = $"attachment; filename=\"{safeTitle}.mkv\"";
+
+    var psi = new ProcessStartInfo
+    {
+        FileName = ffmpeg, UseShellExecute = false, RedirectStandardOutput = true,
+        RedirectStandardError = true, CreateNoWindow = true
+    };
+    foreach (var a in new[] { "-hide_banner","-loglevel","error","-nostdin","-i",source.Url,"-map","0","-c","copy","-f","matroska","pipe:1" })
+        psi.ArgumentList.Add(a);
+    using var process = Process.Start(psi) ?? throw new InvalidOperationException("Could not start FFmpeg.");
+    var stderrTask = process.StandardError.ReadToEndAsync();
+    try
+    {
+        await process.StandardOutput.BaseStream.CopyToAsync(ctx.Response.Body, ctx.RequestAborted);
+        await process.WaitForExitAsync(ctx.RequestAborted);
+    }
+    catch (OperationCanceledException)
+    {
+        try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+    }
+    _ = await stderrTask;
+}).RequireAuthorization();
+
+app.MapDelete("/api/downloads/{id}", async (string id) =>
 {
     if (!downloads.TryRemove(id, out var job)) return Results.NotFound();
-    try { if (File.Exists(job.Path)) File.Delete(job.Path); } catch { }
+    if (job.StorageType?.Equals("rclone", StringComparison.OrdinalIgnoreCase) == true && job.Status == "Completed")
+    {
+        try
+        {
+            var rclone = FindExecutable("rclone");
+            if (rclone is not null)
+            {
+                var fileName = Path.GetFileName(job.Path);
+                if (fileName.StartsWith(job.Id + "-", StringComparison.OrdinalIgnoreCase))
+                    fileName = fileName[(job.Id.Length + 1)..];
+                var remotePath = (job.StorageDestination ?? "").TrimEnd('/') + "/" + fileName;
+                var psi = new ProcessStartInfo { FileName = rclone, UseShellExecute = false, RedirectStandardError = true, CreateNoWindow = true };
+                psi.ArgumentList.Add("deletefile");
+                psi.ArgumentList.Add(remotePath);
+                using var rp = Process.Start(psi);
+                if (rp is not null) await rp.WaitForExitAsync();
+            }
+        }
+        catch { }
+    }
+    else
+    {
+        try { if (File.Exists(job.Path)) File.Delete(job.Path); } catch { }
+    }
     return Results.NoContent();
 }).RequireAuthorization();
 
@@ -2093,7 +2298,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "1.0.0",
+        version = "1.1.0",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -2265,6 +2470,84 @@ app.MapPost("/api/system/recover", async () =>
     return Results.Ok(new { recovered = true, cleaned = removed, activeLiveStreams = liveSessions.Count });
 }).RequireAuthorization(p => p.RequireRole("Admin"));
 
+app.MapGet("/api/storage-targets", () =>
+{
+    var rows = LoadStorageTargets().Where(x => x.Enabled).Select(x => new
+    {
+        x.Id, x.Name, x.Type, x.Destination, x.DefaultDvr, x.DefaultDownload, x.Enabled
+    });
+    return Results.Ok(rows);
+}).RequireAuthorization();
+
+app.MapGet("/api/admin/storage-targets", (HttpContext ctx) =>
+{
+    if (!ctx.User.IsInRole("Admin")) return Results.Forbid();
+    return Results.Ok(LoadStorageTargets());
+}).RequireAuthorization();
+
+app.MapPost("/api/admin/storage-targets", (StorageTargetInput input, HttpContext ctx) =>
+{
+    if (!ctx.User.IsInRole("Admin")) return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(input.Name) || string.IsNullOrWhiteSpace(input.Destination))
+        return Results.BadRequest("Name and destination are required.");
+    var type = (input.Type ?? "path").Trim().ToLowerInvariant();
+    if (type is not ("path" or "rclone"))
+        return Results.BadRequest("Storage type must be 'path' or 'rclone'.");
+
+    var rows = LoadStorageTargets();
+    var id = string.IsNullOrWhiteSpace(input.Id) ? Guid.NewGuid().ToString("N") : input.Id.Trim();
+    rows.RemoveAll(x => x.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+
+    if (input.DefaultDvr) rows = rows.Select(x => x with { DefaultDvr = false }).ToList();
+    if (input.DefaultDownload) rows = rows.Select(x => x with { DefaultDownload = false }).ToList();
+
+    rows.Add(new StorageTarget(id, input.Name.Trim(), type, input.Destination.Trim(),
+        input.DefaultDvr, input.DefaultDownload, input.Enabled));
+    Save(storageTargetsFile, rows);
+    return Results.Ok(rows);
+}).RequireAuthorization();
+
+app.MapDelete("/api/admin/storage-targets/{id}", (string id, HttpContext ctx) =>
+{
+    if (!ctx.User.IsInRole("Admin")) return Results.Forbid();
+    var rows = LoadStorageTargets();
+    var removed = rows.RemoveAll(x => x.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+    if (removed == 0) return Results.NotFound();
+    Save(storageTargetsFile, rows);
+    return Results.NoContent();
+}).RequireAuthorization();
+
+app.MapPost("/api/admin/storage-targets/{id}/test", async (string id, HttpContext ctx) =>
+{
+    if (!ctx.User.IsInRole("Admin")) return Results.Forbid();
+    var target = LoadStorageTargets().FirstOrDefault(x => x.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+    if (target is null) return Results.NotFound();
+    try
+    {
+        if (target.Type.Equals("path", StringComparison.OrdinalIgnoreCase))
+        {
+            Directory.CreateDirectory(target.Destination);
+            var probe = Path.Combine(target.Destination, $".myonlinetv-{Guid.NewGuid():N}.tmp");
+            await File.WriteAllTextAsync(probe, "MyOnline TV storage test");
+            File.Delete(probe);
+        }
+        else
+        {
+            var rclone = FindExecutable("rclone") ?? throw new InvalidOperationException("rclone is not installed.");
+            var psi = new ProcessStartInfo { FileName = rclone, UseShellExecute = false, RedirectStandardError = true, CreateNoWindow = true };
+            psi.ArgumentList.Add("lsd");
+            psi.ArgumentList.Add(target.Destination);
+            using var process = Process.Start(psi) ?? throw new InvalidOperationException("Could not start rclone.");
+            var errTask = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+            var err = await errTask;
+            if (process.ExitCode != 0) throw new InvalidOperationException(err);
+        }
+        return Results.Ok(new { ok = true, message = "Storage target is writable/reachable." });
+    }
+    catch (Exception ex) { return Results.BadRequest(new { ok = false, message = ex.GetBaseException().Message }); }
+}).RequireAuthorization();
+
 app.MapGet("/api/recordings", () =>
 {
     var rows = LoadRecordingJobs()
@@ -2272,8 +2555,12 @@ app.MapGet("/api/recordings", () =>
         .Select(x => new
         {
             x.Id, x.ProviderId, x.ChannelKey, x.ChannelName, x.Title, x.Start, x.End,
-            x.Status, x.FileName, x.Error,
-            completed = x.Status == "Completed" && !string.IsNullOrWhiteSpace(x.FileName) && File.Exists(Path.Combine(recordingsDir, x.FileName))
+            x.Status, x.FileName, x.Error, x.StorageTargetId, x.StorageTargetName, x.StoredPath,
+            completed = x.Status == "Completed",
+            playable = x.Status == "Completed" && !string.IsNullOrWhiteSpace(x.StoredPath) &&
+                       x.StorageTargetId != null &&
+                       LoadStorageTargets().Any(t => t.Id == x.StorageTargetId && t.Type == "path") &&
+                       File.Exists(x.StoredPath)
         });
     return Results.Ok(rows);
 }).RequireAuthorization();
@@ -2294,6 +2581,9 @@ app.MapPost("/api/recordings", (RecordingRequest input) =>
         input.Start,
         input.End,
         "Scheduled",
+        null,
+        null,
+        input.StorageTargetId,
         null,
         null);
     rows.Add(job);
@@ -2317,7 +2607,7 @@ app.MapPost("/api/recordings/{id}/cancel", (string id) =>
     return Results.Ok();
 }).RequireAuthorization();
 
-app.MapDelete("/api/recordings/{id}", (string id) =>
+app.MapDelete("/api/recordings/{id}", async (string id) =>
 {
     var rows = LoadRecordingJobs();
     var job = rows.FirstOrDefault(x => x.Id == id);
@@ -2326,10 +2616,29 @@ app.MapDelete("/api/recordings/{id}", (string id) =>
     {
         try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
     }
-    if (!string.IsNullOrWhiteSpace(job.FileName))
+    if (!string.IsNullOrWhiteSpace(job.StoredPath))
     {
-        var path = Path.Combine(recordingsDir, job.FileName);
-        try { if (File.Exists(path)) File.Delete(path); } catch { }
+        var target = FindStorageTarget(job.StorageTargetId);
+        if (target?.Type.Equals("path", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            try { if (File.Exists(job.StoredPath)) File.Delete(job.StoredPath); } catch { }
+        }
+        else if (target?.Type.Equals("rclone", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            try
+            {
+                var rclone = FindExecutable("rclone");
+                if (rclone is not null)
+                {
+                    var psi = new ProcessStartInfo { FileName = rclone, UseShellExecute = false, RedirectStandardError = true, CreateNoWindow = true };
+                    psi.ArgumentList.Add("deletefile");
+                    psi.ArgumentList.Add(job.StoredPath);
+                    using var rp = Process.Start(psi);
+                    if (rp is not null) await rp.WaitForExitAsync();
+                }
+            }
+            catch { }
+        }
     }
     rows.RemoveAll(x => x.Id == id);
     SaveRecordingJobs(rows);
@@ -2339,10 +2648,11 @@ app.MapDelete("/api/recordings/{id}", (string id) =>
 app.MapGet("/api/recordings/{id}/file", (string id) =>
 {
     var job = LoadRecordingJobs().FirstOrDefault(x => x.Id == id);
-    if (job is null || string.IsNullOrWhiteSpace(job.FileName)) return Results.NotFound();
-    var path = Path.Combine(recordingsDir, job.FileName);
-    if (!File.Exists(path)) return Results.NotFound();
-    return Results.File(path, "video/mp2t", job.FileName, enableRangeProcessing: true);
+    if (job is null || string.IsNullOrWhiteSpace(job.StoredPath) || string.IsNullOrWhiteSpace(job.FileName)) return Results.NotFound();
+    var target = FindStorageTarget(job.StorageTargetId);
+    if (target?.Type.Equals("path", StringComparison.OrdinalIgnoreCase) != true || !File.Exists(job.StoredPath))
+        return Results.NotFound();
+    return Results.File(job.StoredPath, "video/mp2t", job.FileName, enableRangeProcessing: true);
 }).RequireAuthorization();
 
 _ = Task.Run(RecordingSchedulerLoop);
@@ -2451,7 +2761,7 @@ async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, TimeSpa
     var url = BuildXtreamPlayerApiUrl(c, action, extra);
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/1.0.0");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/1.1.0");
     using var cts = new CancellationTokenSource(timeout);
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -2617,7 +2927,7 @@ async Task<List<LiveChannel>> LoadM3uChannels(string url)
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/x-mpegURL,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/1.0.0");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/1.1.0");
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -2636,7 +2946,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/1.0.0");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/1.1.0");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }
@@ -2932,18 +3242,21 @@ record MediaLibrarySelectionInput(string[]? LibraryIds);
 record MediaLibraryConnection(string BaseUrl, string Token);
 record UnifiedEpisodeItem(string Id, string Source, string SourceProviderId, string ItemId, string SeriesId, int SeasonNumber, int EpisodeNumber, string Name, string? Year, string? Rating, string? Poster);
 record UnifiedMediaItem(string Id, string Source, string SourceProviderId, string Kind, string Name, string? Year, string? Rating, string? Poster, string? ParentId, string? StreamUrl, double? Progress, DateTimeOffset? AddedAt);
-record RecordingRequest(string ProviderId, string ChannelKey, string? ChannelName, string? Title, DateTimeOffset Start, DateTimeOffset End);
-record RecordingJob(string Id, string ProviderId, string ChannelKey, string ChannelName, string Title, DateTimeOffset Start, DateTimeOffset End, string Status, string? FileName, string? Error);
-record MediaDownloadRequest(string Token, string? Title);
+record RecordingRequest(string ProviderId, string ChannelKey, string? ChannelName, string? Title, DateTimeOffset Start, DateTimeOffset End, string? StorageTargetId = null);
+record RecordingJob(string Id, string ProviderId, string ChannelKey, string ChannelName, string Title, DateTimeOffset Start, DateTimeOffset End, string Status, string? FileName, string? Error, string? StorageTargetId = null, string? StorageTargetName = null, string? StoredPath = null);
+record StorageTarget(string Id, string Name, string Type, string Destination, bool DefaultDvr, bool DefaultDownload, bool Enabled);
+record StorageTargetInput(string? Id, string Name, string? Type, string Destination, bool DefaultDvr, bool DefaultDownload, bool Enabled);
+record MediaDownloadRequest(string Token, string? Title, string? StorageTargetId = null);
 record ProxyTarget(string Url, string Kind, DateTimeOffset Created);
 record LiveSession(string Id, string Directory, Process Process, StringBuilder ErrorLog, string SourceUrl, DateTimeOffset Started, double? DurationSeconds = null);
 record RecentError(DateTimeOffset At, string Area, string Message);
 
-record DownloadJob(string Id, string Title, string SourceUrl, string Path, string Status, double Progress, string? Error, DateTimeOffset Created)
+record DownloadJob(string Id, string Title, string SourceUrl, string Path, string Status, double Progress, string? Error, DateTimeOffset Created,
+    string? StorageTargetId = null, string? StorageTargetName = null, string? StorageType = null, string? StorageDestination = null)
 {
     public object Safe() => new
     {
-        Id, Title, Status, Progress, Error, Created,
+        Id, Title, Status, Progress, Error, Created, StorageTargetId, StorageTargetName, StorageType, StorageDestination,
         fileName = System.IO.Path.GetFileName(Path),
         completed = Status == "Completed"
     };

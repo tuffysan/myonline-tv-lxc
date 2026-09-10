@@ -1,4 +1,4 @@
-# MyOnline TV Web v1.0.0 — Proxmox LXC
+# MyOnline TV Web v1.1.0 — Proxmox LXC
 
 MyOnline TV Web is a self-hosted entertainment appliance for Proxmox VE.
 
@@ -490,8 +490,8 @@ Existing IPTV, Plex/Jellyfin, DVR, duration, Continue Watching, Recently Watched
 - Uses the same responsive mobile/tablet/TV behavior introduced in v0.9.0.
 
 
-## v1.0.0 — First stable milestone
-v1.0.0 is the cumulative first major milestone of MyOnline TV Web.
+## v1.1.0 — First stable milestone
+v1.1.0 is the cumulative first major milestone of MyOnline TV Web.
 
 It contains:
 - IPTV Live TV, EPG Guide, Movies and Series.
@@ -506,3 +506,31 @@ It contains:
 - Home media-center redesign.
 
 `RELEASE-CHECKLIST.md` is included and should be completed on the target system before declaring the installation the production baseline.
+
+
+## v1.1.0 — DVR & Storage
+
+### Live TV DVR
+- Live TV channel cards now have a red **Record** button.
+- The active Live TV player has a **Record** control.
+- Clicking a programme in Guide opens **Play channel / Record programme** actions.
+- Recordings require a configured Storage target and are no longer intended to remain permanently in the LXC.
+- DVR supports a default destination and manual destination selection in the Recordings view.
+
+### Storage destinations
+Admin → **Storage** supports:
+- **Mounted path / NAS** — for SMB/NFS shares mounted into the container, e.g. `/mnt/media`.
+- **Cloud via rclone** — e.g. `onedrive:MyOnlineTV`, `gdrive:MyOnlineTV`, `dropbox:MyOnlineTV`, depending on the rclone remotes configured in the LXC.
+- Per-target **Test**.
+- Default target for **DVR**.
+- Default target for **Downloads**.
+
+The installer/updater installs `rclone`. Cloud credentials are managed by rclone itself; MyOnline TV stores only the remote destination string.
+
+### Downloads
+Movie/episode Download now asks for a destination:
+- **This device** — streams the download to the browser/device. It is not kept permanently in the container.
+- A configured **Storage** target — written directly to a mounted path/NAS, or transferred to an rclone cloud remote.
+- Cloud/rclone transfers may use a temporary container file while the transfer is active; it is removed after successful upload.
+
+Protected/DRM content is not decrypted or bypassed.

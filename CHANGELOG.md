@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.1.0 — DVR & Storage
+- Exposed Live TV recording directly in Live TV and the player.
+- Reworked Guide programme click into Play / Record actions.
+- Added Admin → Storage.
+- Added mounted-path/NAS destinations.
+- Added rclone cloud destinations and target connectivity tests.
+- Added default DVR and Download destinations.
+- DVR now requires external/configured storage instead of permanent LXC storage.
+- Download now offers This device or configured Storage destination.
+- Added direct browser/device download endpoint.
+- Added rclone installation to install/update dependencies.
+
+
 ## v1.0.0 — First stable milestone
 - Promoted the cumulative v0.9.4 feature set to the first 1.0 milestone.
 - Added release and device regression checklist.

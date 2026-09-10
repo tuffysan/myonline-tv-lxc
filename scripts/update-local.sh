@@ -64,7 +64,7 @@ chown www-data:www-data '${BACKUP}' /var/lib/myonlinetv/last-pre-update-backup
 
 CURRENT_STEP="2/8 Preparing runtime"
 echo "[2/8] Preparing runtime..."
-pct exec "$CTID" -- bash -lc 'apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates ffmpeg tar'
+pct exec "$CTID" -- bash -lc 'apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates ffmpeg tar rclone'
 if [[ -n "$ARTIFACT" ]]; then
   pct exec "$CTID" -- bash -lc 'DEBIAN_FRONTEND=noninteractive apt-get install -y aspnetcore-runtime-10.0'
 else
