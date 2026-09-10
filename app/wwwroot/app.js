@@ -467,18 +467,18 @@ function showProgramDetails(channelKey,channelNameText,payload){
 
 async function movies(){
   if(!await ensureProvider('xtream')){content.innerHTML='<div class=card>Movies require an Xtream-compatible provider.</div>';return}
-  content.innerHTML='<div class=card>Loading movies…</div>';
+  content.innerHTML='<div class=card>Loading movies… The first load can take up to 2 minutes for large Xtream libraries.</div>';
   try{
     const cats=await api(`/api/vod/${currentProvider}/categories`);
     content.innerHTML=`<div class=toolbar>${providerSelect('xtream')}<select id=category><option value="">All categories</option>${cats.map(c=>`<option value="${escAttr(c.id)}">${esc(c.name)}</option>`).join('')}</select><input id=mediaq placeholder="Search movies"></div><div id=mediaPlayer></div><div id=mediaGrid class=posterGrid></div>`;
     $('#provider').onchange=async e=>{currentProvider=e.target.value;await movies()};
     $('#category').onchange=loadMovies;$('#mediaq').oninput=debounce(filterMedia);
     await loadMovies();
-  }catch(e){content.innerHTML=errorCard(e)}
+  }catch(e){content.innerHTML=errorCard(new Error(`Movies could not be loaded. The provider may need longer to return the VOD catalogue. ${e.message||e}`))}
 }
 let mediaItems=[];
 async function loadMovies(){
-  const grid=$('#mediaGrid');if(grid)grid.innerHTML='<div class=card>Loading movies…</div>';
+  const grid=$('#mediaGrid');if(grid)grid.innerHTML='<div class=card>Loading movies… The first load can take up to 2 minutes for large Xtream libraries.</div>';
   try{
     const cat=$('#category')?.value||'',key=catalogueCacheKey('movies',currentProvider,cat);mediaItems=readCatalogueCache(key)||await api(`/api/vod/${currentProvider}/items?categoryId=${encodeURIComponent(cat)}`);writeCatalogueCache(key,mediaItems);
     filterMedia();
@@ -650,7 +650,7 @@ function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 function escAttr(s){return esc(s)}
 boot().catch(e=>{$('#auth').classList.remove('hidden');$('#auth').innerHTML=`<div class=authCard><h2>Startup error</h2><pre>${esc(e.message)}</pre></div>`});
 
-// v0.5.1 catalogue cache
+// v0.5.2 catalogue cache
 const CATALOG_CACHE_PREFIX='myonline-catalog-v1:';
 function catalogueCacheKey(kind,provider,category){return `${CATALOG_CACHE_PREFIX}${kind}:${provider}:${category||'all'}`}
 function readCatalogueCache(key,maxAgeMs=10*60*1000){
@@ -660,11 +660,11 @@ function writeCatalogueCache(key,items){
   try{sessionStorage.setItem(key,JSON.stringify({saved:Date.now(),items}))}catch{}
 }
 
-// v0.5.1 player cleanup
+// v0.5.2 player cleanup
 window.addEventListener('pagehide',()=>destroyPlayer());
 window.addEventListener('beforeunload',()=>destroyPlayer());
 
-// v0.5.1 movie favourites
+// v0.5.2 movie favourites
 function mediaFavKey(){return `myonline-media-favourites-v2:${currentProfile||'default'}`}
 function getMediaFavs(){try{return JSON.parse(localStorage.getItem(mediaFavKey())||'[]')}catch{return []}}
 function isMediaFav(type,id){return getMediaFavs().some(x=>x.type===type&&String(x.id)===String(id))}
@@ -675,7 +675,7 @@ function toggleMediaFav(type,item){
   if(type==='movie')filterMedia();else filterSeries();
 }
 
-// v0.5.1 watch history
+// v0.5.2 watch history
 function historyKey(){return `myonline-media-history-v2:${currentProfile||'default'}`}
 function getMediaHistory(){try{return JSON.parse(localStorage.getItem(historyKey())||'[]')}catch{return []}}
 function rememberMediaHistory(type,item){
@@ -684,14 +684,14 @@ function rememberMediaHistory(type,item){
   localStorage.setItem(historyKey(),JSON.stringify(rows.slice(0,100)));
 }
 
-// v0.5.1 home rails
+// v0.5.2 home rails
 function homeMediaRails(){
   const favs=getMediaFavs().slice(0,12),hist=getMediaHistory().slice(0,12);
   return `${favs.length?`<h2>Media favourites</h2><div class=continueRow>${favs.map(x=>`<button class=continueCard onclick="show('${x.type==='movie'?'movies':'series'}')"><span>★</span><b>${esc(x.name)}</b><small>${esc(x.type)}</small></button>`).join('')}</div>`:''}
   ${hist.length?`<h2>Recently watched</h2><div class=continueRow>${hist.map(x=>`<button class=continueCard onclick="show('${x.type==='movie'?'movies':'series'}')"><span>↻</span><b>${esc(x.name)}</b><small>${new Date(x.updated).toLocaleString()}</small></button>`).join('')}</div>`:''}`;
 }
 
-// v0.5.1 quick search
+// v0.5.2 quick search
 function homeQuickSearch(){
   const q=($('#homeSearch')?.value||'').trim();
   if(!q)return;
@@ -699,7 +699,7 @@ function homeQuickSearch(){
   show('movies').then(()=>{const x=$('#mediaq');if(x){x.value=q;filterMedia()}});
 }
 
-// v0.5.1 TV focus navigation
+// v0.5.2 TV focus navigation
 function tvFocusables(){return [...document.querySelectorAll('button,a[href],input,select,[tabindex]:not([tabindex="-1"])')].filter(x=>!x.disabled&&x.offsetParent!==null)}
 function moveTvFocus(delta){
   const rows=tvFocusables();if(!rows.length)return;
@@ -712,7 +712,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='ArrowUp'){moveTvFocus(-1);e.preventDefault()}
 });
 
-// v0.5.1 remote playback controls
+// v0.5.2 remote playback controls
 document.addEventListener('keydown',e=>{
   const v=$('#video');
   if(!v)return;
@@ -723,13 +723,13 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&document.fullscreenElement){document.exitFullscreen?.()}
 });
 
-// v0.5.1 profiles polish
+// v0.5.2 profiles polish
 document.addEventListener('click',e=>{if(!e.target.closest?.('#profilePicker')&&!e.target.closest?.('.profileBadge'))$('#profilePicker')?.remove()});
 
-// v0.5.1 debounce
+// v0.5.2 debounce
 function debounce(fn,ms=180){let t;return (...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms)}}
 
-// v0.5.1 player recovery
+// v0.5.2 player recovery
 function installVideoRecovery(video){
   if(!video||video.dataset.recoveryInstalled)return;
   video.dataset.recoveryInstalled='1';
@@ -740,10 +740,10 @@ function installVideoRecovery(video){
 }
 document.addEventListener('play',e=>{if(e.target?.tagName==='VIDEO')installVideoRecovery(e.target)},true);
 
-// v0.5.1 system auto refresh
+// v0.5.2 system auto refresh
 let systemRefreshTimer=null;document.addEventListener('visibilitychange',()=>{if(!document.hidden&&currentView==='system')systemView().catch(()=>{})});
 
-// v0.5.1 accessibility
+// v0.5.2 accessibility
 function syncNavAria(){
   document.querySelectorAll('nav button[data-view]').forEach(b=>b.setAttribute('aria-current',b.dataset.view===currentView?'page':'false'));
 }
