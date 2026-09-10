@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.8.1 — Movie & Series duration
+- Added server-side ffprobe duration detection for VOD/episode playback.
+- Media session responses now include `durationSeconds`.
+- Player now shows elapsed time and total runtime.
+- Browser metadata duration remains a fallback when ffprobe cannot determine runtime.
+- Live TV behavior remains unchanged.
+
+
 ## v0.8.0 — DVR & Live TV Recording
 - Added persistent DVR recording queue.
 - Added dedicated Recordings navigation and management view.

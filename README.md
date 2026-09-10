@@ -1,4 +1,4 @@
-# MyOnline TV Web v0.8.0 — Proxmox LXC
+# MyOnline TV Web v0.8.1 — Proxmox LXC
 
 MyOnline TV Web is a self-hosted entertainment appliance for Proxmox VE.
 
@@ -372,3 +372,12 @@ v0.8.0 introduces the first DVR milestone:
 - Cancel active/scheduled recordings.
 - Play/save completed recordings through the authenticated web app.
 - Existing v0.7.2 Media Center UX remains cumulative.
+
+## v0.8.1 — Movie & Series duration
+
+- Uses `ffprobe` server-side to detect the real duration of Movies and Episodes before playback.
+- Sends `durationSeconds` with the media playback session.
+- Displays current time and total length under the player, for example `12:34 / 1:42:18`.
+- Keeps the browser's own duration as a fallback when ffprobe cannot determine the source length.
+- Continue Watching and resume behavior from v0.8.0 is unchanged.
+- Live TV remains treated as a live stream and does not show a fixed total length.

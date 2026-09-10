@@ -90,7 +90,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.8.0");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.8.1");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
@@ -563,7 +563,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "0.8.0",
+    version = "0.8.1",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -601,14 +601,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = AuthConfigured();
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "0.8.0", checks })
-        : Results.Json(new { status = "not-ready", version = "0.8.0", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "0.8.1", checks })
+        : Results.Json(new { status = "not-ready", version = "0.8.1", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "0.8.0",
+    version = "0.8.1",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = AuthConfigured(),
@@ -1773,6 +1773,8 @@ app.MapPost("/api/media/start/{token}", async (string token, bool? transcode) =>
     if (ffmpeg is null)
         return Results.Problem("FFmpeg is not installed in the MyOnline TV container.", statusCode: 503);
 
+    var durationSeconds = await ProbeDurationSeconds(sourceUrl);
+
     foreach (var existing in liveSessions.Keys.ToArray())
         await StopLiveSession(existing);
 
@@ -1838,7 +1840,7 @@ app.MapPost("/api/media/start/{token}", async (string token, bool? transcode) =>
         return Results.Problem($"Could not start FFmpeg: {ex.Message}", statusCode: 500);
     }
 
-    var session = new LiveSession(sessionId, sessionDir, process, errorLog, sourceUrl, DateTimeOffset.UtcNow);
+    var session = new LiveSession(sessionId, sessionDir, process, errorLog, sourceUrl, DateTimeOffset.UtcNow, durationSeconds);
     liveSessions[sessionId] = session;
 
     _ = Task.Run(async () =>
@@ -1867,7 +1869,8 @@ app.MapPost("/api/media/start/{token}", async (string token, bool? transcode) =>
         statusUrl = $"/api/live/status/{sessionId}",
         playbackUrl = $"/api/live/hls/{sessionId}/index.m3u8",
         mode = transcode == true ? "hls-transcode" : "hls-remux",
-        sourceHost = sourceUri.Host
+        sourceHost = sourceUri.Host,
+        durationSeconds
     });
 }).RequireAuthorization();
 
@@ -1998,7 +2001,13 @@ app.MapGet("/api/live/status/{sessionId}", async (string sessionId) =>
     var playlistPath = Path.Combine(session.Directory, "index.m3u8");
     var ready = File.Exists(playlistPath) && Directory.EnumerateFiles(session.Directory, "*.ts").Any();
     if (ready)
-        return Results.Ok(new { sessionId, status = "ready", playbackUrl = $"/api/live/hls/{sessionId}/index.m3u8" });
+        return Results.Ok(new
+        {
+            sessionId,
+            status = "ready",
+            playbackUrl = $"/api/live/hls/{sessionId}/index.m3u8",
+            durationSeconds = session.DurationSeconds
+        });
 
     if (session.Process.HasExited)
     {
@@ -2029,7 +2038,7 @@ app.MapGet("/api/live/status/{sessionId}", async (string sessionId) =>
         });
     }
 
-    return Results.Ok(new { sessionId, status = "starting" });
+    return Results.Ok(new { sessionId, status = "starting", durationSeconds = session.DurationSeconds });
 }).RequireAuthorization();
 
 app.MapGet("/api/live/hls/{sessionId}/{fileName}", (string sessionId, string fileName) =>
@@ -2059,7 +2068,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "0.8.0",
+        version = "0.8.1",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -2417,7 +2426,7 @@ async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, TimeSpa
     var url = BuildXtreamPlayerApiUrl(c, action, extra);
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.8.0");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.8.1");
     using var cts = new CancellationTokenSource(timeout);
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -2583,7 +2592,7 @@ async Task<List<LiveChannel>> LoadM3uChannels(string url)
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/x-mpegURL,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.8.0");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.8.1");
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -2602,7 +2611,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.8.0");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.8.1");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }
@@ -2826,6 +2835,49 @@ static string? FindExecutable(string name)
     return null;
 }
 
+static async Task<double?> ProbeDurationSeconds(string sourceUrl)
+{
+    var ffprobe = FindExecutable("ffprobe");
+    if (ffprobe is null) return null;
+
+    var psi = new ProcessStartInfo
+    {
+        FileName = ffprobe,
+        UseShellExecute = false,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        CreateNoWindow = true
+    };
+    foreach (var arg in new[]
+    {
+        "-v", "error",
+        "-rw_timeout", "8000000",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        sourceUrl
+    }) psi.ArgumentList.Add(arg);
+
+    using var process = new Process { StartInfo = psi };
+    try
+    {
+        if (!process.Start()) return null;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync(cts.Token);
+        var output = (await outputTask).Trim();
+        if (process.ExitCode == 0 &&
+            double.TryParse(output, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var seconds) &&
+            double.IsFinite(seconds) && seconds > 0)
+            return seconds;
+    }
+    catch
+    {
+        try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+    }
+    return null;
+}
+
 record ProviderStored(string Id, string Name, string Type, string EncryptedConnection);
 record ProviderConnection(string? PlaylistUrl, string? EpgUrl, string? BaseUrl, string? Username, string? Password);
 record ProviderInput(string? Id, string Name, string Type, string? PlaylistUrl, string? EpgUrl, string? BaseUrl, string? Username, string? Password, bool KeepExistingConnection = false, bool KeepExistingPassword = false);
@@ -2858,7 +2910,7 @@ record RecordingRequest(string ProviderId, string ChannelKey, string? ChannelNam
 record RecordingJob(string Id, string ProviderId, string ChannelKey, string ChannelName, string Title, DateTimeOffset Start, DateTimeOffset End, string Status, string? FileName, string? Error);
 record MediaDownloadRequest(string Token, string? Title);
 record ProxyTarget(string Url, string Kind, DateTimeOffset Created);
-record LiveSession(string Id, string Directory, Process Process, StringBuilder ErrorLog, string SourceUrl, DateTimeOffset Started);
+record LiveSession(string Id, string Directory, Process Process, StringBuilder ErrorLog, string SourceUrl, DateTimeOffset Started, double? DurationSeconds = null);
 record RecentError(DateTimeOffset At, string Area, string Message);
 
 record DownloadJob(string Id, string Title, string SourceUrl, string Path, string Status, double Progress, string? Error, DateTimeOffset Created)

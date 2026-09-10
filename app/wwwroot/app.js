@@ -390,12 +390,36 @@ let pendingResumeSeconds=0;
 let nextUnifiedEpisode=null;
 let unifiedEpisodeContext=[];
 
+function formatMediaTime(seconds){
+  const s=Math.max(0,Math.floor(Number(seconds)||0));
+  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
+  if(h>0)return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  return `${m}:${String(sec).padStart(2,'0')}`;
+}
+
+function installMediaDurationDisplay(video,totalSeconds){
+  const totalEl=$('#mediaTotalTime'),currentEl=$('#mediaCurrentTime');
+  let total=Number(totalSeconds)||0;
+
+  const refresh=()=>{
+    if(currentEl)currentEl.textContent=formatMediaTime(video.currentTime||0);
+    // Prefer ffprobe duration. Fall back to browser duration when it becomes finite.
+    if(!(total>0) && Number.isFinite(video.duration) && video.duration>0) total=video.duration;
+    if(totalEl) totalEl.textContent=total>0?formatMediaTime(total):'--:--';
+  };
+
+  video.addEventListener('timeupdate',refresh);
+  video.addEventListener('loadedmetadata',refresh);
+  video.addEventListener('durationchange',refresh);
+  refresh();
+}
+
 async function playServerMedia(token,name,mediaId=null,forceTranscode=false){
   if(!forceTranscode)mediaFallbackTried=false;
   destroyPlayer();
   const wrap=$('#playerWrap')||$('#mediaPlayer');
   if(!wrap)return;
-  wrap.innerHTML=`<div class=playerCard><video id=video controls autoplay playsinline></video><div id=mediaPlaybackStatus class=livePlaybackStatus>Preparing video…</div><div class=nowPlaying>${esc(name)}</div></div>`;
+  wrap.innerHTML=`<div class=playerCard><video id=video controls autoplay playsinline></video><div class=mediaTimeBar><span id=mediaCurrentTime>00:00</span><span>/</span><span id=mediaTotalTime>--:--</span></div><div id=mediaPlaybackStatus class=livePlaybackStatus>Preparing video…</div><div class=nowPlaying>${esc(name)}</div></div>`;
   wrap.scrollIntoView({behavior:'smooth',block:'start'});
 
   try{
@@ -416,6 +440,8 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false){
     const video=$('#video');
     if(!video)return;
     const playbackUrl=state.playbackUrl||info.playbackUrl;
+    const mediaDurationSeconds=Number(state.durationSeconds||info.durationSeconds)||0;
+    installMediaDurationDisplay(video,mediaDurationSeconds);
 
     const requestedResume=Math.max(0,Number(pendingResumeSeconds)||0);
     pendingResumeSeconds=0;
@@ -489,8 +515,9 @@ function playMedia(url,name,mediaId=null){
   destroyPlayer();
   const wrap=$('#playerWrap')||$('#mediaPlayer');
   if(!wrap)return;
-  wrap.innerHTML=`<div class=playerCard><video id=video controls autoplay playsinline></video><div class=nowPlaying>${esc(name)}</div></div>`;
+  wrap.innerHTML=`<div class=playerCard><video id=video controls autoplay playsinline></video><div class=mediaTimeBar><span id=mediaCurrentTime>00:00</span><span>/</span><span id=mediaTotalTime>--:--</span></div><div class=nowPlaying>${esc(name)}</div></div>`;
   const video=$('#video');
+  installMediaDurationDisplay(video,0);
   if(mediaId){
     let last=-1;
     const save=()=>{
