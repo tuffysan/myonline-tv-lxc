@@ -70,6 +70,8 @@ var channelPreferencesFile = Path.Combine(dataDir, "channel-preferences.json");
 var profilesFile = Path.Combine(dataDir, "profiles.json");
 var adminFile = Path.Combine(dataDir, "admin.json");
 var usersFile = Path.Combine(dataDir, "users.json");
+var profileAccessFile = Path.Combine(dataDir, "profile-access.json");
+var profilePoliciesFile = Path.Combine(dataDir, "profile-policies.json");
 var secretKeyFile = Path.Combine(dataDir, "secrets.key");
 var downloadsDir = Path.Combine(dataDir, "downloads");
 var backupsDir = Path.Combine(dataDir, "backups");
@@ -85,7 +87,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.5.7");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.6.0");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
@@ -258,6 +260,58 @@ bool IsAdmin(HttpContext ctx) =>
 bool HasEnabledAdmin(IEnumerable<AppUser> users) =>
     users.Any(x => x.Enabled && x.Role.Equals("Admin", StringComparison.OrdinalIgnoreCase));
 
+
+Dictionary<string, UserProfileAccess> LoadProfileAccess() =>
+    Load<Dictionary<string, UserProfileAccess>>(profileAccessFile) ?? new(StringComparer.OrdinalIgnoreCase);
+
+Dictionary<string, ProfilePolicy> LoadProfilePolicies() =>
+    Load<Dictionary<string, ProfilePolicy>>(profilePoliciesFile) ?? new(StringComparer.OrdinalIgnoreCase);
+
+UserProfileAccess AccessFor(string username)
+{
+    var rows = LoadProfileAccess();
+    if (rows.TryGetValue(username, out var hit)) return hit;
+    var profileIds = LoadProfiles().Select(x => x.Id).ToArray();
+    return new UserProfileAccess(profileIds, profileIds.FirstOrDefault() ?? "default");
+}
+
+ProfilePolicy PolicyFor(string profileId)
+{
+    var rows = LoadProfilePolicies();
+    return rows.TryGetValue(profileId, out var hit)
+        ? hit
+        : new ProfilePolicy(true, true, true, true, Array.Empty<string>(), null);
+}
+
+bool ProfileAllowedForUser(string username, string profileId)
+{
+    if (string.IsNullOrWhiteSpace(username)) return false;
+    var user = LoadUsers().FirstOrDefault(x => x.Username.Equals(username, StringComparison.OrdinalIgnoreCase));
+    if (user?.Role.Equals("Admin", StringComparison.OrdinalIgnoreCase) == true) return true;
+    return AccessFor(username).AllowedProfileIds.Contains(profileId, StringComparer.OrdinalIgnoreCase);
+}
+
+bool FeatureAllowed(HttpContext ctx, string feature, string? providerId = null)
+{
+    if (ctx.User.Identity?.IsAuthenticated != true) return true;
+    if (ctx.User.IsInRole("Admin")) return true;
+    var profileId = ctx.Request.Headers["X-MyOnline-Profile"].FirstOrDefault();
+    if (string.IsNullOrWhiteSpace(profileId)) return false;
+    var username = ctx.User.Identity?.Name ?? "";
+    if (!ProfileAllowedForUser(username, profileId)) return false;
+    var p = PolicyFor(profileId);
+    if (!string.IsNullOrWhiteSpace(providerId) && p.AllowedProviderIds.Length > 0 &&
+        !p.AllowedProviderIds.Contains(providerId, StringComparer.OrdinalIgnoreCase)) return false;
+    return feature switch
+    {
+        "live" => p.Live,
+        "movies" => p.Movies,
+        "series" => p.Series,
+        "downloads" => p.Downloads,
+        _ => true
+    };
+}
+
 Dictionary<string, ChannelPreferences> LoadChannelPreferences() => Load<Dictionary<string, ChannelPreferences>>(channelPreferencesFile) ?? new(StringComparer.OrdinalIgnoreCase);
 ChannelPreferences PreferencesFor(string providerId)
 {
@@ -359,7 +413,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "0.5.7",
+    version = "0.6.0",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -397,14 +451,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = AuthConfigured();
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "0.5.7", checks })
-        : Results.Json(new { status = "not-ready", version = "0.5.7", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "0.6.0", checks })
+        : Results.Json(new { status = "not-ready", version = "0.6.0", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "0.5.7",
+    version = "0.6.0",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = AuthConfigured(),
@@ -977,6 +1031,60 @@ app.MapPost("/api/series/{providerId}/episode/{episodeId}/token", (string provid
     });
 }).RequireAuthorization();
 
+
+app.MapGet("/api/access/me", (HttpContext ctx) =>
+{
+    var username = ctx.User.Identity?.Name ?? "";
+    var access = AccessFor(username);
+    var isAdmin = ctx.User.IsInRole("Admin");
+    var allowed = isAdmin ? LoadProfiles().Select(x => x.Id).ToArray() : access.AllowedProfileIds;
+    return Results.Ok(new
+    {
+        allowedProfileIds = allowed,
+        defaultProfileId = isAdmin ? (allowed.FirstOrDefault() ?? "default") : access.DefaultProfileId,
+        policies = allowed.ToDictionary(id => id, id => PolicyFor(id))
+    });
+}).RequireAuthorization();
+
+app.MapGet("/api/admin/profile-access", () =>
+{
+    return Results.Ok(new { userAccess = LoadProfileAccess(), policies = LoadProfilePolicies() });
+}).RequireAuthorization(p => p.RequireRole("Admin"));
+
+app.MapPost("/api/admin/profile-access/user/{username}", (string username, UserProfileAccess input) =>
+{
+    var valid = LoadProfiles().Select(x => x.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    var ids = (input.AllowedProfileIds ?? Array.Empty<string>()).Where(valid.Contains).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    if (ids.Length == 0) return Results.BadRequest("Select at least one profile.");
+    var def = ids.Contains(input.DefaultProfileId, StringComparer.OrdinalIgnoreCase) ? input.DefaultProfileId : ids[0];
+    var rows = LoadProfileAccess(); rows[username] = new UserProfileAccess(ids, def); Save(profileAccessFile, rows);
+    return Results.Ok(rows[username]);
+}).RequireAuthorization(p => p.RequireRole("Admin"));
+
+app.MapPost("/api/admin/profile-access/profile/{profileId}", (string profileId, ProfilePolicyInput input) =>
+{
+    if (!LoadProfiles().Any(x => x.Id == profileId)) return Results.NotFound();
+    var existing = PolicyFor(profileId);
+    PasswordCredential? pin = existing.PinCredential;
+    if (!string.IsNullOrWhiteSpace(input.Pin))
+    {
+        if (input.Pin!.Length < 4) return Results.BadRequest("PIN must contain at least 4 characters.");
+        pin = PasswordCredential.Create(profileId, input.Pin);
+    }
+    if (input.ClearPin) pin = null;
+    var policy = new ProfilePolicy(input.Live, input.Movies, input.Series, input.Downloads,
+        input.AllowedProviderIds ?? Array.Empty<string>(), pin);
+    var rows = LoadProfilePolicies(); rows[profileId] = policy; Save(profilePoliciesFile, rows);
+    return Results.Ok(new { policy.Live, policy.Movies, policy.Series, policy.Downloads, policy.AllowedProviderIds, hasPin = policy.PinCredential is not null });
+}).RequireAuthorization(p => p.RequireRole("Admin"));
+
+app.MapPost("/api/profile/{profileId}/verify-pin", (string profileId, PinRequest input) =>
+{
+    var policy = PolicyFor(profileId);
+    if (policy.PinCredential is null) return Results.Ok(new { valid = true });
+    return Results.Ok(new { valid = policy.PinCredential.Verify(profileId, input.Pin ?? "") });
+}).RequireAuthorization();
+
 app.MapGet("/api/profiles", () => Results.Ok(LoadProfiles())).RequireAuthorization();
 app.MapPost("/api/profiles", (ViewerProfileInput req) =>
 {
@@ -1421,7 +1529,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "0.5.7",
+        version = "0.6.0",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -1545,7 +1653,7 @@ app.MapPost("/api/system/restore/{fileName}", (string fileName) =>
     using var archive = ZipFile.OpenRead(file);
     var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "providers.json", "favourites.json", "continue-watching.json", "channel-preferences.json", "profiles.json", "users.json", "admin.json"
+        "providers.json", "favourites.json", "continue-watching.json", "channel-preferences.json", "profiles.json", "users.json", "admin.json", "profile-access.json", "profile-policies.json"
     };
     foreach (var entry in archive.Entries.Where(e => allowed.Contains(e.FullName)))
     {
@@ -1697,7 +1805,7 @@ async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, TimeSpa
     var url = BuildXtreamPlayerApiUrl(c, action, extra);
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.7");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.6.0");
     using var cts = new CancellationTokenSource(timeout);
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -1863,7 +1971,7 @@ async Task<List<LiveChannel>> LoadM3uChannels(string url)
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/x-mpegURL,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.7");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.6.0");
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -1882,7 +1990,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.7");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.6.0");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }
@@ -2124,6 +2232,10 @@ record SetupRequest(string? Username, string Password);
 record LoginRequest(string Username, string Password);
 record AppUser(string Id, string Username, string Role, bool Enabled, PasswordCredential Credential);
 record UserInput(string? Id, string? Username, string? Password, string? Role, bool Enabled);
+record UserProfileAccess(string[] AllowedProfileIds, string DefaultProfileId);
+record ProfilePolicy(bool Live, bool Movies, bool Series, bool Downloads, string[] AllowedProviderIds, PasswordCredential? PinCredential);
+record ProfilePolicyInput(bool Live, bool Movies, bool Series, bool Downloads, string[]? AllowedProviderIds, string? Pin, bool ClearPin = false);
+record PinRequest(string? Pin);
 record MediaDownloadRequest(string Token, string? Title);
 record ProxyTarget(string Url, string Kind, DateTimeOffset Created);
 record LiveSession(string Id, string Directory, Process Process, StringBuilder ErrorLog, string SourceUrl, DateTimeOffset Started);

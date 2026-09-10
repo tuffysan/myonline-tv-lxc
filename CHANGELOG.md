@@ -1,6 +1,33 @@
 # Changelog
 
-## v0.5.7 — Admin & Provider Management
+## v0.6.0 — Stable Feature Release
+- Promotes the v0.5.x feature train to the v0.6.0 stable feature baseline.
+- Includes working Live TV, Guide, Movies and Series playback foundations.
+- Includes persistent catalogue cache, retry/recovery diagnostics and TV/Remote UX.
+- Includes multi-user Admin, provider editing, web-app branding and profile permissions.
+- Includes Search & Discovery across Live, Movies and Series.
+- Adds a defensive startup fallback if profile-access configuration is temporarily unavailable.
+- Keeps PUBLISH.cmd / PUBLISH.ps1 version-independent for all future releases.
+
+## v0.6.0 — Search & Discovery
+- Adds a dedicated Search view in the main navigation.
+- Home search now opens global search instead of only filtering Movies.
+- Searches the selected provider across Live channels, Movies and Series in parallel.
+- Search respects current profile permissions.
+- Results are grouped by Live TV, Movies and Series with poster artwork where available.
+- Uses the existing catalogue caches and long Movies timeout to avoid changing working playback behavior.
+- Keeps the permanent version-independent PUBLISH.cmd / PUBLISH.ps1.
+
+## v0.6.0 — Profiles, Permissions & Parental Controls
+- Adds per-user profile access and a default profile.
+- Adds per-profile permissions for Live/Guide, Movies, Series and Downloads.
+- Adds optional provider restrictions per profile.
+- Adds server-side stored Kids PIN verification using the existing password hashing mechanism.
+- Admin includes a permissions matrix and user-to-profile assignment controls.
+- Normal users only see profiles and navigation items they are allowed to use.
+- Keeps the permanent version-independent PUBLISH.cmd / PUBLISH.ps1.
+
+## v0.6.0 — Admin & Provider Management
 - Adds multi-user authentication with `Admin` and `User` roles.
 - Automatically migrates the original single administrator account into `users.json`.
 - Admin can create, edit, enable/disable, reset passwords and remove users.
@@ -14,7 +41,7 @@
 - Keeps permanent version-independent `PUBLISH.cmd` / `PUBLISH.ps1`.
 - Keeps v0.5.6 TV/Remote UX, v0.5.5 recovery and all working playback/catalogue fixes.
 
-## v0.5.7 — TV & Remote UX
+## v0.6.0 — TV & Remote UX
 - Replaces linear Up/Down focus stepping with spatial four-direction navigation.
 - Arrow keys now choose the closest control in the intended direction.
 - Stronger focus treatment for 10-foot/TV use, including poster-card scaling.
@@ -29,7 +56,7 @@
 - Keeps the permanent version-independent `PUBLISH.cmd` / `PUBLISH.ps1`.
 - Keeps v0.5.5 Reliability & Recovery and all v0.5.3/v0.5.4 playback/catalogue fixes.
 
-## v0.5.7 — Reliability & Recovery
+## v0.6.0 — Reliability & Recovery
 - Adds three-attempt GET retry with progressive backoff for transient network, 429, 502, 503 and 504 failures.
 - Timeout errors now include the endpoint and timeout duration.
 - System page now shows catalogue cache file count/size, latest successful catalogue refreshes and recent tracked provider/catalogue errors.
@@ -40,7 +67,7 @@
 - Removes version-specific publish scripts.
 - Live TV, Guide, Movies playback and Series playback routes remain unchanged.
 
-## v0.5.7 — Stability & Cache Foundation
+## v0.6.0 — Stability & Cache Foundation
 - Adds persistent on-disk Movies/Series catalogue cache under the application data directory.
 - Uses stale cached catalogue data immediately while refreshing in the background.
 - Adds Refresh buttons for Movies and Series.
@@ -51,22 +78,22 @@
 - Replaces the publish helper with a robust version that checks whether a remote tag exists before deleting it.
 - Live TV, Guide, Movies playback and Series playback remain unchanged.
 
-## v0.5.7 — Movies + Series artwork regression fix
+## v0.6.0 — Movies + Series artwork regression fix
 - Movies frontend timeout now matches the slower VOD backend request path.
 - Movies shows an explicit empty-state instead of a blank page.
 - VOD catalogue loading is logged with elapsed time.
 - Series and Movies artwork use provider image URLs directly again, avoiding the broken short-lived artwork proxy-token path.
 - Frontend catalogue cache key bumped to avoid stale cached payloads.
-- Includes `PUBLISH-v0.5.7.ps1` and `.cmd` to add, commit, push `main`, recreate/push tag `v0.5.7`, and trigger the GitHub release workflow.
+- Includes `PUBLISH-v0.6.0.ps1` and `.cmd` to add, commit, push `main`, recreate/push tag `v0.6.0`, and trigger the GitHub release workflow.
 - Live TV, Guide and media playback code paths are otherwise unchanged.
 
-## v0.5.7 — Movies catalogue timeout fix
+## v0.6.0 — Movies catalogue timeout fix
 - Increases the Xtream `get_vod_streams` request timeout from 20 seconds to 120 seconds.
 - Keeps the existing VOD catalogue cache behavior, so slower providers mainly affect the first catalogue load.
 - Adds clearer Movies loading/error text for large or slow Xtream libraries.
 - Live TV and Series code paths are intentionally unchanged from v0.5.1.
 
-## v0.5.7 — updater extraction fix
+## v0.6.0 — updater extraction fix
 - Splits the Proxmox release upload, gzip verification, extraction, application verification, and cleanup into separate `pct exec` commands.
 - Keeps `/tmp/myonline-tv-release.tar.gz` until the extracted application has been verified.
 - Verifies `MyOnlineTV.Web.dll`, runtime config, `wwwroot/index.html`, and `wwwroot/app.js` before deleting the uploaded archive.
@@ -74,182 +101,182 @@
 - Adds staging diagnostics on failure: uploaded artifact, extracted directory listing, and disk-space status.
 - Application functionality from v0.5.0 is unchanged; this release only hardens the updater.
 
-## v0.5.7 — Stable 0.5.7
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Stable 0.6.0
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
-- Focus: Stable 0.5.7.
+- Focus: Stable 0.6.0.
 
-## v0.5.7 — Release candidate / feature freeze
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Release candidate / feature freeze
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Release candidate / feature freeze.
 
-## v0.5.7 — Release hardening
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Release hardening
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Release hardening.
 
-## v0.5.7 — Regression checks
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Regression checks
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Regression checks.
 
-## v0.5.7 — Upgrade safety
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Upgrade safety
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Upgrade safety.
 
-## v0.5.7 — Error recovery
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Error recovery
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Error recovery.
 
-## v0.5.7 — Accessibility/keyboard polish
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Accessibility/keyboard polish
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Accessibility/keyboard polish.
 
-## v0.5.7 — Mobile/tablet polish
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Mobile/tablet polish
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Mobile/tablet polish.
 
-## v0.5.7 — Backup/restore polish
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Backup/restore polish
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Backup/restore polish.
 
-## v0.5.7 — System page polish
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — System page polish
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: System page polish.
 
-## v0.5.7 — Downloads polish
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Downloads polish
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Downloads polish.
 
-## v0.5.7 — Player UX polish
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Player UX polish
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Player UX polish.
 
-## v0.5.7 — Player reliability polish
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Player reliability polish
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Player reliability polish.
 
-## v0.5.7 — Search debounce/performance
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Search debounce/performance
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Search debounce/performance.
 
-## v0.5.7 — Artwork/browser cache hints
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Artwork/browser cache hints
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Artwork/browser cache hints.
 
-## v0.5.7 — Provider management polish
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Provider management polish
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Provider management polish.
 
-## v0.5.7 — Profile-scoped history
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Profile-scoped history
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Profile-scoped history.
 
-## v0.5.7 — Profile-scoped favourites
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Profile-scoped favourites
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Profile-scoped favourites.
 
-## v0.5.7 — Profiles polish
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Profiles polish
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Profiles polish.
 
-## v0.5.7 — Guide polish
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Guide polish
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Guide polish.
 
-## v0.5.7 — TV layout polish
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — TV layout polish
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: TV layout polish.
 
-## v0.5.7 — Remote playback controls
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Remote playback controls
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Remote playback controls.
 
-## v0.5.7 — TV/remote focus navigation
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — TV/remote focus navigation
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: TV/remote focus navigation.
 
-## v0.5.7 — Quick search
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Quick search
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Quick search.
 
-## v0.5.7 — Home favourites/history rails
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Home favourites/history rails
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Home favourites/history rails.
 
-## v0.5.7 — Continue Watching polish
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Continue Watching polish
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Continue Watching polish.
 
-## v0.5.7 — Local watch history
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Local watch history
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Local watch history.
 
-## v0.5.7 — Series favourites
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Series favourites
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Series favourites.
 
-## v0.5.7 — Movie favourites
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Movie favourites
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Movie favourites.
 
-## v0.5.7 — Live favourites quick filter
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Live favourites quick filter
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Live favourites quick filter.
 
-## v0.5.7 — Player/session cleanup hardening
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Player/session cleanup hardening
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Player/session cleanup hardening.
 
-## v0.5.7 — Movies/Series catalogue cache
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Movies/Series catalogue cache
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Movies/Series catalogue cache.
 
-## v0.5.7 — GET retry/timeout handling
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — GET retry/timeout handling
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: GET retry/timeout handling.
 
-## v0.5.7 — Diagnostics polish
-- Incremental release in the v0.4.16 → v0.5.7 test train.
+## v0.6.0 — Diagnostics polish
+- Incremental release in the v0.4.16 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Diagnostics polish.
 
-## v0.5.7 — Release smoke test
-- Incremental release in the v0.5.7 → v0.5.7 test train.
+## v0.6.0 — Release smoke test
+- Incremental release in the v0.6.0 → v0.6.0 test train.
 - Preserves all fixes and features from the previous release.
 - Focus: Release smoke test.
 
-## v0.5.7 — updater download fix
+## v0.6.0 — updater download fix
 - Fixes the updater bug that reported a release asset as missing immediately after a successful download.
 - Replaces the incorrect `if ! curl ... || { ... }` construct with a normal `if ! curl; then ... fi`.
 - Verifies the downloaded application archive and checksum file with `test -s` semantics.
@@ -257,14 +284,14 @@
 - Moves the `github-common.sh` shebang back to the first line.
 - Keeps the stable v0.4.14 application and corrected linux-x64 GitHub release workflow unchanged.
 
-## v0.5.7 — Stable release workflow fix
+## v0.6.0 — Stable release workflow fix
 - Keeps the user-confirmed v0.4.6 application baseline used by v0.4.13.
 - Fixes GitHub Actions NETSDK1047 during Publish linux-x64.
 - Adds an explicit runtime-specific `dotnet restore app/MyOnlineTV.Web.csproj -r linux-x64` before publish.
 - Keeps `dotnet publish -r linux-x64 --self-contained false --no-restore` after the matching restore.
 - Keeps release asset verification and GitHub Release publishing.
 
-## v0.5.7 — Stable recovery build
+## v0.6.0 — Stable recovery build
 - Restores the last user-confirmed working application baseline from v0.4.6.
 - Live TV playback retained from the proven FFmpeg/HLS implementation.
 - Movies playback retained from the proven v0.4.5/v0.4.6 implementation.
@@ -274,14 +301,14 @@
 - Uses the corrected GitHub Release workflow and updater infrastructure from the later release-fix work.
 - Intended as the new stable baseline before adding further features.
 
-## v0.5.7
+## v0.6.0
 - Guide programmes now start Live TV immediately when clicked.
 - Removed the old flow that scrolled to a programme details card at the bottom of the Guide and required a second Watch Live click.
 - Playback uses the existing Guide player area above the timeline.
 - Channel-row Live buttons continue to work unchanged.
 - Keeps all v0.4.5 Movies/Series FFmpeg-HLS playback fixes and v0.4.4 release fixes.
 
-## v0.5.7
+## v0.6.0
 - Fixes Movies and Series playback in browsers.
 - Identified raw MKV/TS/provider media as the playback problem: browsers cannot reliably play these containers/codecs through a simple HTTP proxy.
 - Movies and episodes now start server-side FFmpeg HLS playback, like the proven Live TV pipeline.
@@ -291,15 +318,15 @@
 - Download handling remains separate and unchanged.
 - Keeps v0.4.4 release/tag compatibility and all Live TV/catalogue fixes.
 
-## v0.5.7
+## v0.6.0
 - Includes the v0.4.3 Movies/Series lazy-token and catalogue scalability fixes.
 - Fixes GitHub Release packaging so artifact filenames are no longer hard-coded to one version.
-- Release workflow accepts preferred `v0.5.7` tags and legacy-compatible `v.0.5.7` tags.
-- Updater normalizes both tag formats to the canonical artifact name `myonline-tv-web-v0.5.7-linux-x64.tar.gz`.
+- Release workflow accepts preferred `v0.6.0` tags and legacy-compatible `v.0.6.0` tags.
+- Updater normalizes both tag formats to the canonical artifact name `myonline-tv-web-v0.6.0-linux-x64.tar.gz`.
 - Updater now gives a clear error when a GitHub Release exists without built artifacts.
 - README documents how to verify a successful release before updating Proxmox.
 
-## v0.5.7
+## v0.6.0
 - Fixes the Movies/Series catalogue scalability regression identified from v0.4.2 runtime logs.
 - Catalogue endpoints no longer create thousands of proxy/download tokens while loading every movie/episode.
 - Movie playback/download tokens are now created lazily only when Play/Download is clicked.
@@ -307,7 +334,7 @@
 - Keeps Xtream catalogue caching and the v0.4.1 Live TV fix.
 - Reduces memory/CPU pressure caused by very large IPTV VOD catalogues.
 
-## v0.5.7
+## v0.6.0
 - Movies/Series reliability hotfix.
 - Added 10-minute Xtream catalogue caches for VOD and Series categories/items.
 - Bounded catalogue requests so a slow provider does not leave the UI loading indefinitely.
@@ -315,41 +342,41 @@
 - Movies and Series now show load failures inside their grids instead of appearing stuck.
 - Preserves the v0.4.1 Live TV regression fix.
 
-## v0.5.7
+## v0.6.0
 - Critical Live TV regression fix.
 - Removed an accidental Continue Watching block from `playLive()` that referenced undefined `mediaId`, `video` and `url` variables and stopped Live TV before `/api/live/start` was called.
 - Moved Continue Watching tracking into `playMedia()` where those variables belong.
 - Keeps the v0.3.16 working FFmpeg/HLS Live TV start/status/playback flow.
 - Keeps v0.4.0 Guide, channel/group visibility, profiles and system features.
 
-## v0.5.7
+## v0.6.0
 - Viewer profiles with profile picker and Settings management.
 - System dashboard shows active streams, profiles and app memory.
 - Backup now includes channel preferences and profiles.
 - Restore provider/channel/profile/viewing data from a server backup.
 - Includes all Guide, channel management and Movies/Series improvements from v0.3.18–v0.3.20.
 
-## v0.5.7
+## v0.6.0
 - Poster-first Movies and Series presentation.
 - Movie details with plot, genre, year and rating when provided by Xtream.
 - Richer Series cards.
 - Continue Watching progress is saved during movie/episode playback.
 - Home page now has a Continue Watching rail.
 
-## v0.5.7
+## v0.6.0
 - Guide windows for Now, Tonight and Tomorrow.
 - Red current-time line and current-program highlighting.
 - Programme details with Watch live action.
 - Live player stays available above the guide while browsing EPG.
 
-## v0.5.7
+## v0.6.0
 - Start Live TV directly from channel rows and programme blocks in Guide.
 - Hide whole groups or individual channels.
 - Server-side channel/group preferences shared across devices.
 - Local channel aliases.
 - Settings page for managing and restoring hidden groups/channels.
 
-## v0.5.7
+## v0.6.0
 - Live TV UX release.
 - Added Now/Next EPG information to channel cards and player overlay.
 - Added LIVE overlay with channel logo and clock.
@@ -360,19 +387,19 @@
 - Added clearer Connecting / Preparing / Playing / Error playback states.
 - Kept the working v0.3.16 FFmpeg/HLS playback architecture unchanged.
 
-## v0.5.7
+## v0.6.0
 - Release re-spin of v0.3.15 so a clean GitHub Release can be created.
 - Same Live TV direct provider/channel playback flow as v0.3.15.
-- Version and release metadata updated to 0.5.7.
+- Version and release metadata updated to 0.6.0.
 
-## v0.5.7
+## v0.6.0
 - Fixed Live TV playback start by removing the temporary in-memory live proxy token hop.
 - `/api/live/start/{providerId}/{channelKey}` now resolves the channel directly from the server-side provider cache and starts FFmpeg from its protected source URL.
 - Fixed TV Guide playback to pass the channel key instead of the removed `playToken` field.
 - Keeps provider credentials and source stream URLs server-side.
 - Preserves asynchronous FFmpeg/HLS startup and compatibility-transcoding fallback from v0.3.14.
 
-## v0.5.7
+## v0.6.0
 
 - Fixed Live TV channel-list requests timing out at the internal Nginx reverse proxy.
 - Added a 10-minute per-provider channel cache; stale channel data is served immediately while refresh runs in the background.
