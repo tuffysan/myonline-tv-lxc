@@ -1,4 +1,4 @@
-# MyOnline TV Web v0.4.11 — Proxmox LXC
+# MyOnline TV Web v0.4.13 — Proxmox LXC
 
 MyOnline TV Web is a self-hosted entertainment appliance for Proxmox VE.
 
@@ -282,62 +282,50 @@ Back up `secrets.key` together with encrypted provider data.
 The bundled Nginx configuration defaults to HTTP for trusted LAN deployment. Do not directly expose it to the public Internet. Use HTTPS and preferably Tailscale/VPN or a properly secured reverse proxy for remote access.
 
 
-## Live TV browser playback (v0.4.11)
+## Live TV browser playback (v0.4.13)
 
 Raw MPEG-TS/`video/mp2t` Live TV streams are now converted to browser-compatible HLS by FFmpeg inside the LXC. The default path uses stream-copy remuxing (`-c copy`) for low CPU use. If hls.js reports a fatal codec/playback failure, the web UI retries once with H.264/AAC compatibility transcoding. Switching channel stops the previous FFmpeg session and removes temporary HLS segments. Provider source URLs and credentials remain server-side.
 
 ### Live TV channel cache and startup flow
 
-v0.4.11 caches each provider's Live TV channel metadata for 10 minutes. Once a cache exists, stale data is returned immediately while refresh runs in the background. Artwork proxying is lazy, which avoids generating tens of thousands of proxy entries during a channel refresh. Live TV playback no longer uses a temporary in-memory playback token: the browser sends the provider ID and channel key to the server, which resolves the protected source URL from the server-side channel cache. FFmpeg startup remains asynchronous: the browser starts a session and polls its status until HLS is ready, so a slow stream cannot hold an Nginx request open until a gateway timeout.
+v0.4.13 caches each provider's Live TV channel metadata for 10 minutes. Once a cache exists, stale data is returned immediately while refresh runs in the background. Artwork proxying is lazy, which avoids generating tens of thousands of proxy entries during a channel refresh. Live TV playback no longer uses a temporary in-memory playback token: the browser sends the provider ID and channel key to the server, which resolves the protected source URL from the server-side channel cache. FFmpeg startup remains asynchronous: the browser starts a session and polls its status until HLS is ready, so a slow stream cannot hold an Nginx request open until a gateway timeout.
 
 ## Release naming
 
-For v0.4.11 and later, the preferred Git tag format is:
+For v0.4.13 and later, the preferred Git tag format is:
 
 ```text
-v0.4.11
+v0.4.13
 ```
 
-The release workflow also accepts the legacy form `v.0.4.11`, and the updater normalizes both forms when locating release artifacts.
+The release workflow also accepts the legacy form `v.0.4.13`, and the updater normalizes both forms when locating release artifacts.
 
 A successful GitHub Release must contain these generated assets in addition to GitHub's automatic source archives:
 
 ```text
-myonline-tv-web-v0.4.11-linux-x64.tar.gz
-myonline-tv-lxc-v0.4.11-source.tar.gz
+myonline-tv-web-v0.4.13-linux-x64.tar.gz
+myonline-tv-lxc-v0.4.13-source.tar.gz
 SHA256SUMS-RELEASE.txt
 release.json
 ```
 
 If only `Source code (zip)` and `Source code (tar.gz)` are shown, the Release workflow did not finish successfully and the Proxmox updater should not be run yet.
 
-## v0.4.11 media library behaviour
+## Stable baseline: v0.4.13
 
-Movies and Series are loaded in pages of 100 items. Search and category filtering are processed server-side against the ten-minute Xtream catalogue cache. This keeps browser rendering, artwork tokens and response payloads bounded even for very large IPTV libraries.
+v0.4.13 deliberately uses the last user-confirmed working application baseline (v0.4.6) for Live TV, Guide, Movies and Series, while retaining the corrected GitHub release/update infrastructure.
 
-Continue Watching stores stable provider/media identifiers and asks the server for a fresh playback token when resuming, so entries remain usable after MyOnline TV or the LXC has restarted.
-
-## Release workflow (v0.4.11+)
-
-Create the Git tag only after the version commit has been pushed to `main`.
-
-Preferred tag format:
+Create the release tag as:
 
 ```text
-v0.4.11
+v0.4.13
 ```
 
-The workflow validates the Git tag against `VERSION`, builds the .NET application, publishes `linux-x64`, creates checksums, verifies the archives and then creates the GitHub Release.
-
-A successful v0.4.11 release must contain:
+A successful GitHub Release must contain:
 
 ```text
-myonline-tv-web-v0.4.11-linux-x64.tar.gz
-myonline-tv-lxc-v0.4.11-source.tar.gz
+myonline-tv-web-v0.4.13-linux-x64.tar.gz
+myonline-tv-lxc-v0.4.13-source.tar.gz
 SHA256SUMS-RELEASE.txt
 release.json
-Source code (zip)
-Source code (tar.gz)
 ```
-
-If the GitHub Release only shows the two automatic Source code files, the release build failed or did not run. Do not update the Proxmox container until the four generated assets above are present.
