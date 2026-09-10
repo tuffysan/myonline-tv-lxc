@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.9.0 — Responsive & TV UX
+- Added dedicated mobile, tablet, desktop and TV breakpoints.
+- Added mobile bottom navigation and More sheet.
+- Added tablet portrait bottom navigation and landscape compact sidebar.
+- Added swipe-friendly media rails and denser mobile poster grids.
+- Added sticky Guide channel column for mobile/tablet.
+- Added 10-foot TV sizing, focus treatment and fullscreen player improvements.
+- Added TV rail scrolling fallback when spatial navigation reaches an edge.
+- Replaced random remote focus IDs with deterministic per-session IDs.
+
+
 ## v0.8.5 — Poster recovery
 - Added IPTV catalogue-based poster backfill for Continue Watching and Recently Watched.
 - Added legacy title normalization for `SC - ...` history entries.

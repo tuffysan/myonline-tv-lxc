@@ -1,4 +1,4 @@
-# MyOnline TV Web v0.8.5 — Proxmox LXC
+# MyOnline TV Web v0.9.0 — Proxmox LXC
 
 MyOnline TV Web is a self-hosted entertainment appliance for Proxmox VE.
 
@@ -426,3 +426,30 @@ v0.8.0 introduces the first DVR milestone:
 - Persists recovered Recently Watched posters in local history.
 - IPTV episode playback now falls back to the poster from the Series catalogue when `get_series_info` does not return a cover.
 - Existing Plex/Jellyfin dedicated menus from v0.8.4 remain unchanged.
+
+## v0.9.0 — Responsive & TV UX
+
+This milestone introduces dedicated interaction and layout behavior for mobile, tablet, desktop and TV.
+
+### Mobile
+- Replaces the desktop sidebar with a fixed five-button bottom navigation.
+- Adds a More sheet for Series, Plex, Jellyfin, Downloads, Recordings, Search, System and Admin.
+- Uses two-column poster grids and swipe-friendly horizontal media rails.
+- Reduces hero size and increases touch target sizes.
+- Improves episode, channel, form and player layouts for narrow screens.
+
+### Tablet
+- Uses a compact icon-oriented sidebar in landscape.
+- Uses bottom navigation in portrait.
+- Adjusts poster density, spacing and content padding independently from mobile/desktop.
+- Makes the Guide channel column sticky while horizontally scrolling the timeline.
+
+### TV / 10-foot UI
+- Adds a dedicated large-screen/coarse-pointer TV layout.
+- Enlarges text, controls, posters, navigation and focus outlines.
+- Improves D-pad spatial navigation and horizontal rail scrolling.
+- Uses stronger focused-card scaling and scroll-to-focus behavior.
+- Reduces scrollbar emphasis while keeping rails navigable.
+- Improves fullscreen video sizing for televisions.
+
+Existing IPTV, Plex/Jellyfin, DVR, duration, Continue Watching, Recently Watched and poster recovery functionality remains cumulative.

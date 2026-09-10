@@ -427,3 +427,273 @@ img{content-visibility:auto}
   font-size:.72rem;
   opacity:.55;
 }
+
+
+/* =========================================================
+   v0.9.0 Responsive & TV UX
+   Mobile <720 | Tablet 720-1179 | Desktop 1180+ | TV 1400+ coarse pointer
+   ========================================================= */
+
+:root{
+  --mobile-nav-h:72px;
+  --touch-min:44px;
+}
+
+/* Shared responsive polish */
+html,body{max-width:100%;overflow-x:hidden}
+button,a,input,select{touch-action:manipulation}
+.posterCard,.continueCard,.actionCard{transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
+.posterRail,.continueRow,.mediaHistoryRail{-webkit-overflow-scrolling:touch;overscroll-behavior-inline:contain}
+.timelineWrap{-webkit-overflow-scrolling:touch}
+
+/* Mobile bottom navigation */
+.mobileBottomNav{
+  display:none;
+  position:fixed;
+  left:0;right:0;bottom:0;
+  min-height:var(--mobile-nav-h);
+  z-index:90;
+  grid-template-columns:repeat(5,1fr);
+  padding:7px max(8px,env(safe-area-inset-right)) calc(7px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));
+  background:rgba(7,16,24,.96);
+  backdrop-filter:blur(18px);
+  border-top:1px solid #29475d;
+  box-shadow:0 -12px 35px rgba(0,0,0,.35);
+}
+.mobileBottomNav button{
+  min-width:0;
+  min-height:54px;
+  display:grid;
+  place-items:center;
+  gap:2px;
+  border:0;
+  border-radius:13px;
+  background:transparent;
+  color:#aebdcc;
+}
+.mobileBottomNav button span{font-size:1.15rem}
+.mobileBottomNav button small{font-size:.72rem}
+.mobileBottomNav button.active{color:#fff;background:#143149}
+.mobileBottomNav button.active span{color:var(--accent)}
+
+.mobileMoreSheet{
+  position:fixed;
+  left:10px;right:10px;
+  bottom:calc(var(--mobile-nav-h) + 10px + env(safe-area-inset-bottom));
+  z-index:95;
+  padding:10px 12px 16px;
+  border:1px solid #29475d;
+  border-radius:20px;
+  background:rgba(9,24,35,.98);
+  backdrop-filter:blur(20px);
+  box-shadow:0 20px 60px rgba(0,0,0,.5);
+}
+.mobileMoreHandle{width:44px;height:4px;border-radius:4px;background:#45677d;margin:2px auto 12px}
+.mobileMoreGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.mobileMoreGrid button{
+  min-height:58px;
+  display:flex;align-items:center;gap:10px;
+  padding:12px 14px;
+  border-radius:14px;border:1px solid var(--line);
+  background:#10283a;color:#fff;text-align:left;
+}
+.mobileMoreGrid button span{font-size:1.1rem}
+
+/* MOBILE */
+@media(max-width:719px){
+  #app{display:block!important;padding-bottom:calc(var(--mobile-nav-h) + env(safe-area-inset-bottom))}
+  aside{display:none!important}
+  main{width:100%;min-width:0}
+  main header{display:flex!important;position:sticky;top:0;z-index:20;height:auto;min-height:52px;padding:10px 14px;background:rgba(7,16,24,.94);backdrop-filter:blur(12px)}
+  #status{display:none}
+  #userBadge{margin-left:auto}
+  #content{padding:12px 12px 22px}
+  .mobileBottomNav{display:grid}
+
+  .hero{padding:17px 16px;border-radius:16px;margin-bottom:14px}
+  .hero h2{font-size:clamp(1.65rem,8vw,2.15rem);margin:.2em 0 .35em}
+  .hero p{font-size:.92rem;line-height:1.45}
+  .hero .row{display:grid;grid-template-columns:1fr auto;gap:7px}
+  .hero input{min-width:0;width:100%}
+  .hero .btn{padding-inline:13px}
+
+  .stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-bottom:16px}
+  .stat{padding:11px 9px;border-radius:12px}
+  .stat b{font-size:1.3rem}.stat span{font-size:.68rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  #content h2{font-size:1.3rem;margin-top:20px}
+  .sectionHead{margin-top:18px}
+  .sectionHead h2{font-size:1.3rem}
+  .linkButton{min-height:var(--touch-min)}
+
+  .posterGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .posterBody{padding:9px}
+  .posterBody b{font-size:.88rem}
+  .posterBody small{font-size:.74rem}
+  .posterRail,.continueRow,.mediaHistoryRail{
+    grid-auto-columns:minmax(145px,44vw)!important;
+    gap:10px;
+    padding-bottom:10px;
+    scroll-snap-type:x mandatory;
+  }
+  .posterRail .posterCard,.mediaHistoryRail .historyCard{scroll-snap-align:start}
+  .historyCardBody{padding:9px 10px 11px}
+  .historyCardBody b{font-size:.88rem}
+  .historyCardBody small{font-size:.72rem}
+
+  .grid{grid-template-columns:1fr 1fr;gap:9px}
+  .actionCard{padding:13px}
+  .actionCard h3{font-size:1rem;margin:.2em 0}
+  .actionCard p{font-size:.78rem;margin:.4em 0 0}
+
+  .toolbar{top:52px;padding:7px 0 9px;gap:7px}
+  .toolbar input,.toolbar select{min-width:0;width:100%;flex:1 1 100%}
+  .toolbar .btn{min-height:var(--touch-min)}
+
+  .channelCard{grid-template-columns:42px 1fr auto!important;gap:8px;padding:8px}
+  .channelCard .round+button,.channelCard button:nth-of-type(n+3){display:none}
+  .logoBox{width:40px;height:34px}.logoBox img{max-width:38px;max-height:30px}
+
+  .seriesHero{grid-template-columns:80px 1fr;gap:12px}
+  .seriesHero img{width:80px}
+  .episode{align-items:flex-start;flex-direction:column}
+  .episode .row{width:100%}.episode .btn{flex:1}
+
+  .serviceRow{display:grid;grid-template-columns:1fr 1fr}
+  .service{padding:12px 10px;text-align:center}
+
+  .formGrid{grid-template-columns:1fr!important}
+  .manageChannel{grid-template-columns:1fr!important}
+  .recordForm{grid-template-columns:1fr}
+  .recordingCard{align-items:flex-start;flex-direction:column}
+
+  video{max-height:72vh;border-radius:10px}
+  .playerCard{padding:6px;border-radius:12px}
+  .mediaTimeBar{padding:7px 7px 0}
+
+  /* EPG: sticky channel names while horizontal scrolling */
+  .timelineWrap{border-radius:11px}
+  .timelineHead,.timelineRow{grid-template-columns:105px minmax(820px,1fr)!important}
+  .channelHead,.timelineChannel{position:sticky;left:0;z-index:5}
+  .channelHead{background:#0c1b28}
+  .timelineChannel{background:#0d1c29}
+  .timelineChannel img{width:30px;max-height:26px}
+  .programLane,.timelineRow{min-height:62px}
+  .prog{height:50px;top:6px;padding:5px}
+  .prog small{font-size:.7rem}
+
+  .authCard{padding:20px}
+}
+
+/* TABLET portrait/landscape */
+@media(min-width:720px) and (max-width:1179px){
+  #app{grid-template-columns:86px minmax(0,1fr)}
+  aside{width:86px;padding:14px 10px;overflow:hidden}
+  .brand h1,.brand small{display:none}
+  .brandIcon{margin:0 auto 12px}
+  nav button{
+    min-height:54px;
+    padding:10px 6px;
+    text-align:center;
+    font-size:0;
+  }
+  nav button::first-letter{font-size:1rem}
+  nav button[data-view]{
+    display:grid;
+    place-items:center;
+  }
+  .logout{font-size:0;min-height:48px}
+  .logout::before{content:"↪";font-size:1rem}
+  #content{padding:20px}
+  .hero{padding:22px}
+  .hero h2{font-size:30px}
+  .stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .posterGrid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:13px}
+  .posterRail,.continueRow,.mediaHistoryRail{grid-auto-columns:minmax(155px,190px)}
+  .formGrid{grid-template-columns:1fr 1fr}
+  .timelineHead,.timelineRow{grid-template-columns:145px minmax(900px,1fr)}
+  .channelHead,.timelineChannel{position:sticky;left:0;z-index:5}
+  .channelHead{background:#0c1b28}
+  .timelineChannel{background:#0d1c29}
+}
+
+/* Tablet portrait gets mobile bottom nav and hides compact sidebar */
+@media(min-width:720px) and (max-width:900px) and (orientation:portrait){
+  #app{display:block!important;padding-bottom:var(--mobile-nav-h)}
+  aside{display:none!important}
+  .mobileBottomNav{display:grid}
+  main header{position:sticky;top:0;z-index:20}
+  #content{padding:18px}
+  .posterGrid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .posterRail,.continueRow,.mediaHistoryRail{grid-auto-columns:minmax(170px,28vw)}
+}
+
+/* DESKTOP */
+@media(min-width:1180px) and (max-width:1799px){
+  .posterGrid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+  .posterRail,.continueRow,.mediaHistoryRail{grid-auto-columns:minmax(180px,220px)}
+}
+
+/* TV / 10-foot UX */
+@media(min-width:1400px) and (pointer:coarse){
+  body{font-size:20px}
+  #app{grid-template-columns:300px minmax(0,1fr)}
+  aside{padding:24px 18px}
+  .brandIcon{width:54px;height:54px}
+  .brand h1{font-size:1.55rem}
+  nav{gap:10px}
+  nav button,.logout{min-height:62px;font-size:1.08rem;padding:15px 18px}
+  main header{min-height:86px;padding:28px 40px}
+  #content{padding:38px 46px}
+  .hero{padding:38px;border-radius:24px}
+  .hero h2{font-size:2.5rem}
+  .hero p{font-size:1.05rem}
+  .stats{gap:18px}.stat{padding:24px}.stat b{font-size:2rem}
+  .posterGrid{grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:24px}
+  .posterRail,.continueRow,.mediaHistoryRail{grid-auto-columns:minmax(220px,270px);gap:20px}
+  .posterBody{padding:16px}
+  .posterBody b,.historyCardBody b{font-size:1.05rem}
+  .btn,input,select{min-height:54px;font-size:1rem}
+  .channelCard{min-height:84px}
+  .timelineHead,.timelineRow{grid-template-columns:210px minmax(1200px,1fr)}
+  .timelineRow,.programLane{min-height:86px}
+  .prog{height:72px}
+  video{max-height:74vh}
+  .tvRemoteHint{font-size:18px}
+  .mediaHistoryRail::-webkit-scrollbar,
+  .posterRail::-webkit-scrollbar,
+  .continueRow::-webkit-scrollbar{height:4px}
+  .mediaHistoryRail::-webkit-scrollbar-thumb,
+  .posterRail::-webkit-scrollbar-thumb,
+  .continueRow::-webkit-scrollbar-thumb{background:rgba(91,200,255,.38)}
+}
+
+/* Strong focus for remote users */
+.isTV .tvRemoteMode button:focus,
+.isTV .tvRemoteMode a:focus,
+.isTV .tvRemoteMode input:focus,
+.isTV .tvRemoteMode select:focus,
+.isTV button:focus-visible,
+.isTV a:focus-visible{
+  outline:5px solid var(--accent);
+  outline-offset:5px;
+  box-shadow:0 0 0 4px rgba(0,0,0,.8),0 18px 48px rgba(0,0,0,.55);
+}
+.isTV .posterCard:focus-visible,
+.isTV .historyCard:focus-within{
+  transform:scale(1.07);
+  z-index:8;
+}
+
+/* Safer fullscreen on TV */
+.isTV .playerCard:fullscreen{
+  padding:0;
+  border:0;
+  border-radius:0;
+}
+.isTV .playerCard:fullscreen video{
+  width:100vw;
+  height:100vh;
+  max-height:100vh;
+  object-fit:contain;
+}

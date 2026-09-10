@@ -43,6 +43,69 @@ async function api(url,opt={}){
 }
 const jpost=(url,obj)=>api(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(obj)});
 
+function updateResponsiveMode(){
+  const w=window.innerWidth;
+  const coarse=window.matchMedia?.('(pointer:coarse)')?.matches===true;
+  const root=document.documentElement;
+  root.classList.toggle('isMobile',w<720);
+  root.classList.toggle('isTablet',w>=720&&w<1180);
+  root.classList.toggle('isTV',w>=1400&&coarse);
+  root.classList.toggle('isDesktop',w>=1180&&!coarse);
+}
+
+function renderMobileNavigation(){
+  const host=$('#mobileBottomNav');
+  if(!host)return;
+  const primary=[
+    ['home','⌂','Home'],
+    ['live','▣','Live'],
+    ['guide','▤','Guide'],
+    ['movies','▶','Movies']
+  ];
+  host.innerHTML=primary.map(([view,icon,label])=>`<button data-mobile-view="${view}" class="${currentView===view?'active':''}"><span>${icon}</span><small>${label}</small></button>`).join('')+
+    `<button id=mobileMoreButton class="${['series','plex','jellyfin','downloads','recordings','search','system','admin'].includes(currentView)?'active':''}"><span>•••</span><small>More</small></button>`;
+  host.querySelectorAll('[data-mobile-view]').forEach(b=>b.onclick=()=>show(b.dataset.mobileView));
+  $('#mobileMoreButton').onclick=toggleMobileMore;
+}
+
+function toggleMobileMore(){
+  const sheet=$('#mobileMoreSheet');
+  if(!sheet)return;
+  const open=sheet.classList.contains('hidden');
+  if(!open){sheet.classList.add('hidden');sheet.setAttribute('aria-hidden','true');return}
+  const items=[
+    ['series','▦','Series'],
+    ['plex','◆','Plex'],
+    ['jellyfin','◇','Jellyfin'],
+    ['downloads','↓','Downloads'],
+    ['recordings','●','Recordings'],
+    ['search','⌕','Search'],
+    ['system','◉','System'],
+    ['admin','🛡','Admin']
+  ];
+  sheet.innerHTML=`<div class=mobileMoreHandle></div><div class=mobileMoreGrid>${
+    items.map(([view,icon,label])=>{
+      const desktop=document.querySelector(`nav button[data-view="${view}"]`);
+      if(desktop?.classList.contains('hidden'))return '';
+      if((view==='system'||view==='admin')&&authState.role!=='Admin')return '';
+      return `<button data-more-view="${view}"><span>${icon}</span><b>${label}</b></button>`;
+    }).join('')
+  }</div>`;
+  sheet.classList.remove('hidden');
+  sheet.setAttribute('aria-hidden','false');
+  sheet.querySelectorAll('[data-more-view]').forEach(b=>b.onclick=()=>{sheet.classList.add('hidden');show(b.dataset.moreView)});
+}
+
+window.addEventListener('resize',debounce(()=>{updateResponsiveMode();renderMobileNavigation()},120));
+document.addEventListener('click',e=>{
+  const sheet=$('#mobileMoreSheet');
+  if(!sheet||sheet.classList.contains('hidden'))return;
+  if(e.target.closest('#mobileMoreSheet')||e.target.closest('#mobileMoreButton'))return;
+  sheet.classList.add('hidden');
+  sheet.setAttribute('aria-hidden','true');
+});
+updateResponsiveMode();
+
 async function boot(){
   const st=await fetch('/api/auth/status',{credentials:'same-origin'}).then(r=>r.json());
   if(!st.configured||!st.authenticated){await authGate(st);return}
@@ -81,6 +144,8 @@ async function enterApp(st){
   const brandVersion=$('#brandVersion');if(brandVersion)brandVersion.textContent=`Web v${s.version} · Unified Media Center`;
   providers=await api('/api/providers');fav=new Set(await api('/api/favourites'));profiles=await api('/api/profiles');try{mediaLibraries=await api('/api/media-libraries')}catch{mediaLibraries=[]}try{accessState=await api('/api/access/me')}catch{accessState={allowedProfileIds:profiles.map(p=>p.id),defaultProfileId:profiles[0]?.id||'default',policies:{}}}profiles=profiles.filter(p=>authState.role==='Admin'||(accessState.allowedProfileIds||[]).includes(p.id));if(!profiles.some(p=>p.id===currentProfile))currentProfile=accessState.defaultProfileId||profiles[0]?.id||'default';applyPermissions();renderMediaLibraryNav();renderProfileBadge();
   if(!currentProvider&&providers.length)currentProvider=providers[0].id;
+  updateResponsiveMode();
+  renderMobileNavigation();
   show('home');
 }
 $('#logout').onclick=async()=>{await api('/api/auth/logout',{method:'POST'});await authGate()};
@@ -104,6 +169,8 @@ async function refreshMediaLibraryNav(){
 async function show(v){
   if(!viewAllowed(v)){v='home'}
   currentView=v;destroyPlayer();
+  renderMobileNavigation();
+  const moreSheet=$('#mobileMoreSheet');if(moreSheet){moreSheet.classList.add('hidden');moreSheet.setAttribute('aria-hidden','true')}
   title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'Recordings',search:'Search',system:'System',admin:'Admin'})[v]||v;
   if(v==='home')await home();
   if(v==='live')await live();
@@ -1280,7 +1347,19 @@ function tvMoveSpatial(direction){
   if(best){
     best.focus({preventScroll:true});
     best.scrollIntoView({block:'nearest',inline:'nearest',behavior:'smooth'});
+  }else{
+    tvScrollRailFromFocused(direction);
   }
+}
+
+function tvScrollRailFromFocused(direction){
+  const focused=document.activeElement;
+  const rail=focused?.closest?.('.posterRail,.continueRow,.mediaHistoryRail');
+  if(!rail)return false;
+  if(direction!=='left'&&direction!=='right')return false;
+  const delta=Math.max(220,Math.floor(rail.clientWidth*.72))*(direction==='left'?-1:1);
+  rail.scrollBy({left:delta,behavior:'smooth'});
+  return true;
 }
 
 function tvActivateFocused(){
@@ -1306,7 +1385,8 @@ document.addEventListener('focusin',e=>{
   const el=e.target;
   if(!el?.matches?.('button,a[href],input,select,[tabindex]'))return;
   if(!el.dataset.tvFocusId){
-    el.dataset.tvFocusId='tv-'+Math.random().toString(36).slice(2,10);
+    window.__tvFocusSeq=(window.__tvFocusSeq||0)+1;
+    el.dataset.tvFocusId='tv-'+window.__tvFocusSeq;
   }
   if(currentView)tvLastFocusByView[currentView]=el.dataset.tvFocusId;
 });
