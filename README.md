@@ -1,4 +1,4 @@
-# MyOnline TV Web v2.0.0 — Proxmox LXC
+# MyOnline TV Web v2.0.1 — Proxmox LXC
 
 MyOnline TV Web is a self-hosted entertainment appliance for Proxmox VE.
 
@@ -490,8 +490,8 @@ Existing IPTV, Plex/Jellyfin, DVR, duration, Continue Watching, Recently Watched
 - Uses the same responsive mobile/tablet/TV behavior introduced in v0.9.0.
 
 
-## v2.0.0 — First stable milestone
-v2.0.0 is the cumulative first major milestone of MyOnline TV Web.
+## v2.0.1 — First stable milestone
+v2.0.1 is the cumulative first major milestone of MyOnline TV Web.
 
 It contains:
 - IPTV Live TV, EPG Guide, Movies and Series.
@@ -508,7 +508,7 @@ It contains:
 `RELEASE-CHECKLIST.md` is included and should be completed on the target system before declaring the installation the production baseline.
 
 
-## v2.0.0 — DVR & Storage
+## v2.0.1 — DVR & Storage
 
 ### Live TV DVR
 - Live TV channel cards now have a red **Record** button.
@@ -536,7 +536,7 @@ Movie/episode Download now asks for a destination:
 Protected/DRM content is not decrypted or bypassed.
 
 
-## v2.0.0 — Smart DVR
+## v2.0.1 — Smart DVR
 
 - Series recording rules from Guide
 - New-episodes-only flag
@@ -546,7 +546,7 @@ Protected/DRM content is not decrypted or bypassed.
 - DVR rules management in Recordings
 
 
-## v2.0.0 — Unified Library
+## v2.0.1 — Unified Library
 
 - Single Library view across configured media libraries
 - Title-normalized duplicate grouping
@@ -555,7 +555,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Poster and source metadata retained
 
 
-## v2.0.0 — Smart Home
+## v2.0.1 — Smart Home
 
 - Profile-aware Smart Home state
 - Time-aware greeting/status strip
@@ -565,7 +565,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Existing Continue Watching and Recently Watched retained
 
 
-## v2.0.0 — DVR Library
+## v2.0.1 — DVR Library
 
 - Completed recordings grouped into a DVR Library
 - Automatic title-based series grouping
@@ -575,7 +575,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Scheduled/active recording list remains available
 
 
-## v2.0.0 — Search 2.0
+## v2.0.1 — Search 2.0
 
 - One search UI across unified Movies and Series
 - Live TV channel search
@@ -584,7 +584,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Parallel source queries with graceful source failure
 
 
-## v2.0.0 — Multi-room
+## v2.0.1 — Multi-room
 
 - Rooms/devices registry
 - TV/browser device classification
@@ -594,7 +594,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Foundation for Continue on another screen
 
 
-## v2.0.0 — Installable PWA
+## v2.0.1 — Installable PWA
 
 - Installable web app manifest
 - Standalone display mode
@@ -604,7 +604,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Theme metadata for mobile/desktop installation
 
 
-## v2.0.0 — Notifications
+## v2.0.1 — Notifications
 
 - In-app notification center
 - Read/unread state
@@ -613,7 +613,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Persistent notification history
 
 
-## v2.0.0 — Appliance milestone
+## v2.0.1 — Appliance milestone
 
 - Appliance health dashboard
 - Disk usage/free-space status

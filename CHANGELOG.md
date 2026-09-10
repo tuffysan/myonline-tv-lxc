@@ -1,6 +1,14 @@
 # Changelog
 
-## v2.0.0 — DVR & Storage
+## v2.0.1 — Navigation hotfix
+- Fixed Appliance menu click not dispatching `applianceView()`.
+- Fixed Alerts menu click not dispatching `notificationsView()`.
+- Fixed Rooms menu click not dispatching `roomsView()`.
+- Fixed Library menu click not dispatching `unifiedLibraryView()`.
+- Added regression validation for every menu view registered in the v2.0 navigation.
+
+
+## v2.0.1 — DVR & Storage
 - Exposed Live TV recording directly in Live TV and the player.
 - Reworked Guide programme click into Play / Record actions.
 - Added Admin → Storage.

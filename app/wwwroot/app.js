@@ -191,6 +191,10 @@ async function show(v){
   if(v==='jellyfin')await mediaLibraryView('jellyfin');
   if(v==='downloads')await downloadView();
   if(v==='recordings')await recordingsView();
+  if(v==='appliance')await applianceView();
+  if(v==='notifications')await notificationsView();
+  if(v==='rooms')await roomsView();
+  if(v==='library')await unifiedLibraryView();
   if(v==='search')await searchView();
   if(v==='system')await systemView();
   if(v==='admin')await adminView();
