@@ -1,21 +1,25 @@
-# MyOnline TV v0.5.5 — Reliability & Recovery
+# MyOnline TV v0.5.6 — TV & Remote UX
 
-## Reliability
-GET requests retry up to three times for transient network errors and HTTP 429/502/503/504. Retries use progressive delays. Long-running Movies catalogue requests keep their existing custom timeout.
+This release focuses on television and remote-control use without changing the working Live, Movies or Series playback APIs.
 
-## Recovery
-System → Run recovery cleans exited Live/FFmpeg sessions and stale HLS folders older than 12 hours. Active streams are not touched.
+## Navigation
+- Arrow keys move spatially to the nearest control in that direction.
+- Enter/OK activates the focused control.
+- Escape/Backspace returns to Home, unless fullscreen is active.
+- Focus is remembered per view during the current browser session.
 
-## Diagnostics
-System now displays:
-- catalogue cache size and file count
-- latest successful catalogue refreshes
-- recent tracked provider/catalogue errors
-- active Live streams and existing runtime information
+## Playback remote keys
+- Media Play / Pause are supported.
+- F enters fullscreen.
+- Movies and Series: Media Rewind / Fast Forward or J / L seek 10 seconds.
+- Live TV playback behavior is intentionally left unchanged.
+
+## TV presentation
+Remote use enables a stronger focus ring, larger cards and controls on large displays, plus a short remote-help overlay.
 
 ## Publishing
-From this release onward use only:
+Use the same permanent script as future releases:
 
     PUBLISH.cmd
 
-The script reads VERSION, commits changes, pushes main, safely handles the release tag and pushes it to trigger GitHub Actions. The same script is intended for all future versions.
+It reads the release version from VERSION.
