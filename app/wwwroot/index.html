@@ -9,6 +9,7 @@
 <link rel="apple-touch-icon" href="/app-icon.svg">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="stylesheet" href="styles.css">
+<link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0b1a26"><link rel="icon" href="/icon.svg">
 </head>
 <body>
 <div id="auth" class="auth hidden"></div>
@@ -29,7 +30,11 @@
       <button data-view="jellyfin" class="hidden media-library-nav">◇ Jellyfin</button>
       <button data-view="downloads">↓ Downloads</button>
       <button data-view="recordings">● Recordings</button>
-      <button data-view="search">⌕ Search</button>
+      <button data-view="appliance" class="navbtn">⚙ Appliance</button>
+        <button data-view="notifications" class="navbtn">● Alerts</button>
+        <button data-view="rooms" class="navbtn">▣ Rooms</button>
+        <button data-view="library" class="navbtn">▦ Library</button>
+        <button data-view="search">⌕ Search</button>
       <button data-view="system" data-admin-only>◉ System</button>
       <button data-view="admin" data-admin-only>🛡 Admin</button>
     </nav>

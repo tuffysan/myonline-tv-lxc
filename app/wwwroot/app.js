@@ -79,7 +79,7 @@ function toggleMobileMore(){
     ['jellyfin','◇','Jellyfin'],
     ['downloads','↓','Downloads'],
     ['recordings','●','DVR'],
-    ['search','⌕','Search'],
+    ['appliance','⚙','Appliance'],['notifications','●','Alerts'],['rooms','▣','Rooms'],['library','▦','Library'],['search','⌕','Search'],
     ['system','◉','System'],
     ['admin','🛡','Admin']
   ];
@@ -181,7 +181,7 @@ async function show(v){
   currentView=v;destroyPlayer();
   renderMobileNavigation();
   const moreSheet=$('#mobileMoreSheet');if(moreSheet){moreSheet.classList.add('hidden');moreSheet.setAttribute('aria-hidden','true');document.body.classList.remove('mobileSheetOpen')}
-  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'Recordings',search:'Search',system:'System',admin:'Admin'})[v]||v;
+  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'Recordings',appliance:'Appliance',notifications:'Notifications',rooms:'Rooms',library:'Library',search:'Search',system:'System',admin:'Admin'})[v]||v;
   if(v==='home')await home();
   if(v==='live')await live();
   if(v==='guide')await guide();
@@ -224,6 +224,19 @@ async function selectProfile(id){
   currentProfile=id;localStorage.setItem('myonline-profile',id);$('#profilePicker')?.remove();applyPermissions();renderProfileBadge();show('home')
 }
 
+
+function homePrefsKey(){return `myonline-home-prefs-v1:${currentProfile||'default'}`}
+function getHomePrefs(){try{return JSON.parse(localStorage.getItem(homePrefsKey())||'{}')}catch{return {}}}
+function saveHomePrefs(p){localStorage.setItem(homePrefsKey(),JSON.stringify(p||{}))}
+function smartHomeGreeting(){
+  const h=new Date().getHours();
+  return h<11?'Good morning':h<17?'Good afternoon':'Good evening';
+}
+function smartHomeStatus(){
+  const watched=getWatchedSet().size,hist=getMediaHistory().length;
+  return `<div class=smartHomeStrip><span>${smartHomeGreeting()}</span><small>${watched} watched · ${hist} recent</small><button class=linkButton onclick="show('library')">Open Library</button></div>`;
+}
+
 async function home(){
   let unifiedMovies=[],unifiedSeries=[];
   try{
@@ -249,7 +262,7 @@ async function home(){
   const hasJellyfin=(mediaLibraries||[]).some(x=>x.enabled!==false&&String(x.type).toLowerCase()==='jellyfin');
   const mediaFavs=getMediaFavs().slice(0,12);
 
-  content.innerHTML=`<div class="hero homeHero"><div><span class=kicker>MYONLINE TV</span><h2>What do you want to watch?</h2>
+  content.innerHTML=`${smartHomeStatus()}<div class="hero homeHero"><div><span class=kicker>MYONLINE TV</span><h2>What do you want to watch?</h2>
   <p class=muted>Live TV, IPTV, Plex and Jellyfin — one home screen.</p>
   <div class=row><input id=homeSearch placeholder="Search everything"><button class=btn id=homeSearchButton>Search</button></div></div></div>
 
@@ -264,11 +277,11 @@ async function home(){
 
   ${continueItems.length?`<div class=sectionHead><h2>Continue watching</h2><button class=linkButton onclick="clearContinueWatching()">Clear all</button></div><div class="continueRow mediaHistoryRail">${continueItems.slice(0,16).map(x=>`<div class="continueCard historyCard"><button class=historyMain onclick='resumeContinueItem(${JSON.stringify(x)})'>${mediaPosterMarkup(x.poster,x.title)}<div class=historyCardBody><b>${esc(x.title)}</b><small>${formatMediaTime(x.positionSeconds||0)}${x.durationSeconds?' / '+formatMediaTime(x.durationSeconds):''}</small>${x.durationSeconds?`<div class=continueProgress><span style="width:${continueProgress(x)}%"></span></div>`:''}</div></button><div class=historyActions><button class=historyWatched title="Mark as watched" onclick='markContinueWatched(${JSON.stringify(x.id)})'>✓</button><button class=historyRemove title="Remove" onclick='removeContinueWatching(${JSON.stringify(x.id)})'>×</button></div></div>`).join('')}</div><div id=mediaPlayer></div>`:''}
 
-  ${recentlyAdded.length?`<div class=sectionHead><h2>Recently added</h2><button class=linkButton onclick="show('search')">Browse all</button></div><div class=posterRail>${recentlyAdded.map(x=>`<button class=posterCard onclick='playUnifiedItem(${JSON.stringify(x.kind==='series'?{...x,kind:"series"}:x)})'>${x.poster?`<img loading=lazy decoding=async src="${escAttr(x.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(x.name)}</b><small><span class=sourceBadge>${esc(x.source||'media')}</span> ${esc(x.year||'')}</small></div></button>`).join('')}</div>`:''}
+  ${recentlyAdded.length?`<div class=sectionHead><h2>New for you</h2><button class=linkButton onclick="show('search')">Browse all</button></div><div class=posterRail>${recentlyAdded.map(x=>`<button class=posterCard onclick='playUnifiedItem(${JSON.stringify(x.kind==='series'?{...x,kind:"series"}:x)})'>${x.poster?`<img loading=lazy decoding=async src="${escAttr(x.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(x.name)}</b><small><span class=sourceBadge>${esc(x.source||'media')}</span> ${esc(x.year||'')}</small></div></button>`).join('')}</div>`:''}
 
   ${homeMediaRails(homeHistory)}
 
-  ${mediaFavs.length?`<div class=sectionHead><h2>My favourites</h2></div><div class=posterRail>${mediaFavs.map(x=>`<button class=posterCard onclick='openHomeFavourite(${JSON.stringify(x)})'>${x.poster?`<img loading=lazy decoding=async src="${escAttr(x.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(x.name)}</b><small>${esc(x.type||'')}</small></div></button>`).join('')}</div>`:''}
+  ${mediaFavs.length?`<div class=sectionHead><h2>Your favourites</h2></div><div class=posterRail>${mediaFavs.map(x=>`<button class=posterCard onclick='openHomeFavourite(${JSON.stringify(x)})'>${x.poster?`<img loading=lazy decoding=async src="${escAttr(x.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(x.name)}</b><small>${esc(x.type||'')}</small></div></button>`).join('')}</div>`:''}
 
   ${unifiedMovies.length?`<div class=sectionHead><h2>Movies from media libraries</h2></div><div class=posterRail>${unifiedMovies.slice(0,14).map(m=>`<button class=posterCard onclick='playUnifiedItem(${JSON.stringify(m)})'>${m.poster?`<img loading=lazy decoding=async src="${escAttr(m.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(m.name)}</b><small><span class=sourceBadge>${esc(m.source)}</span> ${esc(m.year||'')}</small></div></button>`).join('')}</div>`:''}
 
@@ -1727,12 +1740,20 @@ function showGuideProgramActions(channelKey,channelName,programJson){
   let pr;try{pr=JSON.parse(programJson)}catch{return}
   const box=document.createElement('div');
   box.id='programActionSheet';box.className='programActionSheet';
-  box.innerHTML=`<div class=programActionCard><button class=dialogClose onclick="closeProgramActions()">×</button><span class=kicker>TV GUIDE</span><h3>${esc(pr.title||channelName)}</h3><p>${esc(channelName)} · ${new Date(pr.start).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}–${new Date(pr.stop).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</p><div class=row><button class=btn id=guidePlay>▶ Play channel</button><button class="btn recordBtn" id=guideRecord>● Record programme</button></div></div>`;
+  box.innerHTML=`<div class=programActionCard><button class=dialogClose onclick="closeProgramActions()">×</button><span class=kicker>TV GUIDE</span><h3>${esc(pr.title||channelName)}</h3><p>${esc(channelName)} · ${new Date(pr.start).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}–${new Date(pr.stop).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</p><div class=row><button class=btn id=guidePlay>▶ Play channel</button><button class="btn recordBtn" id=guideRecord>● Record programme</button><button class=btn id=guideSeries>● Record series</button></div></div>`;
   document.body.appendChild(box);
   $('#guidePlay').onclick=()=>{closeProgramActions();playLive(channelKey,channelName)};
-  $('#guideRecord').onclick=()=>{closeProgramActions();scheduleGuideRecording(channelKey,channelName,programJson)};
+  $('#guideRecord').onclick=()=>{closeProgramActions();scheduleGuideRecording(channelKey,channelName,programJson)};$('#guideSeries').onclick=()=>{closeProgramActions();createSeriesDvrRule(channelKey,channelName,programJson)};
 }
 
+async function createSeriesDvrRule(channelKey,channelName,programJson){
+  try{
+    const pr=JSON.parse(programJson),targets=await storageTargets(),target=targets.find(x=>x.defaultDvr)||targets[0];
+    if(!target){alert('Configure DVR Storage first.');return}
+    await jpost('/api/dvr/rules',{providerId:currentProvider,channelKey,channelName,titlePattern:pr.title||channelName,newOnly:true,enabled:true,paddingBeforeMinutes:5,paddingAfterMinutes:10,keepLatest:5,storageTargetId:target.id});
+    alert('Series recording rule created.');
+  }catch(e){alert(friendlyError(e))}
+}
 async function scheduleGuideRecording(channelKey,channelName,programJson){
   try{
     const pr=JSON.parse(programJson);
@@ -1754,7 +1775,7 @@ async function scheduleGuideRecording(channelKey,channelName,programJson){
 
 async function recordingsView(){
   if(!await ensureProvider()){content.innerHTML=noProvider();return}
-  const [rows,targets]=await Promise.all([api('/api/recordings'),storageTargets()]);
+  const [rows,targets,dvrRules]=await Promise.all([api('/api/recordings'),storageTargets(),api('/api/dvr/rules')]);
   const ch=await api('/api/channels/'+currentProvider);
   const now=new Date(),later=new Date(now.getTime()+60*60*1000);
   content.innerHTML=`<div class=hero><h2>DVR · Live TV recordings</h2><p class=muted>Record Live TV now or schedule programmes from Guide. Recordings are written to your configured Storage target, not kept permanently in the LXC.</p><div class=row><button class=btn onclick="show('live')">● Record Live TV</button><button class=btn onclick="show('guide')">▤ Schedule from Guide</button>${authState.role==='Admin'?'<button class=btn onclick="show(\'admin\')">Storage settings</button>':''}</div></div>
@@ -1768,7 +1789,7 @@ async function recordingsView(){
     <label>End <input id=recEnd type=datetime-local value="${toLocalInputValue(later)}"></label>
     <button class=btn id=recSchedule>Schedule recording</button>
   </div></div>
-  <div class=recordingList>${rows.length?rows.map(recordingCard).join(''):'<div class=card>No recordings scheduled yet.</div>'}</div>`;
+  <div class=card><h3>Series recording rules</h3>${dvrRules.length?dvrRules.map(r=>`<div class=episode><span><b>${esc(r.titlePattern)}</b><small>${esc(r.channelName)} · ${r.newOnly?'New episodes only':'All episodes'} · ${r.paddingBeforeMinutes}m before / ${r.paddingAfterMinutes}m after · keep ${r.keepLatest}</small></span><button class=btn onclick="deleteDvrRule('${r.id}')">Remove</button></div>`).join(''):'<p class=muted>No series recording rules yet. Create one from Guide.</p>'}</div><div class=sectionHead><h2>DVR Library</h2></div>${dvrLibraryMarkup(rows)}<div class=recordingList>${rows.length?rows.map(recordingCard).join(''):'<div class=card>No recordings scheduled yet.</div>'}</div>`;
 
   $('#provider').onchange=async e=>{currentProvider=e.target.value;await recordingsView()};
   $('#recSchedule').onclick=async()=>{
@@ -1798,34 +1819,26 @@ async function cancelRecording(id){await jpost('/api/recordings/'+id+'/cancel',{
 async function deleteRecording(id){if(!confirm('Remove recording and its stored file?'))return;await api('/api/recordings/'+id,{method:'DELETE'});recordingsView()}
 
 async function searchView(){
-  const initial=window.__pendingGlobalSearch||'';window.__pendingGlobalSearch='';
-  content.innerHTML=`<div class=hero><h2>Search & Discovery</h2><p class=muted>Search Live TV, IPTV, Plex and Jellyfin.</p>
-  <div class=row><input id=globalSearchBox value="${escAttr(initial)}" placeholder="Title, channel or programme"><button class=btn id=globalSearchButton>Search</button></div>
-  <div class=searchFilters>
-    <button class="btn searchFilter activeBtn" data-filter=all>All</button>
-    <button class="btn searchFilter" data-filter=live>Live</button>
-    <button class="btn searchFilter" data-filter=movies>Movies</button>
-    <button class="btn searchFilter" data-filter=series>Series</button>
-  </div></div>
-  <div id=globalSearchStatus class=muted></div><div id=globalSearchResults></div>`;
-  $('#globalSearchButton').onclick=runGlobalSearch;
-  $('#globalSearchBox').onkeydown=e=>{if(e.key==='Enter')runGlobalSearch()};
-  document.querySelectorAll('.searchFilter').forEach(b=>b.onclick=()=>{
-    globalSearchFilter=b.dataset.filter;
-    document.querySelectorAll('.searchFilter').forEach(x=>x.classList.toggle('activeBtn',x===b));
-    renderGlobalSearchResults($('#globalSearchBox').value.trim());
-  });
-  if(initial)await runGlobalSearch();
+  content.innerHTML=`<div class=hero><span class=kicker>SEARCH 2.0</span><h2>Search everything</h2><p class=muted>Movies, series, media libraries, DVR recordings and Live TV.</p><div class=row><input id=globalq placeholder="Search all sources"><button class=btn id=globalSearchBtn>Search</button></div></div><div id=globalSearchResults></div>`;
+  const run=async()=>{
+    const q=$('#globalq').value.trim().toLowerCase();if(!q){$('#globalSearchResults').innerHTML='';return}
+    $('#globalSearchResults').innerHTML='<div class=card>Searching…</div>';
+    try{
+      const tasks=[
+        api('/api/unified/movies',{timeoutMs:65000}).catch(()=>[]),
+        api('/api/unified/series',{timeoutMs:65000}).catch(()=>[]),
+        api('/api/recordings').catch(()=>[]),
+        currentProvider?api('/api/channels/'+currentProvider).catch(()=>[]):Promise.resolve([])
+      ];
+      const [movies,series,recs,channels]=await Promise.all(tasks);
+      const media=[...movies.map(x=>({...x,resultType:'Movie'})),...series.map(x=>({...x,resultType:'Series',kind:'series'}))].filter(x=>(x.name||'').toLowerCase().includes(q));
+      const rr=recs.filter(x=>(x.title||'').toLowerCase().includes(q));
+      const cc=channels.filter(x=>(x.name||'').toLowerCase().includes(q));
+      $('#globalSearchResults').innerHTML=`${media.length?`<h2>Movies & Series</h2><div class=posterGrid>${media.slice(0,30).map(x=>`<button class=posterCard onclick='playUnifiedItem(${JSON.stringify(x)})'>${x.poster?`<img src="${escAttr(x.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(x.name)}</b><small>${esc(x.resultType)} · ${esc(x.source||'')}</small></div></button>`).join('')}</div>`:''}${cc.length?`<h2>Live TV</h2><div class=grid>${cc.slice(0,20).map(c=>`<button class=card onclick='playLive(${JSON.stringify(c.key)},${JSON.stringify(c.name)})'><b>${esc(c.name)}</b><small>Live channel</small></button>`).join('')}</div>`:''}${rr.length?`<h2>DVR</h2>${dvrLibraryMarkup(rr)}`:''}${!media.length&&!cc.length&&!rr.length?'<div class=card>No matches.</div>':''}`;
+    }catch(e){$('#globalSearchResults').innerHTML=errorCard(e)}
+  };
+  $('#globalSearchBtn').onclick=run;$('#globalq').onkeydown=e=>{if(e.key==='Enter')run()};$('#globalq').focus();
 }
-
-function searchScore(x,q){
-  const n=String(x.name||x.title||'').toLowerCase();
-  if(n===q)return 0;
-  if(n.startsWith(q))return 1;
-  const at=n.indexOf(q);
-  return at<0?999:10+at;
-}
-
 async function runGlobalSearch(){
   const original=$('#globalSearchBox').value.trim(),q=original.toLowerCase();
   if(q.length<2){$('#globalSearchStatus').textContent='Enter at least 2 characters.';return}
@@ -2028,4 +2041,77 @@ async function resumeContinueItem(item){
   pendingResumeSeconds=0;
   alert('This older Continue Watching entry does not contain enough playback information. Remove it and play the item once again to create a new resumable entry.');
   return false;
+}
+
+async function deleteDvrRule(id){if(!confirm('Remove DVR rule?'))return;await api('/api/dvr/rules/'+encodeURIComponent(id),{method:'DELETE'});recordingsView()}
+
+function normalizedMediaKey(x){
+  return String(x?.name||x?.title||'').toLowerCase().replace(/\(\d{4}\)/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+}
+function mergeUnifiedSources(rows){
+  const map=new Map();
+  for(const x of rows||[]){
+    const key=normalizedMediaKey(x);
+    if(!key)continue;
+    const cur=map.get(key)||{...x,sources:[]};
+    cur.sources.push(x);
+    if(!cur.poster&&x.poster)cur.poster=x.poster;
+    map.set(key,cur);
+  }
+  return [...map.values()];
+}
+async function unifiedLibraryView(){
+  content.innerHTML='<div class=card>Loading unified library…</div>';
+  try{
+    const [movies,series]=await Promise.all([api('/api/unified/movies',{timeoutMs:65000}),api('/api/unified/series',{timeoutMs:65000})]);
+    const rows=mergeUnifiedSources([...movies.map(x=>({...x,mediaKind:'movie'})),...series.map(x=>({...x,mediaKind:'series'}))]);
+    content.innerHTML=`<div class=hero><span class=kicker>UNIFIED LIBRARY</span><h2>All your media, one library</h2><p class=muted>Duplicates are grouped and every available source stays selectable.</p><input id=unifiedLibrarySearch placeholder="Search library"></div><div id=unifiedLibraryGrid class=posterGrid>${rows.map(unifiedLibraryCard).join('')}</div>`;
+    $('#unifiedLibrarySearch').oninput=e=>{const q=e.target.value.toLowerCase();$('#unifiedLibraryGrid').innerHTML=rows.filter(x=>(x.name||'').toLowerCase().includes(q)).map(unifiedLibraryCard).join('')};
+  }catch(e){content.innerHTML=errorCard(e)}
+}
+function unifiedLibraryCard(x){
+  return `<article class=posterCard>${x.poster?`<img loading=lazy src="${escAttr(x.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(x.name)}</b><small>${esc(x.mediaKind)} · ${x.sources.length} source${x.sources.length===1?'':'s'}</small><div class=sourceChoices>${x.sources.map(s=>`<button class=btn onclick='playUnifiedItem(${JSON.stringify(s.mediaKind==="series"?{...s,kind:"series"}:s)})'>${esc(s.source||'Play')}</button>`).join('')}</div></div></article>`;
+}
+
+function recordingSeriesName(title){
+  return String(title||'Recording').replace(/\s+[Ss]\d{1,2}[Ee]\d{1,3}.*$/,'').replace(/\s+-\s+Episode.*$/i,'').trim();
+}
+function dvrLibraryGroups(rows){
+  const groups=new Map();
+  for(const r of rows.filter(x=>x.completed)){
+    const key=recordingSeriesName(r.title);
+    if(!groups.has(key))groups.set(key,[]);
+    groups.get(key).push(r);
+  }
+  return [...groups.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
+}
+function dvrLibraryMarkup(rows){
+  const groups=dvrLibraryGroups(rows);
+  if(!groups.length)return '<div class=card>No completed recordings yet.</div>';
+  return `<div class=dvrLibrary>${groups.map(([name,items])=>`<section class=card><h3>${esc(name)}</h3><small>${items.length} recording${items.length===1?'':'s'}</small><div class=episodeList>${items.sort((a,b)=>new Date(b.start)-new Date(a.start)).map(r=>`<div class=episode><span><b>${esc(r.title)}</b><small>${esc(r.channelName)} · ${new Date(r.start).toLocaleString()} · ${esc(r.storageTargetName||'Storage')}</small></span><div class=row>${r.playable?`<a class=btn href="/api/recordings/${r.id}/file">Play</a>`:'<span class=muted>External storage</span>'}</div></div>`).join('')}</div></section>`).join('')}</div>`;
+}
+
+async function roomsView(){
+  const rooms=await api('/api/rooms');
+  content.innerHTML=`<div class=hero><span class=kicker>MULTI-ROOM</span><h2>Your screens</h2><p class=muted>Register browsers/TVs and see the latest media handoff state.</p><div class=row><input id=roomName placeholder="Living room TV"><button class=btn id=registerRoom>Register this device</button></div></div><div class=grid>${rooms.map(r=>`<div class=card><h3>${esc(r.name)}</h3><p>${esc(r.deviceType)} · ${new Date(r.updated).toLocaleString()}</p>${r.activeTitle?`<small>Last handoff: ${esc(r.activeTitle)} · ${formatMediaTime(r.positionSeconds)}</small>`:''}</div>`).join('')}</div>`;
+  $('#registerRoom').onclick=async()=>{const name=$('#roomName').value.trim();if(!name)return;await jpost('/api/rooms/register',{name,deviceType:document.documentElement.classList.contains('isTV')?'TV':'Browser'});roomsView()};
+}
+
+if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));}
+
+async function enableBrowserNotifications(){
+  if(!('Notification' in window)){alert('Notifications are not supported by this browser.');return}
+  const p=await Notification.requestPermission();alert(p==='granted'?'Browser notifications enabled.':'Notification permission was not granted.');
+}
+async function notificationsView(){
+  const rows=await api('/api/notifications');
+  content.innerHTML=`<div class=hero><span class=kicker>NOTIFICATIONS</span><h2>Alerts</h2><p class=muted>DVR, storage and media alerts in one place.</p><button class=btn id=enableNotify>Enable browser notifications</button></div><div class=notificationList>${rows.length?rows.map(n=>`<div class="card ${n.read?'':'unreadNotification'}"><div class=row><b>${esc(n.title)}</b><small>${new Date(n.created).toLocaleString()}</small></div><p>${esc(n.message)}</p>${!n.read?`<button class=btn onclick="readNotification('${n.id}')">Mark read</button>`:''}</div>`).join(''):'<div class=card>No notifications.</div>'}</div>`;
+  $('#enableNotify').onclick=enableBrowserNotifications;
+}
+async function readNotification(id){await jpost('/api/notifications/'+encodeURIComponent(id)+'/read',{});notificationsView()}
+
+async function applianceView(){
+  const h=await api('/api/appliance/health');
+  const pct=h.diskTotalBytes?Math.round((1-h.diskFreeBytes/h.diskTotalBytes)*100):0;
+  content.innerHTML=`<div class=hero><span class=kicker>MYONLINE TV 2.0</span><h2>Appliance</h2><p class=muted>Health, backup and setup status for the self-hosted MyOnline TV appliance.</p></div><div class=statsGrid><div class=statCard><b>v${esc(h.version)}</b><small>Version</small></div><div class=statCard><b>${h.storageTargets}</b><small>Storage targets</small></div><div class=statCard><b>${h.dvrRules}</b><small>DVR rules</small></div><div class=statCard><b>${h.rooms}</b><small>Rooms</small></div></div><div class=card><h3>System storage</h3><div class=progress><div style="width:${pct}%"></div></div><p>${pct}% used · ${Math.round(h.diskFreeBytes/1073741824)} GB free</p></div>${authState.role==='Admin'?`<div class=card><h3>Backup</h3><p>Download the core MyOnline TV configuration as a ZIP backup.</p><a class=btn href="/api/appliance/backup">Download backup</a></div>`:''}<div class=card><h3>Setup checklist</h3><p>${h.storageTargets?'✓':'○'} Storage configured</p><p>${h.dvrRules?'✓':'○'} Smart DVR rules</p><p>${h.rooms?'✓':'○'} Multi-room device registered</p><p>✓ PWA install support</p></div>`;
 }

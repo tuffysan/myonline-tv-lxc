@@ -2,12 +2,13 @@
   "name": "MyOnline TV",
   "short_name": "MyOnline TV",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#07111b",
-  "theme_color": "#0b1622",
+  "background_color": "#07131d",
+  "theme_color": "#0b1a26",
   "icons": [
     {
-      "src": "/app-icon.svg",
+      "src": "/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"

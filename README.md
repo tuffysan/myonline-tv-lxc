@@ -1,4 +1,4 @@
-# MyOnline TV Web v1.1.0 — Proxmox LXC
+# MyOnline TV Web v2.0.0 — Proxmox LXC
 
 MyOnline TV Web is a self-hosted entertainment appliance for Proxmox VE.
 
@@ -490,8 +490,8 @@ Existing IPTV, Plex/Jellyfin, DVR, duration, Continue Watching, Recently Watched
 - Uses the same responsive mobile/tablet/TV behavior introduced in v0.9.0.
 
 
-## v1.1.0 — First stable milestone
-v1.1.0 is the cumulative first major milestone of MyOnline TV Web.
+## v2.0.0 — First stable milestone
+v2.0.0 is the cumulative first major milestone of MyOnline TV Web.
 
 It contains:
 - IPTV Live TV, EPG Guide, Movies and Series.
@@ -508,7 +508,7 @@ It contains:
 `RELEASE-CHECKLIST.md` is included and should be completed on the target system before declaring the installation the production baseline.
 
 
-## v1.1.0 — DVR & Storage
+## v2.0.0 — DVR & Storage
 
 ### Live TV DVR
 - Live TV channel cards now have a red **Record** button.
@@ -534,3 +534,90 @@ Movie/episode Download now asks for a destination:
 - Cloud/rclone transfers may use a temporary container file while the transfer is active; it is removed after successful upload.
 
 Protected/DRM content is not decrypted or bypassed.
+
+
+## v2.0.0 — Smart DVR
+
+- Series recording rules from Guide
+- New-episodes-only flag
+- Configurable pre/post recording padding
+- Keep-latest retention setting
+- Storage target per DVR rule
+- DVR rules management in Recordings
+
+
+## v2.0.0 — Unified Library
+
+- Single Library view across configured media libraries
+- Title-normalized duplicate grouping
+- Source chooser when the same title exists in multiple libraries
+- Unified movie/series search inside Library
+- Poster and source metadata retained
+
+
+## v2.0.0 — Smart Home
+
+- Profile-aware Smart Home state
+- Time-aware greeting/status strip
+- New for you rail
+- Your favourites rail
+- Direct Unified Library shortcut
+- Existing Continue Watching and Recently Watched retained
+
+
+## v2.0.0 — DVR Library
+
+- Completed recordings grouped into a DVR Library
+- Automatic title-based series grouping
+- Channel/date/storage metadata per recording
+- Direct playback for path/NAS recordings
+- External-storage status for cloud recordings
+- Scheduled/active recording list remains available
+
+
+## v2.0.0 — Search 2.0
+
+- One search UI across unified Movies and Series
+- Live TV channel search
+- DVR recording search
+- Source/type labels in results
+- Parallel source queries with graceful source failure
+
+
+## v2.0.0 — Multi-room
+
+- Rooms/devices registry
+- TV/browser device classification
+- Media handoff state API
+- Last title and position per room
+- Dedicated Rooms view
+- Foundation for Continue on another screen
+
+
+## v2.0.0 — Installable PWA
+
+- Installable web app manifest
+- Standalone display mode
+- Service worker app-shell cache
+- Offline shell fallback
+- Maskable SVG app icon
+- Theme metadata for mobile/desktop installation
+
+
+## v2.0.0 — Notifications
+
+- In-app notification center
+- Read/unread state
+- Browser notification permission UI
+- Notification API for DVR/storage/media events
+- Persistent notification history
+
+
+## v2.0.0 — Appliance milestone
+
+- Appliance health dashboard
+- Disk usage/free-space status
+- Configuration backup download
+- Setup readiness checklist
+- Storage/DVR/room status summary
+- Cumulative IPTV, Plex/Jellyfin, DVR, PWA, Search and Multi-room features

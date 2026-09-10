@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.1.0 — DVR & Storage
+## v2.0.0 — DVR & Storage
 - Exposed Live TV recording directly in Live TV and the player.
 - Reworked Guide programme click into Play / Record actions.
 - Added Admin → Storage.

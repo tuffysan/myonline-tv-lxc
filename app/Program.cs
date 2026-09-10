@@ -73,6 +73,9 @@ var profileAccessFile = Path.Combine(dataDir, "profile-access.json");
 var profilePoliciesFile = Path.Combine(dataDir, "profile-policies.json");
 var mediaLibrariesFile = Path.Combine(dataDir, "media-libraries.json");
 var recordingsFile = Path.Combine(dataDir, "recordings.json");
+var dvrRulesFile = Path.Combine(dataDir, "dvr-rules.json");
+var roomsFile = Path.Combine(dataDir, "rooms.json");
+var notificationsFile = Path.Combine(dataDir, "notifications.json");
 var storageTargetsFile = Path.Combine(dataDir, "storage-targets.json");
 var recordingsDir = Path.Combine(dataDir, "recordings");
 var secretKeyFile = Path.Combine(dataDir, "secrets.key");
@@ -91,7 +94,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/1.1.0");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/2.0.0");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
@@ -653,7 +656,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "1.1.0",
+    version = "2.0.0",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -691,14 +694,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = AuthConfigured();
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "1.1.0", checks })
-        : Results.Json(new { status = "not-ready", version = "1.1.0", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "2.0.0", checks })
+        : Results.Json(new { status = "not-ready", version = "2.0.0", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "1.1.0",
+    version = "2.0.0",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = AuthConfigured(),
@@ -2298,7 +2301,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "1.1.0",
+        version = "2.0.0",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -2548,6 +2551,26 @@ app.MapPost("/api/admin/storage-targets/{id}/test", async (string id, HttpContex
     catch (Exception ex) { return Results.BadRequest(new { ok = false, message = ex.GetBaseException().Message }); }
 }).RequireAuthorization();
 
+app.MapGet("/api/dvr/rules", () => Results.Ok(Load<List<DvrRule>>(dvrRulesFile) ?? new())).RequireAuthorization();
+app.MapPost("/api/dvr/rules", (DvrRuleInput input) =>
+{
+    if (string.IsNullOrWhiteSpace(input.ProviderId) || string.IsNullOrWhiteSpace(input.ChannelKey) || string.IsNullOrWhiteSpace(input.TitlePattern))
+        return Results.BadRequest("Provider, channel and title are required.");
+    var rows=Load<List<DvrRule>>(dvrRulesFile) ?? new();
+    var id=string.IsNullOrWhiteSpace(input.Id)?Guid.NewGuid().ToString("N"):input.Id;
+    rows.RemoveAll(x=>x.Id==id);
+    rows.Add(new DvrRule(id,input.ProviderId,input.ChannelKey,input.ChannelName??"Channel",input.TitlePattern.Trim(),
+        input.NewOnly,input.Enabled,input.PaddingBeforeMinutes,input.PaddingAfterMinutes,input.KeepLatest,input.StorageTargetId,DateTimeOffset.UtcNow));
+    Save(dvrRulesFile,rows);
+    return Results.Ok(rows);
+}).RequireAuthorization();
+app.MapDelete("/api/dvr/rules/{id}", (string id) =>
+{
+    var rows=Load<List<DvrRule>>(dvrRulesFile) ?? new();
+    if(rows.RemoveAll(x=>x.Id==id)==0)return Results.NotFound();
+    Save(dvrRulesFile,rows); return Results.NoContent();
+}).RequireAuthorization();
+
 app.MapGet("/api/recordings", () =>
 {
     var rows = LoadRecordingJobs()
@@ -2658,6 +2681,59 @@ app.MapGet("/api/recordings/{id}/file", (string id) =>
 _ = Task.Run(RecordingSchedulerLoop);
 
 app.MapFallbackToFile("index.html");
+
+app.MapGet("/api/rooms", () => Results.Ok(Load<List<RoomDevice>>(roomsFile) ?? new())).RequireAuthorization();
+app.MapPost("/api/rooms/register", (RoomDeviceInput input) =>
+{
+    var rows=Load<List<RoomDevice>>(roomsFile) ?? new();
+    var id=string.IsNullOrWhiteSpace(input.Id)?Guid.NewGuid().ToString("N"):input.Id;
+    rows.RemoveAll(x=>x.Id==id);
+    rows.Add(new RoomDevice(id,string.IsNullOrWhiteSpace(input.Name)?"Device":input.Name.Trim(),input.DeviceType??"Browser",DateTimeOffset.UtcNow,input.ActiveMediaId,input.ActiveTitle,input.PositionSeconds));
+    Save(roomsFile,rows); return Results.Ok(rows);
+}).RequireAuthorization();
+app.MapPost("/api/rooms/{id}/handoff", (string id, RoomHandoff input) =>
+{
+    var rows=Load<List<RoomDevice>>(roomsFile) ?? new(); var i=rows.FindIndex(x=>x.Id==id); if(i<0)return Results.NotFound();
+    rows[i]=rows[i] with { ActiveMediaId=input.MediaId,ActiveTitle=input.Title,PositionSeconds=input.PositionSeconds,Updated=DateTimeOffset.UtcNow };
+    Save(roomsFile,rows); return Results.Ok(rows[i]);
+}).RequireAuthorization();
+
+
+app.MapGet("/api/notifications", () => Results.Ok((Load<List<AppNotification>>(notificationsFile) ?? new()).OrderByDescending(x=>x.Created).Take(100))).RequireAuthorization();
+app.MapPost("/api/notifications", (AppNotificationInput input) =>
+{
+    var rows=Load<List<AppNotification>>(notificationsFile) ?? new();
+    rows.Add(new AppNotification(Guid.NewGuid().ToString("N"),input.Title,input.Message,input.Kind??"info",DateTimeOffset.UtcNow,false));
+    Save(notificationsFile,rows.TakeLast(500).ToList()); return Results.Ok();
+}).RequireAuthorization();
+app.MapPost("/api/notifications/{id}/read", (string id) =>
+{
+    var rows=Load<List<AppNotification>>(notificationsFile) ?? new();var i=rows.FindIndex(x=>x.Id==id);if(i<0)return Results.NotFound();
+    rows[i]=rows[i] with { Read=true };Save(notificationsFile,rows);return Results.NoContent();
+}).RequireAuthorization();
+
+
+app.MapGet("/api/appliance/health", () =>
+{
+    var drive=new DriveInfo(Path.GetPathRoot(dataDir)!);
+    return Results.Ok(new {
+        version="2.0.0", dataDirectory=dataDir,
+        storageTargets=LoadStorageTargets().Count,
+        dvrRules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count,
+        rooms=(Load<List<RoomDevice>>(roomsFile)??new()).Count,
+        diskFreeBytes=drive.AvailableFreeSpace,diskTotalBytes=drive.TotalSize,
+        utc=DateTimeOffset.UtcNow
+    });
+}).RequireAuthorization();
+app.MapGet("/api/appliance/backup", (HttpContext ctx) =>
+{
+    if(!ctx.User.IsInRole("Admin"))return Results.Forbid();
+    var files=new[]{providersFile,profilesFile,continueFile,recordingsFile,storageTargetsFile,dvrRulesFile,roomsFile,notificationsFile}.Where(File.Exists).ToArray();
+    var temp=Path.Combine(Path.GetTempPath(),$"myonlinetv-backup-{DateTime.UtcNow:yyyyMMddHHmmss}.zip");
+    using(var z=ZipFile.Open(temp,ZipArchiveMode.Create))foreach(var f in files)z.CreateEntryFromFile(f,Path.GetFileName(f));
+    return Results.File(temp,"application/zip",Path.GetFileName(temp));
+}).RequireAuthorization();
+
 app.Run();
 
 async Task StopLiveSession(string sessionId)
@@ -2761,7 +2837,7 @@ async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, TimeSpa
     var url = BuildXtreamPlayerApiUrl(c, action, extra);
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/1.1.0");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/2.0.0");
     using var cts = new CancellationTokenSource(timeout);
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -2927,7 +3003,7 @@ async Task<List<LiveChannel>> LoadM3uChannels(string url)
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/x-mpegURL,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/1.1.0");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/2.0.0");
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -2946,7 +3022,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/1.1.0");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/2.0.0");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }
@@ -3242,6 +3318,13 @@ record MediaLibrarySelectionInput(string[]? LibraryIds);
 record MediaLibraryConnection(string BaseUrl, string Token);
 record UnifiedEpisodeItem(string Id, string Source, string SourceProviderId, string ItemId, string SeriesId, int SeasonNumber, int EpisodeNumber, string Name, string? Year, string? Rating, string? Poster);
 record UnifiedMediaItem(string Id, string Source, string SourceProviderId, string Kind, string Name, string? Year, string? Rating, string? Poster, string? ParentId, string? StreamUrl, double? Progress, DateTimeOffset? AddedAt);
+record AppNotification(string Id,string Title,string Message,string Kind,DateTimeOffset Created,bool Read);
+record AppNotificationInput(string Title,string Message,string? Kind=null);
+record RoomDevice(string Id,string Name,string DeviceType,DateTimeOffset Updated,string? ActiveMediaId=null,string? ActiveTitle=null,double PositionSeconds=0);
+record RoomDeviceInput(string? Id,string Name,string? DeviceType=null,string? ActiveMediaId=null,string? ActiveTitle=null,double PositionSeconds=0);
+record RoomHandoff(string? MediaId,string? Title,double PositionSeconds=0);
+record DvrRule(string Id,string ProviderId,string ChannelKey,string ChannelName,string TitlePattern,bool NewOnly,bool Enabled,int PaddingBeforeMinutes,int PaddingAfterMinutes,int KeepLatest,string? StorageTargetId,DateTimeOffset Created);
+record DvrRuleInput(string? Id,string ProviderId,string ChannelKey,string? ChannelName,string TitlePattern,bool NewOnly=true,bool Enabled=true,int PaddingBeforeMinutes=5,int PaddingAfterMinutes=10,int KeepLatest=5,string? StorageTargetId=null);
 record RecordingRequest(string ProviderId, string ChannelKey, string? ChannelName, string? Title, DateTimeOffset Start, DateTimeOffset End, string? StorageTargetId = null);
 record RecordingJob(string Id, string ProviderId, string ChannelKey, string ChannelName, string Title, DateTimeOffset Start, DateTimeOffset End, string Status, string? FileName, string? Error, string? StorageTargetId = null, string? StorageTargetName = null, string? StoredPath = null);
 record StorageTarget(string Id, string Name, string Type, string Destination, bool DefaultDvr, bool DefaultDownload, bool Enabled);
