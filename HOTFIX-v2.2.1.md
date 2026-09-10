@@ -1,10 +1,11 @@
-# v2.2.1 compile hotfix
+# v2.2.1 compile fix inherited
 
-The v2.1 diagnostics feature introduced a reference to `MediaLibraryConfig`, but the application model is named `MediaLibraryProvider` and the established loader is `LoadMediaLibraries()`.
+This release train was regenerated after the v2.2.0 compile failure.
 
-Fix:
+Diagnostics uses the application's existing media-library loader:
+
 ```csharp
 var libs = LoadMediaLibraries();
 ```
 
-This removes CS0246 while preserving the diagnostics check for enabled Plex/Jellyfin libraries.
+The invalid `MediaLibraryConfig` reference has been removed.

@@ -79,7 +79,7 @@ function toggleMobileMore(){
     ['jellyfin','◇','Jellyfin'],
     ['downloads','↓','Downloads'],
     ['recordings','●','DVR'],
-    ['diagnostics','✓','Diagnostics'],['appliance','⚙','Appliance'],['notifications','●','Alerts'],['rooms','▣','Rooms'],['library','▦','Library'],['search','⌕','Search'],
+    ['platform','◆','Platform'],['profile-sync','↻','Profile Sync'],['diagnostics','✓','Diagnostics'],['appliance','⚙','Appliance'],['notifications','●','Alerts'],['rooms','▣','Rooms'],['library','▦','Library'],['search','⌕','Search'],
     ['system','◉','System'],
     ['admin','🛡','Admin']
   ];
@@ -181,7 +181,7 @@ async function show(v){
   currentView=v;destroyPlayer();
   renderMobileNavigation();
   const moreSheet=$('#mobileMoreSheet');if(moreSheet){moreSheet.classList.add('hidden');moreSheet.setAttribute('aria-hidden','true');document.body.classList.remove('mobileSheetOpen')}
-  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'Recordings',diagnostics:'Diagnostics',appliance:'Appliance',notifications:'Notifications',rooms:'Rooms',library:'Library',search:'Search',system:'System',admin:'Admin'})[v]||v;
+  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'Recordings',platform:'Platform','profile-sync':'Profile Sync',diagnostics:'Diagnostics',appliance:'Appliance',notifications:'Notifications',rooms:'Rooms',library:'Library',search:'Search',system:'System',admin:'Admin'})[v]||v;
   if(v==='home')await home();
   if(v==='live')await live();
   if(v==='guide')await guide();
@@ -191,6 +191,8 @@ async function show(v){
   if(v==='jellyfin')await mediaLibraryView('jellyfin');
   if(v==='downloads')await downloadView();
   if(v==='recordings')await recordingsView();
+  if(v==='platform')await platformView();
+  if(v==='profile-sync')await profileSyncView();
   if(v==='diagnostics')await diagnosticsView();
   if(v==='appliance')await applianceView();
   if(v==='notifications')await notificationsView();
@@ -469,7 +471,7 @@ async function playLive(channelKey,name,forceTranscode=false){
   if(!wrap)return;
   const selected=channelByKey(channelKey)||{key:channelKey,name};liveCurrentChannel=selected;rememberLiveChannel(selected);
   wrap.innerHTML=`<div class="playerCard livePlayer"><video id=video controls autoplay playsinline></video>${liveOverlay(selected)}
-    <div class="liveControls"><button class=btn onclick="stepLiveChannel(-1)">← Previous</button><button class=btn onclick="stepLiveChannel(1)">Next →</button><button class="btn recordBtn" onclick='recordLiveNow(${JSON.stringify(channelKey)},${JSON.stringify(name)})'>● Record</button><button class=btn onclick="toggleLiveFullscreen()">⛶ Fullscreen</button></div>
+    <div class="liveControls"><button class=btn onclick="stepLiveChannel(-1)">← Previous</button><button class=btn onclick="stepLiveChannel(1)">Next →</button><button class="btn recordBtn" onclick='recordLiveNow(${JSON.stringify(channelKey)},${JSON.stringify(name)})'>● Record</button><button class=btn onclick="togglePlayerFit()">▣ Fit</button><button class=btn onclick="toggleLiveFullscreen()">⛶ Fullscreen</button></div>
     <div id=livePlaybackStatus class=livePlaybackStatus>Connecting to channel…</div><div class=nowPlaying>${esc(name)}</div></div>`;
   wrap.scrollIntoView({behavior:'smooth',block:'start'});
   try{
@@ -869,7 +871,7 @@ function timelineRowV319(c,progs,start,end,span){
     const a=Math.max(new Date(pr.start).getTime(),start.getTime()),b=Math.min(new Date(pr.stop).getTime(),end.getTime());if(b<=a)return '';
     const left=(a-start.getTime())/span*100,width=Math.max(.8,(b-a)/span*100),isNow=a<=Date.now()&&b>Date.now();
     const payload=encodeURIComponent(JSON.stringify(pr));
-    return `<button class="prog ${isNow?'currentProgram':''}" style="left:${left}%;width:${width}%" onclick='showGuideProgramActions(${JSON.stringify(c.key)},${JSON.stringify(channelName(c))},decodeURIComponent("${payload}"))' title="Play or record ${escAttr(pr.title)}"><b>${esc(pr.title)}</b><small>${new Date(pr.start).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</small></button>`;
+    return `<button class="prog ${isNow?'currentProgram':''}" style="left:${left}%;width:${width}%" onclick='showGuideProgramActions(${JSON.stringify(c.key)},${JSON.stringify(channelName(c))},decodeURIComponent("${payload}"))' data-epg-action="play-record" title="Play or record ${escAttr(pr.title)}"><b>${esc(pr.title)}</b><small>${new Date(pr.start).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</small></button>`;
   }).join('');
   return `<div class=timelineRow><button class=timelineChannel onclick='playLive(${JSON.stringify(c.key)},${JSON.stringify(channelName(c))})'>${c.logo?`<img src="${escAttr(c.logo)}">`:''}<span>${esc(channelName(c))}</span><small>▶ Live</small></button><div class=programLane>${line}${blocks}</div></div>`;
 }
@@ -1081,9 +1083,9 @@ async function startMediaDownload(token,name){
 
 async function downloadView(){
   const [jobs,targets]=await Promise.all([api('/api/downloads'),storageTargets()]);
-  content.innerHTML=`<div class=hero><h2>Downloads</h2><p class=muted>Downloads are saved to your device or to a configured Storage target. The LXC is only used for temporary transfer files when a cloud/rclone target requires it.</p><div class=row><button class=btn id=refreshDl>Refresh</button>${authState.role==='Admin'?'<button class=btn onclick="show(\'admin\')">Storage settings</button>':''}</div></div>
+  content.innerHTML=`<div class=hero><span class=kicker>DOWNLOADS 2.0</span><h2>Downloads</h2><p class=muted>Downloads are saved to your device or to a configured Storage target. The LXC is only used for temporary transfer files when a cloud/rclone target requires it.</p><div class=row><button class=btn id=refreshDl>Refresh</button>${authState.role==='Admin'?'<button class=btn onclick="show(\'admin\')">Storage settings</button>':''}</div></div>
   <div class=storageSummary>${targets.length?targets.map(t=>`<span class=storageChip>${t.type==='rclone'?'☁':'▣'} ${esc(t.name)}${t.defaultDownload?' · default':''}</span>`).join(''):'<span class=muted>No server-side Storage targets configured.</span>'}</div>
-  <div class=downloadList>${jobs.length?jobs.map(j=>`<article class=downloadCard><div><h3>${esc(j.title)}</h3><span class="status ${j.status==='Failed'?'bad':''}">${esc(j.status)}</span></div><div class=progress><div style="width:${j.progress<0?35:Math.max(0,j.progress)}%"></div></div><small>${j.progress<0?'Working…':Math.round(j.progress)+'%'} · ${esc(j.storageTargetName||'')} ${j.fileName?'· '+esc(j.fileName):''}</small>${j.error?`<p class=danger>${esc(j.error)}</p>`:''}<div class=row>${j.completed&&j.storageType==='path'?`<a class=btn href="/api/downloads/${j.id}/file">Download copy to device</a>`:''}<button class=btn onclick="deleteDownload('${j.id}')">Remove</button></div></article>`).join(''):'<div class=card>No server-side downloads. Open Movies or Series and click ↓ to choose a destination.</div>'}</div>`;
+  <div class=downloadList>${jobs.length?jobs.map(j=>`<article class=downloadCard><div><h3>${esc(j.title)}</h3><span class="status ${j.status==='Failed'?'bad':''}">${esc(j.status)}</span></div><div class=progress><div style="width:${j.progress<0?35:Math.max(0,j.progress)}%"></div></div><small>${j.progress<0?'Working…':Math.round(j.progress)+'%'} · ${esc(j.storageTargetName||'')} ${j.fileName?'· '+esc(j.fileName):''}</small>${j.error?`<p class=danger>${esc(j.error)}</p>`:''}<div class=row>${j.completed&&j.storageType==='path'?`<a class=btn href="/api/downloads/${j.id}/file">Download copy to device</a>`:''}${['Queued','Downloading','Uploading'].includes(j.status)?`<button class=btn onclick="cancelDownload('${j.id}')">Cancel</button>`:''}${['Failed','Cancelled'].includes(j.status)?`<button class=btn onclick="retryDownload('${j.id}')">Retry</button>`:''}<button class=btn onclick="deleteDownload('${j.id}')">Remove</button></div></article>`).join(''):'<div class=card>No server-side downloads. Open Movies or Series and click ↓ to choose a destination.</div>'}</div>`;
   $('#refreshDl').onclick=downloadView;
 }
 async function deleteDownload(id){if(!confirm('Remove this download and its stored file?'))return;await api('/api/downloads/'+id,{method:'DELETE'});downloadView()}
@@ -2070,8 +2072,9 @@ async function unifiedLibraryView(){
   try{
     const [movies,series]=await Promise.all([api('/api/unified/movies',{timeoutMs:65000}),api('/api/unified/series',{timeoutMs:65000})]);
     const rows=mergeUnifiedSources([...movies.map(x=>({...x,mediaKind:'movie'})),...series.map(x=>({...x,mediaKind:'series'}))]);
-    content.innerHTML=`<div class=hero><span class=kicker>UNIFIED LIBRARY</span><h2>All your media, one library</h2><p class=muted>Duplicates are grouped and every available source stays selectable.</p><input id=unifiedLibrarySearch placeholder="Search library"></div><div id=unifiedLibraryGrid class=posterGrid>${rows.map(unifiedLibraryCard).join('')}</div>`;
+    content.innerHTML=`<div class=hero><span class=kicker>LIBRARY 2.0</span><h2>All your media, one library</h2><p class=muted>Duplicates are grouped and every available source stays selectable.</p><div class=row><input id=unifiedLibrarySearch placeholder="Search library"><select id=librarySort><option value=title>Title</option><option value=year>Year</option><option value=added>Recently added</option></select></div></div><div id=unifiedLibraryGrid class=posterGrid>${rows.map(unifiedLibraryCard).join('')}</div>`;
     $('#unifiedLibrarySearch').oninput=e=>{const q=e.target.value.toLowerCase();$('#unifiedLibraryGrid').innerHTML=rows.filter(x=>(x.name||'').toLowerCase().includes(q)).map(unifiedLibraryCard).join('')};
+    $('#librarySort').onchange=e=>{$('#unifiedLibraryGrid').innerHTML=library2Sort(rows,e.target.value).map(unifiedLibraryCard).join('')};
   }catch(e){content.innerHTML=errorCard(e)}
 }
 function unifiedLibraryCard(x){
@@ -2118,7 +2121,7 @@ async function readNotification(id){await jpost('/api/notifications/'+encodeURIC
 async function applianceView(){
   const h=await api('/api/appliance/health');
   const pct=h.diskTotalBytes?Math.round((1-h.diskFreeBytes/h.diskTotalBytes)*100):0;
-  content.innerHTML=`<div class=hero><span class=kicker>MYONLINE TV 2.0</span><h2>Appliance</h2><p class=muted>Health, backup and setup status for the self-hosted MyOnline TV appliance.</p></div><div class=statsGrid><div class=statCard><b>v${esc(h.version)}</b><small>Version</small></div><div class=statCard><b>${h.storageTargets}</b><small>Storage targets</small></div><div class=statCard><b>${h.dvrRules}</b><small>DVR rules</small></div><div class=statCard><b>${h.rooms}</b><small>Rooms</small></div></div><div class=card><h3>System storage</h3><div class=progress><div style="width:${pct}%"></div></div><p>${pct}% used · ${Math.round(h.diskFreeBytes/1073741824)} GB free</p></div>${authState.role==='Admin'?`<div class=card><h3>Backup</h3><p>Download the core MyOnline TV configuration as a ZIP backup.</p><a class=btn href="/api/appliance/backup">Download backup</a></div>`:''}<div class=card><h3>Setup checklist</h3><p>${h.storageTargets?'✓':'○'} Storage configured</p><p>${h.dvrRules?'✓':'○'} Smart DVR rules</p><p>${h.rooms?'✓':'○'} Multi-room device registered</p><p>✓ PWA install support</p></div>`;
+  content.innerHTML=`<div class=hero><span class=kicker>MYONLINE TV 2.0</span><h2>Appliance</h2><div class=row><button class=btn onclick="installMyOnlineTv()">Install app</button><button class=btn onclick="mobileShareCurrent()">Share</button></div><p class=muted>Health, backup and setup status for the self-hosted MyOnline TV appliance.</p></div><div class=statsGrid><div class=statCard><b>v${esc(h.version)}</b><small>Version</small></div><div class=statCard><b>${h.storageTargets}</b><small>Storage targets</small></div><div class=statCard><b>${h.dvrRules}</b><small>DVR rules</small></div><div class=statCard><b>${h.rooms}</b><small>Rooms</small></div></div><div class=card><h3>System storage</h3><div class=progress><div style="width:${pct}%"></div></div><p>${pct}% used · ${Math.round(h.diskFreeBytes/1073741824)} GB free</p></div>${authState.role==='Admin'?`<div class=card><h3>Backup</h3><p>Download the core MyOnline TV configuration as a ZIP backup.</p><a class=btn href="/api/appliance/backup">Download backup</a></div>`:''}<div class=card><h3>Setup checklist</h3><p>${h.storageTargets?'✓':'○'} Storage configured</p><p>${h.dvrRules?'✓':'○'} Smart DVR rules</p><p>${h.rooms?'✓':'○'} Multi-room device registered</p><p>✓ PWA install support</p></div>`;
 }
 
 
@@ -2129,5 +2132,114 @@ async function diagnosticsView(){
     const d=await api('/api/diagnostics');
     content.innerHTML=`<div class=hero><span class=kicker>STABILITY & DIAGNOSTICS</span><h2>Diagnostics</h2><p class=muted>Runtime prerequisites and configuration health.</p><button class=btn onclick="diagnosticsView()">Run diagnostics</button></div><div class=diagGrid>${d.checks.map(c=>`<div class="card diagCard ${c.ok?'diagOk':'diagBad'}"><b>${c.ok?'✓':'!'} ${esc(c.name)}</b><small>${esc(c.detail)}</small></div>`).join('')}</div>`;
   }catch(e){content.innerHTML=errorCard(e)}
+}
+
+
+
+
+async function serverProfileState(){
+  if(!currentProfile)return [];
+  try{return await api('/api/profile-state/'+encodeURIComponent(currentProfile))}catch{return []}
+}
+async function syncProfileMediaState(mediaId,state){
+  if(!currentProfile||!mediaId)return;
+  try{await api('/api/profile-state/'+encodeURIComponent(currentProfile)+'/'+encodeURIComponent(mediaId),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)})}catch{}
+}
+async function profileSyncView(){
+  const rows=await serverProfileState();
+  content.innerHTML=`<div class=hero><span class=kicker>PROFILE SYNC</span><h2>Synced watch state</h2><p class=muted>Server-side state follows the selected profile across browsers and TVs.</p></div><div class=grid>${rows.length?rows.slice(0,100).map(x=>`<div class=card><b>${esc(x.title)}</b><small>${esc(x.kind)} · ${x.watched?'Watched':formatMediaTime(x.positionSeconds)}</small></div>`).join(''):'<div class=card>No synced state yet.</div>'}</div>`;
+}
+
+
+
+
+function epgNowNext(programmes,now=new Date()){
+  const n=now.getTime();
+  const sorted=[...(programmes||[])].sort((a,b)=>new Date(a.start)-new Date(b.start));
+  const current=sorted.find(p=>new Date(p.start).getTime()<=n&&new Date(p.stop).getTime()>n);
+  const next=sorted.find(p=>new Date(p.start).getTime()>n);
+  return {current,next};
+}
+function epgProgress(pr){
+  if(!pr)return 0;const now=Date.now(),a=new Date(pr.start).getTime(),b=new Date(pr.stop).getTime();
+  return Math.max(0,Math.min(100,((now-a)/(b-a))*100));
+}
+
+
+
+
+function installPlayer2(video,context={}){
+  if(!video)return;
+  video.dataset.player2='true';
+  video.addEventListener('loadedmetadata',()=>{
+    try{
+      if(context.resumeSeconds>5 && context.resumeSeconds<video.duration-10) video.currentTime=context.resumeSeconds;
+    }catch{}
+  },{once:true});
+  video.addEventListener('ended',()=>document.body.classList.add('playerEnded'),{once:true});
+}
+function player2Tracks(video){
+  if(!video)return {audio:0,text:0};
+  return {audio:video.audioTracks?.length||0,text:video.textTracks?.length||0};
+}
+function togglePlayerFit(){
+  const v=document.querySelector('video');if(!v)return;
+  v.classList.toggle('playerContain');
+}
+
+
+
+
+function libraryFacetValues(rows,key){
+  return [...new Set((rows||[]).map(x=>x?.[key]).filter(Boolean))].sort();
+}
+function library2Sort(rows,mode){
+  const r=[...(rows||[])];
+  if(mode==='title')r.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  if(mode==='year')r.sort((a,b)=>(Number(b.year)||0)-(Number(a.year)||0));
+  if(mode==='added')r.sort((a,b)=>new Date(b.addedAt||0)-new Date(a.addedAt||0));
+  return r;
+}
+
+
+
+
+async function cancelDownload(id){await jpost('/api/downloads/'+encodeURIComponent(id)+'/cancel',{});downloadView()}
+async function retryDownload(id){await jpost('/api/downloads/'+encodeURIComponent(id)+'/retry',{});downloadView()}
+
+
+
+
+function showTvMiniGuide(){
+  if(!document.documentElement.classList.contains('isTV'))return;
+  let box=$('#tvMiniGuide');if(box){box.remove();return}
+  box=document.createElement('div');box.id='tvMiniGuide';box.className='tvMiniGuide';
+  box.innerHTML=`<b>TV quick menu</b><button onclick="show('guide');$('#tvMiniGuide')?.remove()">Guide</button><button onclick="show('recordings');$('#tvMiniGuide')?.remove()">DVR</button><button onclick="show('search');$('#tvMiniGuide')?.remove()">Search</button>`;
+  document.body.appendChild(box);box.querySelector('button')?.focus();
+}
+window.addEventListener('keydown',e=>{
+  if(!document.documentElement.classList.contains('isTV'))return;
+  if(e.key==='g'||e.key==='G'||e.key==='Guide'){e.preventDefault();showTvMiniGuide()}
+});
+
+
+
+
+let deferredInstallPrompt=null;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstallPrompt=e});
+async function installMyOnlineTv(){
+  if(!deferredInstallPrompt){alert('Use your browser menu to install/add MyOnline TV to the home screen.');return}
+  deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;
+}
+function mobileShareCurrent(){
+  if(navigator.share)navigator.share({title:'MyOnline TV',url:location.href}).catch(()=>{});
+}
+
+
+
+
+async function platformView(){
+  const s=await api('/api/platform/status');
+  content.innerHTML=`<div class="hero platformHero"><span class=kicker>MYONLINE TV 3.0</span><h2>${esc(s.platform)}</h2><p>One self-hosted platform for Live TV, DVR, Movies, Series and personal media.</p></div><div class=statsGrid><div class=statCard><b>${s.providers}</b><small>IPTV providers</small></div><div class=statCard><b>${s.storageTargets}</b><small>Storage targets</small></div><div class=statCard><b>${s.dvrRules}</b><small>DVR rules</small></div><div class=statCard><b>${s.rooms}</b><small>Rooms</small></div></div><div class=card><h3>Platform capabilities</h3><div class=capabilityGrid>${s.features.map(x=>`<span>✓ ${esc(x)}</span>`).join('')}</div></div><div class=row><button class=btn onclick="show('diagnostics')">Run diagnostics</button><button class=btn onclick="show('appliance')">Appliance</button><button class=btn onclick="show('library')">Library</button><button class=btn onclick="show('recordings')">DVR</button></div>`;
 }
 

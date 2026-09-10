@@ -782,3 +782,25 @@ body.mobileSheetOpen{overflow:hidden}
 
 
 .dvrStatusBar{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.dvrStatusBar span{padding:8px 11px;border:1px solid var(--line);border-radius:999px;background:#0d1c29}.dvrStatusBar b{margin-left:5px}
+
+
+.guideGrid{scroll-behavior:smooth}.programme[data-epg-action]{position:relative}.programme[data-epg-action]:focus{outline:3px solid #58a9d4;outline-offset:2px}.guideNow{box-shadow:inset 3px 0 0 #55a6d2}
+
+
+video.playerContain{object-fit:contain!important}.playerShell video{background:#000}.playerControls{touch-action:manipulation}
+
+
+
+html.isTV body{font-size:18px}
+html.isTV nav button{min-height:54px}
+html.isTV .posterCard{min-width:190px}
+html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px solid #73c5ef!important;outline-offset:4px!important;transform:scale(1.035)}
+.tvMiniGuide{position:fixed;z-index:2500;right:4vw;bottom:6vh;display:grid;gap:8px;width:280px;padding:18px;border:1px solid #4f86a6;border-radius:18px;background:#07131df2;box-shadow:0 25px 80px #000}
+.tvMiniGuide button{padding:13px;border:1px solid var(--line);border-radius:11px;background:#112a3d;color:#fff;text-align:left}
+
+
+
+@media(max-width:719px){input,select,button{font-size:16px}.posterGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.hero{padding:16px}.btn{min-height:44px}}
+
+
+.platformHero{background:linear-gradient(135deg,#0b2435,#102e43)}.capabilityGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:9px}.capabilityGrid span{padding:10px;border:1px solid var(--line);border-radius:10px;background:#0d1c29}

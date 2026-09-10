@@ -13,5 +13,26 @@
       "type": "image/svg+xml",
       "purpose": "any maskable"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "Live TV",
+      "short_name": "Live",
+      "url": "/?view=live"
+    },
+    {
+      "name": "Guide",
+      "short_name": "Guide",
+      "url": "/?view=guide"
+    },
+    {
+      "name": "DVR",
+      "short_name": "DVR",
+      "url": "/?view=recordings"
+    }
+  ],
+  "display_override": [
+    "window-controls-overlay",
+    "standalone"
   ]
 }

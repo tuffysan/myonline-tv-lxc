@@ -1,4 +1,4 @@
-# MyOnline TV Web v2.2.1 — Proxmox LXC
+# MyOnline TV Web v3.0.1 — Proxmox LXC
 
 MyOnline TV Web is a self-hosted entertainment appliance for Proxmox VE.
 
@@ -490,8 +490,8 @@ Existing IPTV, Plex/Jellyfin, DVR, duration, Continue Watching, Recently Watched
 - Uses the same responsive mobile/tablet/TV behavior introduced in v0.9.0.
 
 
-## v2.2.1 — First stable milestone
-v2.2.1 is the cumulative first major milestone of MyOnline TV Web.
+## v3.0.1 — First stable milestone
+v3.0.1 is the cumulative first major milestone of MyOnline TV Web.
 
 It contains:
 - IPTV Live TV, EPG Guide, Movies and Series.
@@ -508,7 +508,7 @@ It contains:
 `RELEASE-CHECKLIST.md` is included and should be completed on the target system before declaring the installation the production baseline.
 
 
-## v2.2.1 — DVR & Storage
+## v3.0.1 — DVR & Storage
 
 ### Live TV DVR
 - Live TV channel cards now have a red **Record** button.
@@ -536,7 +536,7 @@ Movie/episode Download now asks for a destination:
 Protected/DRM content is not decrypted or bypassed.
 
 
-## v2.2.1 — Smart DVR
+## v3.0.1 — Smart DVR
 
 - Series recording rules from Guide
 - New-episodes-only flag
@@ -546,7 +546,7 @@ Protected/DRM content is not decrypted or bypassed.
 - DVR rules management in Recordings
 
 
-## v2.2.1 — Unified Library
+## v3.0.1 — Unified Library
 
 - Single Library view across configured media libraries
 - Title-normalized duplicate grouping
@@ -555,7 +555,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Poster and source metadata retained
 
 
-## v2.2.1 — Smart Home
+## v3.0.1 — Smart Home
 
 - Profile-aware Smart Home state
 - Time-aware greeting/status strip
@@ -565,7 +565,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Existing Continue Watching and Recently Watched retained
 
 
-## v2.2.1 — DVR Library
+## v3.0.1 — DVR Library
 
 - Completed recordings grouped into a DVR Library
 - Automatic title-based series grouping
@@ -575,7 +575,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Scheduled/active recording list remains available
 
 
-## v2.2.1 — Search 2.0
+## v3.0.1 — Search 2.0
 
 - One search UI across unified Movies and Series
 - Live TV channel search
@@ -584,7 +584,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Parallel source queries with graceful source failure
 
 
-## v2.2.1 — Multi-room
+## v3.0.1 — Multi-room
 
 - Rooms/devices registry
 - TV/browser device classification
@@ -594,7 +594,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Foundation for Continue on another screen
 
 
-## v2.2.1 — Installable PWA
+## v3.0.1 — Installable PWA
 
 - Installable web app manifest
 - Standalone display mode
@@ -604,7 +604,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Theme metadata for mobile/desktop installation
 
 
-## v2.2.1 — Notifications
+## v3.0.1 — Notifications
 
 - In-app notification center
 - Read/unread state
@@ -613,7 +613,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Persistent notification history
 
 
-## v2.2.1 — Appliance milestone
+## v3.0.1 — Appliance milestone
 
 - Appliance health dashboard
 - Disk usage/free-space status
@@ -623,7 +623,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Cumulative IPTV, Plex/Jellyfin, DVR, PWA, Search and Multi-room features
 
 
-## v2.2.1 — Stability & Diagnostics
+## v3.0.1 — Stability & Diagnostics
 
 - Admin diagnostics center
 - FFmpeg/FFprobe/rclone checks
@@ -633,7 +633,7 @@ Protected/DRM content is not decrypted or bypassed.
 - v2.0.1 navigation hotfix retained
 
 
-## v2.2.1 — DVR 2.0
+## v3.0.1 — DVR 2.0
 
 - DVR status summary
 - Recording conflict detection
@@ -641,3 +641,85 @@ Protected/DRM content is not decrypted or bypassed.
 - Smart DVR rule overview retained
 - Storage-aware recording retained
 - Conflict warning in DVR UI
+
+
+## v3.0.1 — Profiles & Sync
+
+- Server-side per-profile media-state API
+- Resume position and duration fields
+- Watched and favourite fields
+- Poster/title/kind metadata
+- Cross-device profile state view
+- Local state remains compatible during migration
+
+
+## v3.0.1 — EPG 2.0
+
+- Guide promoted to EPG 2.0 UX
+- Now/Next calculation helpers
+- Programme progress helper
+- Keyboard/TV focus improvements
+- Play/record programme actions retained
+- Smart DVR integration retained
+
+
+## v3.0.1 — Player 2.0
+
+- Unified Player 2 helper layer
+- Resume-on-metadata support
+- Audio/text track capability detection
+- Fit/contain toggle
+- Ended-state hook for next-episode UX
+- Existing HLS/FFmpeg playback retained
+
+
+## v3.0.1 — Library 2.0
+
+- Library 2.0 presentation
+- Title/year/recently-added sorting
+- Facet helper foundation
+- Duplicate source grouping retained
+- Unified source chooser retained
+- Poster metadata retained
+
+
+## v3.0.1 — Downloads 2.0
+
+- Cancel action
+- Retry failed/cancelled jobs
+- Device/NAS/cloud destination chooser retained
+- Progress/status UI retained
+- Storage destination labels
+- No permanent LXC storage requirement retained
+
+
+## v3.0.1 — TV Experience 2.0
+
+- Stronger 10-foot typography
+- Larger remote focus targets
+- TV quick/mini guide overlay
+- Guide/DVR/Search remote shortcuts
+- Enhanced D-pad focus styling
+- Existing spatial rail navigation retained
+
+
+## v3.0.1 — Mobile / PWA 2.0
+
+- PWA shortcuts for Live/Guide/DVR
+- Install-app action
+- Web Share action
+- Improved mobile touch targets
+- Two-column mobile poster grid
+- Updated service-worker cache version
+
+
+## v3.0.1 — MyOnline TV Platform
+
+- Platform status endpoint and dashboard
+- Cumulative IPTV/EPG/DVR/Storage/Plex/Jellyfin stack
+- Unified Library + Search 2.0
+- Server profile-state foundation
+- Multi-room foundation
+- Installable PWA
+- Notifications and diagnostics
+- Appliance backup/health retained

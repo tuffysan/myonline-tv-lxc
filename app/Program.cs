@@ -76,6 +76,7 @@ var recordingsFile = Path.Combine(dataDir, "recordings.json");
 var dvrRulesFile = Path.Combine(dataDir, "dvr-rules.json");
 var roomsFile = Path.Combine(dataDir, "rooms.json");
 var notificationsFile = Path.Combine(dataDir, "notifications.json");
+var profileStateFile = Path.Combine(dataDir, "profile-state.json");
 var storageTargetsFile = Path.Combine(dataDir, "storage-targets.json");
 var recordingsDir = Path.Combine(dataDir, "recordings");
 var secretKeyFile = Path.Combine(dataDir, "secrets.key");
@@ -94,7 +95,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/2.2.1");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/3.0.1");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
@@ -656,7 +657,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "2.2.1",
+    version = "3.0.1",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -694,14 +695,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = AuthConfigured();
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "2.2.1", checks })
-        : Results.Json(new { status = "not-ready", version = "2.2.1", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "3.0.1", checks })
+        : Results.Json(new { status = "not-ready", version = "3.0.1", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "2.2.1",
+    version = "3.0.1",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = AuthConfigured(),
@@ -2301,7 +2302,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "2.2.1",
+        version = "3.0.1",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -2717,7 +2718,7 @@ app.MapGet("/api/appliance/health", () =>
 {
     var drive=new DriveInfo(Path.GetPathRoot(dataDir)!);
     return Results.Ok(new {
-        version="2.2.1", dataDirectory=dataDir,
+        version="3.0.1", dataDirectory=dataDir,
         storageTargets=LoadStorageTargets().Count,
         dvrRules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count,
         rooms=(Load<List<RoomDevice>>(roomsFile)??new()).Count,
@@ -2774,6 +2775,58 @@ app.MapGet("/api/dvr/status", () =>
         scheduled=jobs.Count(x=>x.Status=="Scheduled"),recording=jobs.Count(x=>x.Status=="Recording"),
         failed=jobs.Count(x=>x.Status=="Failed"),completed=jobs.Count(x=>x.Status=="Completed"),
         rules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count(x=>x.Enabled)
+    });
+}).RequireAuthorization();
+
+
+
+app.MapGet("/api/profile-state/{profileId}", (string profileId) =>
+{
+    var rows=Load<List<ProfileMediaState>>(profileStateFile)??new();
+    return Results.Ok(rows.Where(x=>x.ProfileId==profileId).OrderByDescending(x=>x.Updated));
+}).RequireAuthorization();
+app.MapPut("/api/profile-state/{profileId}/{mediaId}", (string profileId,string mediaId,ProfileMediaStateInput input) =>
+{
+    var rows=Load<List<ProfileMediaState>>(profileStateFile)??new();var i=rows.FindIndex(x=>x.ProfileId==profileId&&x.MediaId==mediaId);
+    var item=new ProfileMediaState(profileId,mediaId,input.Title??mediaId,input.Kind??"media",input.PositionSeconds,input.DurationSeconds,input.Watched,input.Favourite,input.Poster,DateTimeOffset.UtcNow);
+    if(i>=0)rows[i]=item;else rows.Add(item);Save(profileStateFile,rows);return Results.Ok(item);
+}).RequireAuthorization();
+app.MapDelete("/api/profile-state/{profileId}/{mediaId}", (string profileId,string mediaId) =>
+{
+    var rows=Load<List<ProfileMediaState>>(profileStateFile)??new();rows.RemoveAll(x=>x.ProfileId==profileId&&x.MediaId==mediaId);Save(profileStateFile,rows);return Results.NoContent();
+}).RequireAuthorization();
+
+
+
+app.MapPost("/api/downloads/{id}/cancel", (string id) =>
+{
+    if(!downloads.TryGetValue(id,out var job))return Results.NotFound();
+    if(job.Status is "Completed" or "Failed")return Results.BadRequest("Download is not active.");
+    downloads[id]=job with {Status="Cancelled",Error="Cancelled by user"};
+    return Results.Ok(downloads[id].Safe());
+}).RequireAuthorization();
+app.MapPost("/api/downloads/{id}/retry", (string id) =>
+{
+    if(!downloads.TryGetValue(id,out var job))return Results.NotFound();
+    if(job.Status is not ("Failed" or "Cancelled"))return Results.BadRequest("Only failed/cancelled downloads can be retried.");
+    var retry=job with {Status="Queued",Progress=0,Error=null,Created=DateTimeOffset.UtcNow};
+    downloads[id]=retry;_ = Task.Run(()=>RunDownload(retry));return Results.Accepted($"/api/downloads/{id}",retry.Safe());
+}).RequireAuthorization();
+
+
+
+app.MapGet("/api/platform/status", () =>
+{
+    var drive=new DriveInfo(Path.GetPathRoot(dataDir)!);
+    return Results.Ok(new {
+        version="3.0.1",platform="MyOnline TV Platform",
+        providers=LoadProviders().Count,
+        storageTargets=LoadStorageTargets().Count(x=>x.Enabled),
+        dvrRules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count(x=>x.Enabled),
+        rooms=(Load<List<RoomDevice>>(roomsFile)??new()).Count,
+        notifications=(Load<List<AppNotification>>(notificationsFile)??new()).Count(x=>!x.Read),
+        diskFreeBytes=drive.AvailableFreeSpace,
+        features=new[]{"IPTV","EPG","DVR","Storage","Plex","Jellyfin","Unified Library","Profile Sync","Search","Multi-room","PWA","Notifications","Diagnostics"}
     });
 }).RequireAuthorization();
 
@@ -2881,7 +2934,7 @@ async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, TimeSpa
     var url = BuildXtreamPlayerApiUrl(c, action, extra);
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/2.2.1");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/3.0.1");
     using var cts = new CancellationTokenSource(timeout);
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -3047,7 +3100,7 @@ async Task<List<LiveChannel>> LoadM3uChannels(string url)
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/x-mpegURL,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/2.2.1");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/3.0.1");
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -3066,7 +3119,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/2.2.1");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/3.0.1");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }
@@ -3362,6 +3415,8 @@ record MediaLibrarySelectionInput(string[]? LibraryIds);
 record MediaLibraryConnection(string BaseUrl, string Token);
 record UnifiedEpisodeItem(string Id, string Source, string SourceProviderId, string ItemId, string SeriesId, int SeasonNumber, int EpisodeNumber, string Name, string? Year, string? Rating, string? Poster);
 record UnifiedMediaItem(string Id, string Source, string SourceProviderId, string Kind, string Name, string? Year, string? Rating, string? Poster, string? ParentId, string? StreamUrl, double? Progress, DateTimeOffset? AddedAt);
+record ProfileMediaState(string ProfileId,string MediaId,string Title,string Kind,double PositionSeconds,double? DurationSeconds,bool Watched,bool Favourite,string? Poster,DateTimeOffset Updated);
+record ProfileMediaStateInput(string? Title=null,string? Kind=null,double PositionSeconds=0,double? DurationSeconds=null,bool Watched=false,bool Favourite=false,string? Poster=null);
 record AppNotification(string Id,string Title,string Message,string Kind,DateTimeOffset Created,bool Read);
 record AppNotificationInput(string Title,string Message,string? Kind=null);
 record RoomDevice(string Id,string Name,string DeviceType,DateTimeOffset Updated,string? ActiveMediaId=null,string? ActiveTitle=null,double PositionSeconds=0);
