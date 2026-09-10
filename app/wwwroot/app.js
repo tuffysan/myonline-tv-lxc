@@ -120,6 +120,24 @@ async function boot(){
   if(!st.configured||!st.authenticated){await authGate(st);return}
   await enterApp(st);
 }
+
+let sourceAccess={adminIptv:true,adminPlex:true,adminJellyfin:true};
+let navigationConfig={items:[]};
+const navigationLabels={home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'DVR',notifications:'Alerts',rooms:'Rooms',library:'Library',search:'Search',sources:'My Sources',system:'System',platform:'System overview',diagnostics:'Diagnostics',appliance:'Appliance',admin:'Admin'};
+async function loadNavigationConfig(){try{navigationConfig=await api('/api/navigation')}catch{navigationConfig={items:[]}}applyNavigationConfig()}
+function applyNavigationConfig(){
+ const items=navigationConfig?.items||[],map=new Map(items.map(x=>[x.id,x]));
+ document.querySelectorAll('nav button[data-view]').forEach(b=>{const x=map.get(b.dataset.view);if(x)b.classList.toggle('navConfigHidden',x.enabled===false)});
+ const n=document.querySelector('aside nav')||document.querySelector('nav');
+ if(n&&items.length){const o=new Map(items.map((x,i)=>[x.id,Number.isFinite(x.order)?x.order:i]));[...n.querySelectorAll('button[data-view]')].sort((a,b)=>(o.get(a.dataset.view)??999)-(o.get(b.dataset.view)??999)).forEach(b=>n.appendChild(b))}
+ renderMobileNavigation();
+}
+async function saveNavigationManager(){
+ const rows=[...document.querySelectorAll('#navigationManager [data-nav-id]')].map((r,i)=>({id:r.dataset.navId,enabled:r.querySelector('input[type=checkbox]').checked,order:i}));
+ navigationConfig=await api('/api/admin/navigation',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:rows})});
+ applyNavigationConfig();await adminView();
+}
+function moveNavigationItem(id,d){const box=$('#navigationManager'),r=box?.querySelector(`[data-nav-id="${CSS.escape(id)}"]`);if(!r)return;const n=d<0?r.previousElementSibling:r.nextElementSibling;if(!n)return;if(d<0)box.insertBefore(r,n);else box.insertBefore(n,r)}
 async function authGate(state){
   const st=state||await fetch('/api/auth/status',{credentials:'same-origin'}).then(r=>r.json());
   $('#app').classList.add('hidden');$('#auth').classList.remove('hidden');
@@ -151,10 +169,11 @@ async function enterApp(st){
   $('#userBadge').textContent=authState.user||'user';
   const s=await api('/api/status');$('#status').textContent=`${s.version} · ${s.platform}`;
   const brandVersion=$('#brandVersion');if(brandVersion)brandVersion.textContent=`Web v${s.version} · Unified Media Center`;
-  providers=await api('/api/providers');fav=new Set(await api('/api/favourites'));profiles=await api('/api/profiles');try{mediaLibraries=await api('/api/media-libraries')}catch{mediaLibraries=[]}try{accessState=await api('/api/access/me')}catch{accessState={allowedProfileIds:profiles.map(p=>p.id),defaultProfileId:profiles[0]?.id||'default',policies:{}}}profiles=profiles.filter(p=>authState.role==='Admin'||(accessState.allowedProfileIds||[]).includes(p.id));if(!profiles.some(p=>p.id===currentProfile))currentProfile=accessState.defaultProfileId||profiles[0]?.id||'default';applyPermissions();renderMediaLibraryNav();renderProfileBadge();
+  providers=await api('/api/providers');fav=new Set(await api('/api/favourites'));profiles=await api('/api/profiles');try{sourceAccess=await api('/api/source-access/me')}catch{sourceAccess={adminIptv:true,adminPlex:true,adminJellyfin:true}};try{mediaLibraries=await api('/api/media-libraries')}catch{mediaLibraries=[]}try{accessState=await api('/api/access/me')}catch{accessState={allowedProfileIds:profiles.map(p=>p.id),defaultProfileId:profiles[0]?.id||'default',policies:{}}}profiles=profiles.filter(p=>authState.role==='Admin'||(accessState.allowedProfileIds||[]).includes(p.id));if(!profiles.some(p=>p.id===currentProfile))currentProfile=accessState.defaultProfileId||profiles[0]?.id||'default';applyPermissions();renderMediaLibraryNav();renderProfileBadge();
   if(!currentProvider&&providers.length)currentProvider=providers[0].id;
   updateResponsiveMode();
   renderMobileNavigation();
+  await loadNavigationConfig();
   show('home');
 }
 $('#logout').onclick=async()=>{await api('/api/auth/logout',{method:'POST'});await authGate()};
@@ -180,7 +199,7 @@ async function show(v){
   currentView=v;destroyPlayer();
   renderMobileNavigation();
   const moreSheet=$('#mobileMoreSheet');if(moreSheet){moreSheet.classList.add('hidden');moreSheet.setAttribute('aria-hidden','true');document.body.classList.remove('mobileSheetOpen')}
-  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'Recordings',platform:'Platform','profile-sync':'Profile Sync',diagnostics:'Diagnostics',appliance:'Appliance',notifications:'Notifications',rooms:'Rooms',library:'Library',search:'Search',system:'System',admin:'Admin'})[v]||v;
+  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'Recordings',platform:'Platform','profile-sync':'Profile Sync',diagnostics:'Diagnostics',appliance:'Appliance',notifications:'Notifications',rooms:'Rooms',library:'Library',search:'Search',sources:'My Sources',system:'System',admin:'Admin'})[v]||v;
   if(v==='home')await home();
   if(v==='live')await live();
   if(v==='guide')await guide();
@@ -198,6 +217,7 @@ async function show(v){
   if(v==='rooms')await roomsView();
   if(v==='library')await unifiedLibraryView();
   if(v==='search')await searchView();
+  if(v==='sources')await sourcesView();
   if(v==='system')await systemView();
   if(v==='admin')await adminView();
 }
@@ -1090,6 +1110,14 @@ async function downloadView(){
 async function deleteDownload(id){if(!confirm('Remove this download and its stored file?'))return;await api('/api/downloads/'+id,{method:'DELETE'});downloadView()}
 
 
+
+async function sourcesView(){
+ let rows=[];try{rows=await api('/api/my-sources')}catch{}
+ const defs=[['iptv','IPTV',sourceAccess.adminIptv],['plex','Plex',sourceAccess.adminPlex],['jellyfin','Jellyfin',sourceAccess.adminJellyfin]];
+ content.innerHTML=`<div class=hero><h2>My Sources</h2><p class=muted>Admin-managed sources are ready to use. Add your own only where self-management is enabled.</p></div><div class=grid>${defs.map(([t,n,m])=>`<div class=card><h3>${n}</h3>${m?'<p>Managed by administrator.</p>':`<p>You manage this source.</p><div class=formGrid><div class=field><label>Name</label><input id="src-name-${t}" value="${n}"></div><div class=field><label>Base URL</label><input id="src-base-${t}"></div>${t==='iptv'?'<div class=field><label>M3U URL</label><input id=src-playlist-iptv></div><div class=field><label>EPG URL</label><input id=src-epg-iptv></div><div class=field><label>Username</label><input id=src-user-iptv></div><div class=field><label>Password</label><input type=password id=src-secret-iptv></div>':'<div class=field><label>Token / API key</label><input type=password id="src-secret-'+t+'"></div>'}</div><button class=btn onclick="saveMySource('${t}')">Save</button>`}</div>`).join('')}</div><h2>Saved personal sources</h2><div class=grid>${rows.map(x=>`<div class=card><h3>${esc(x.name)}</h3><p>${esc(x.type)}</p><button class=btn onclick="deleteMySource('${escAttr(x.id)}')">Remove</button></div>`).join('')||'<div class=card>No personal sources saved.</div>'}</div>`;
+}
+async function saveMySource(t){const b={type:t,name:$('#src-name-'+t)?.value||t,baseUrl:$('#src-base-'+t)?.value||'',playlistUrl:$('#src-playlist-'+t)?.value||'',epgUrl:$('#src-epg-'+t)?.value||'',username:$('#src-user-'+t)?.value||'',enabled:true};const x=$('#src-secret-'+t)?.value||'';if(t==='iptv')b.password=x;else b.token=x;try{await jpost('/api/my-sources',b);await sourcesView()}catch(e){alert(friendlyError(e))}}
+async function deleteMySource(id){if(!confirm('Remove source?'))return;await api('/api/my-sources/'+encodeURIComponent(id),{method:'DELETE'});await sourcesView()}
 async function systemView(){
   content.innerHTML='<div class=card>Loading system information…</div>';
   try{
@@ -1130,13 +1158,23 @@ async function restoreBackup(fileName){if(!confirm('Restore data from '+fileName
 
 let editingProviderId=null, editingUserId=null;
 
+
+let adminSourceAccess={};
+function editUserSources(u){const x=adminSourceAccess[u]||{adminIptv:true,adminPlex:true,adminJellyfin:true};const b=$('#userSourceAccessEditor');b.style.display='block';b.innerHTML=`<h3>Source access · ${esc(u)}</h3><p class=muted>Checked = use Admin configuration. Unchecked = user manages own source.</p><label class=checkline><input id=usaIptv type=checkbox ${x.adminIptv?'checked':''}> IPTV — Admin configuration</label><label class=checkline><input id=usaPlex type=checkbox ${x.adminPlex?'checked':''}> Plex — Admin configuration</label><label class=checkline><input id=usaJelly type=checkbox ${x.adminJellyfin?'checked':''}> Jellyfin — Admin configuration</label><div class=row><button class=btn onclick="saveUserSources('${escAttr(u)}')">Save source access</button></div>`;b.scrollIntoView({behavior:'smooth',block:'center'})}
+async function saveUserSources(u){const x={adminIptv:$('#usaIptv').checked,adminPlex:$('#usaPlex').checked,adminJellyfin:$('#usaJelly').checked};await api('/api/admin/source-access/'+encodeURIComponent(u),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(x)});adminSourceAccess[u]=x;await adminView()}
 async function adminView(){
   if(authState.role!=='Admin'){content.innerHTML='<div class=card>Administrator access is required.</div>';return}
   providers=await api('/api/providers');profiles=await api('/api/profiles');
-  const users=await api('/api/admin/users');const accessCfg=await api('/api/admin/profile-access');mediaLibraries=await api('/api/media-libraries');const adminStorage=await api('/api/admin/storage-targets');renderMediaLibraryNav();
+  const users=await api('/api/admin/users');const accessCfg=await api('/api/admin/profile-access');const sourceCfg=await api('/api/admin/source-access');adminSourceAccess=sourceCfg||{};mediaLibraries=await api('/api/media-libraries');const adminStorage=await api('/api/admin/storage-targets');renderMediaLibraryNav();
 
   content.innerHTML=`
   <div class=hero><h2>Administration</h2><p class=muted>Manage users, IPTV providers, Plex/Jellyfin libraries and viewer profiles.</p></div>
+  <h2>Menu & navigation</h2>
+  <div class=card>
+    <p class=muted>Choose which pages are visible and their order. Home and Admin are always available.</p>
+    <div id=navigationManager class=manageList>${(navigationConfig?.items||[]).map(x=>`<div class=manageChannel data-nav-id="${escAttr(x.id)}"><span><b>${esc(navigationLabels[x.id]||x.id)}</b></span><label class=checkline><input type=checkbox ${x.enabled?'checked':''} ${x.id==='home'||x.id==='admin'?'disabled':''}> Visible</label><span class=row><button class=btn type=button onclick="moveNavigationItem('${escAttr(x.id)}',-1)">↑</button><button class=btn type=button onclick="moveNavigationItem('${escAttr(x.id)}',1)">↓</button></span></div>`).join('')}</div>
+    <div class=row><button class=btn id=saveNavigation>Save menu</button></div>
+  </div>
   <h2>System tools</h2>
   <div class="grid adminSystemTools">
     <div class=card><h3>System overview</h3><p class=muted>Platform status, configured services and capabilities.</p><button class=btn onclick="show('platform')">Open system overview</button></div>
@@ -1155,7 +1193,9 @@ async function adminView(){
     </div>
     <div class=row><button class=btn id=saveUser>Add user</button><button class=btn id=cancelUser disabled>Cancel edit</button></div>
   </div>
-  <div class=manageList>${users.map(u=>{const ua=accessCfg.userAccess[u.username]||{allowedProfileIds:profiles.map(p=>p.id),defaultProfileId:profiles[0]?.id||'default'};return `<div class=manageChannel><span><b>${esc(u.username)}</b> · ${esc(u.role)} ${u.enabled?'':'· Disabled'}</span><span><select multiple id="ua-${u.id}">${profiles.map(p=>`<option value="${p.id}" ${ua.allowedProfileIds.includes(p.id)?'selected':''}>${esc(p.name)}</option>`).join('')}</select></span><button class=btn onclick="saveUserAccess('${escAttr(u.id)}','${escAttr(u.username)}')">Profiles</button><button class=btn onclick="editUser('${escAttr(u.id)}')">Edit</button><button class=btn onclick="deleteUser('${escAttr(u.id)}','${escAttr(u.username)}')">Remove</button></div>`}).join('')}</div>
+  <div class=manageList>${users.map(u=>{const ua=accessCfg.userAccess[u.username]||{allowedProfileIds:profiles.map(p=>p.id),defaultProfileId:profiles[0]?.id||'default'};return `<div class=manageChannel><span><b>${esc(u.username)}</b> · ${esc(u.role)} ${u.enabled?'':'· Disabled'}</span><span><select multiple id="ua-${u.id}">${profiles.map(p=>`<option value="${p.id}" ${ua.allowedProfileIds.includes(p.id)?'selected':''}>${esc(p.name)}</option>`).join('')}</select></span><button class=btn onclick="saveUserAccess('${escAttr(u.id)}','${escAttr(u.username)}')">Profiles</button><button class=btn onclick="editUserSources('${escAttr(u.username)}')">Sources</button><button class=btn onclick="editUser('${escAttr(u.id)}')">Edit</button><button class=btn onclick="deleteUser('${escAttr(u.id)}','${escAttr(u.username)}')">Remove</button></div>`}).join('')}</div>
+
+  <div id=userSourceAccessEditor class=card style="display:none"></div>
 
   <h2>Media libraries</h2>
   <div class=card>
@@ -1230,6 +1270,7 @@ async function adminView(){
       <button class=btn onclick="saveProfilePolicy('${p.id}')">Save permissions</button></div>`;
   }).join('');
 
+  $('#saveNavigation').onclick=saveNavigationManager;
   $('#manageChannels').onclick=manageChannels;
   $('#addProfile').onclick=async()=>{try{await jpost('/api/profiles',{id:null,name:$('#profileName').value,isKids:$('#profileKids').checked,icon:$('#profileIcon').value});profiles=await api('/api/profiles');adminView()}catch(e){alert(friendlyError(e))}};
 

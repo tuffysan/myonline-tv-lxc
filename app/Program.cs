@@ -77,6 +77,9 @@ var dvrRulesFile = Path.Combine(dataDir, "dvr-rules.json");
 var roomsFile = Path.Combine(dataDir, "rooms.json");
 var notificationsFile = Path.Combine(dataDir, "notifications.json");
 var profileStateFile = Path.Combine(dataDir, "profile-state.json");
+var navigationFile = Path.Combine(dataDir, "navigation.json");
+var userSourceAccessFile = Path.Combine(dataDir, "user-source-access.json");
+var userSourcesFile = Path.Combine(dataDir, "user-sources.json");
 var storageTargetsFile = Path.Combine(dataDir, "storage-targets.json");
 var recordingsDir = Path.Combine(dataDir, "recordings");
 var secretKeyFile = Path.Combine(dataDir, "secrets.key");
@@ -95,7 +98,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/3.0.2");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/3.0.4");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
@@ -657,7 +660,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "3.0.2",
+    version = "3.0.4",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -695,14 +698,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = AuthConfigured();
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "3.0.2", checks })
-        : Results.Json(new { status = "not-ready", version = "3.0.2", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "3.0.4", checks })
+        : Results.Json(new { status = "not-ready", version = "3.0.4", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "3.0.2",
+    version = "3.0.4",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = AuthConfigured(),
@@ -1656,6 +1659,39 @@ app.MapPost("/api/media-libraries/{id}/libraries/selection", (string id, MediaLi
     return Results.Ok(new { id, libraryIds = selected });
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
 
+
+Dictionary<string,UserSourceAccess> LoadUserSourceAccess() => Load<Dictionary<string,UserSourceAccess>>(userSourceAccessFile) ?? new(StringComparer.OrdinalIgnoreCase);
+List<UserSourceItem> LoadUserSources() => Load<List<UserSourceItem>>(userSourcesFile) ?? new();
+UserSourceAccess SourceAccessFor(string username){var rows=LoadUserSourceAccess();return rows.TryGetValue(username,out var x)?x:new(true,true,true);}
+
+app.MapGet("/api/source-access/me",(HttpContext ctx)=>{
+ var a=ctx.User.IsInRole("Admin")?new UserSourceAccess(true,true,true):SourceAccessFor(ctx.User.Identity?.Name??"");
+ return Results.Ok(new{adminIptv=a.AdminIptv,adminPlex=a.AdminPlex,adminJellyfin=a.AdminJellyfin,ownIptv=!a.AdminIptv,ownPlex=!a.AdminPlex,ownJellyfin=!a.AdminJellyfin});
+}).RequireAuthorization();
+app.MapGet("/api/admin/source-access",()=>Results.Ok(LoadUserSourceAccess())).RequireAuthorization(p=>p.RequireRole("Admin"));
+app.MapPut("/api/admin/source-access/{username}",(string username,UserSourceAccess input)=>{
+ if(!LoadUsers().Any(x=>x.Username.Equals(username,StringComparison.OrdinalIgnoreCase)))return Results.NotFound();
+ var rows=LoadUserSourceAccess();rows[username]=input;Save(userSourceAccessFile,rows);return Results.Ok(input);
+}).RequireAuthorization(p=>p.RequireRole("Admin"));
+app.MapGet("/api/my-sources",(HttpContext ctx)=>{
+ var username=ctx.User.Identity?.Name??"";
+ return Results.Ok(LoadUserSources().Where(x=>x.Username.Equals(username,StringComparison.OrdinalIgnoreCase)).Select(x=>new UserSourceSafe(x.Id,x.Type,x.Name,x.Enabled,"",true)));
+}).RequireAuthorization();
+app.MapPost("/api/my-sources",(UserSourceInput input,HttpContext ctx)=>{
+ var username=ctx.User.Identity?.Name??"";var a=SourceAccessFor(username);var type=(input.Type??"").Trim().ToLowerInvariant();
+ if((type=="iptv"&&a.AdminIptv)||(type=="plex"&&a.AdminPlex)||(type=="jellyfin"&&a.AdminJellyfin))return Results.BadRequest("This source is managed by the administrator.");
+ if(type is not ("iptv" or "plex" or "jellyfin"))return Results.BadRequest("Invalid source type.");
+ var rows=LoadUserSources();var id=string.IsNullOrWhiteSpace(input.Id)?Guid.NewGuid().ToString("N"):input.Id.Trim();
+ object conn=type=="iptv"?new{input.PlaylistUrl,input.EpgUrl,input.BaseUrl,input.Username,input.Password}:new{input.BaseUrl,input.Token};
+ var row=new UserSourceItem(id,username,type,input.Name.Trim(),input.Enabled,secretBox.Encrypt(JsonSerializer.Serialize(conn,jsonOptions)));
+ var ix=rows.FindIndex(x=>x.Id==id&&x.Username.Equals(username,StringComparison.OrdinalIgnoreCase));if(ix>=0)rows[ix]=row;else rows.Add(row);Save(userSourcesFile,rows);
+ return Results.Ok(new{row.Id,row.Type,row.Name,row.Enabled});
+}).RequireAuthorization();
+app.MapDelete("/api/my-sources/{id}",(string id,HttpContext ctx)=>{
+ var u=ctx.User.Identity?.Name??"";var rows=LoadUserSources();var next=rows.Where(x=>!(x.Id==id&&x.Username.Equals(u,StringComparison.OrdinalIgnoreCase))).ToList();
+ if(next.Count==rows.Count)return Results.NotFound();Save(userSourcesFile,next);return Results.NoContent();
+}).RequireAuthorization();
+
 app.MapGet("/api/access/me", (HttpContext ctx) =>
 {
     var username = ctx.User.Identity?.Name ?? "";
@@ -2302,7 +2338,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "3.0.2",
+        version = "3.0.4",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -2718,7 +2754,7 @@ app.MapGet("/api/appliance/health", () =>
 {
     var drive=new DriveInfo(Path.GetPathRoot(dataDir)!);
     return Results.Ok(new {
-        version="3.0.2", dataDirectory=dataDir,
+        version="3.0.4", dataDirectory=dataDir,
         storageTargets=LoadStorageTargets().Count,
         dvrRules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count,
         rooms=(Load<List<RoomDevice>>(roomsFile)??new()).Count,
@@ -2780,6 +2816,24 @@ app.MapGet("/api/dvr/status", () =>
 
 
 
+
+NavigationConfig LoadNavigationConfig()
+{
+    var saved=Load<NavigationConfig>(navigationFile);
+    var ids=new[]{"home","live","guide","movies","series","plex","jellyfin","downloads","recordings","notifications","rooms","library","search","system","platform","diagnostics","appliance","admin"};
+    var map=(saved?.Items??new List<NavigationItemConfig>()).ToDictionary(x=>x.Id,StringComparer.OrdinalIgnoreCase);
+    var items=ids.Select((id,n)=>map.TryGetValue(id,out var x)?x:new NavigationItemConfig(id,true,n))
+      .Select(x=>x.Id is "home" or "admin"?x with{Enabled=true}:x).OrderBy(x=>x.Order).ToList();
+    return new NavigationConfig(items);
+}
+app.MapGet("/api/navigation",()=>Results.Ok(LoadNavigationConfig())).RequireAuthorization();
+app.MapPut("/api/admin/navigation",(NavigationConfig input)=>{
+    var allowed=new HashSet<string>(new[]{"home","live","guide","movies","series","plex","jellyfin","downloads","recordings","notifications","rooms","library","search","system","platform","diagnostics","appliance","admin"},StringComparer.OrdinalIgnoreCase);
+    var items=(input.Items??new List<NavigationItemConfig>()).Where(x=>allowed.Contains(x.Id)).GroupBy(x=>x.Id,StringComparer.OrdinalIgnoreCase).Select(g=>g.First())
+      .Select(x=>x.Id is "home" or "admin"?x with{Enabled=true}:x).OrderBy(x=>x.Order).ToList();
+    Save(navigationFile,new NavigationConfig(items));return Results.Ok(LoadNavigationConfig());
+}).RequireAuthorization(p=>p.RequireRole("Admin"));
+
 app.MapGet("/api/profile-state/{profileId}", (string profileId) =>
 {
     var rows=Load<List<ProfileMediaState>>(profileStateFile)??new();
@@ -2819,7 +2873,7 @@ app.MapGet("/api/platform/status", () =>
 {
     var drive=new DriveInfo(Path.GetPathRoot(dataDir)!);
     return Results.Ok(new {
-        version="3.0.2",platform="MyOnline TV Platform",
+        version="3.0.4",platform="MyOnline TV Platform",
         providers=LoadProviders().Count,
         storageTargets=LoadStorageTargets().Count(x=>x.Enabled),
         dvrRules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count(x=>x.Enabled),
@@ -2934,7 +2988,7 @@ async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, TimeSpa
     var url = BuildXtreamPlayerApiUrl(c, action, extra);
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/3.0.2");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/3.0.4");
     using var cts = new CancellationTokenSource(timeout);
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -3100,7 +3154,7 @@ async Task<List<LiveChannel>> LoadM3uChannels(string url)
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/x-mpegURL,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/3.0.2");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/3.0.4");
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -3119,7 +3173,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/3.0.2");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/3.0.4");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }
@@ -3419,6 +3473,12 @@ record ProfileMediaState(string ProfileId,string MediaId,string Title,string Kin
 record ProfileMediaStateInput(string? Title=null,string? Kind=null,double PositionSeconds=0,double? DurationSeconds=null,bool Watched=false,bool Favourite=false,string? Poster=null);
 record AppNotification(string Id,string Title,string Message,string Kind,DateTimeOffset Created,bool Read);
 record AppNotificationInput(string Title,string Message,string? Kind=null);
+record NavigationItemConfig(string Id, bool Enabled, int Order);
+record NavigationConfig(List<NavigationItemConfig> Items);
+record UserSourceAccess(bool AdminIptv, bool AdminPlex, bool AdminJellyfin);
+record UserSourceItem(string Id, string Username, string Type, string Name, bool Enabled, string EncryptedConnection);
+record UserSourceInput(string? Id, string Type, string Name, string? BaseUrl, string? PlaylistUrl, string? EpgUrl, string? Username, string? Password, string? Token, bool Enabled);
+record UserSourceSafe(string Id, string Type, string Name, bool Enabled, string Host, bool HasSecret);
 record RoomDevice(string Id,string Name,string DeviceType,DateTimeOffset Updated,string? ActiveMediaId=null,string? ActiveTitle=null,double PositionSeconds=0);
 record RoomDeviceInput(string? Id,string Name,string? DeviceType=null,string? ActiveMediaId=null,string? ActiveTitle=null,double PositionSeconds=0);
 record RoomHandoff(string? MediaId,string? Title,double PositionSeconds=0);

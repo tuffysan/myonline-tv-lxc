@@ -804,3 +804,7 @@ html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px 
 
 
 .platformHero{background:linear-gradient(135deg,#0b2435,#102e43)}.capabilityGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:9px}.capabilityGrid span{padding:10px;border:1px solid var(--line);border-radius:10px;background:#0d1c29}
+
+.navConfigHidden{display:none!important}
+#navigationManager .manageChannel{align-items:center}
+#navigationManager .row{margin-left:auto}
