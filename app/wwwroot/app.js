@@ -649,7 +649,7 @@ let editingProviderId=null, editingUserId=null;
 async function adminView(){
   if(authState.role!=='Admin'){content.innerHTML='<div class=card>Administrator access is required.</div>';return}
   providers=await api('/api/providers');profiles=await api('/api/profiles');
-  const users=await api('/api/admin/users');const accessCfg=await api('/api/admin/profile-access');
+  const users=await api('/api/admin/users');const accessCfg=await api('/api/admin/profile-access');const mediaLibraries=await api('/api/media-libraries');
 
   content.innerHTML=`
   <div class=hero><h2>Administration</h2><p class=muted>Manage users, IPTV providers and viewer profiles.</p></div>
@@ -665,6 +665,19 @@ async function adminView(){
     <div class=row><button class=btn id=saveUser>Add user</button><button class=btn id=cancelUser disabled>Cancel edit</button></div>
   </div>
   <div class=manageList>${users.map(u=>{const ua=accessCfg.userAccess[u.username]||{allowedProfileIds:profiles.map(p=>p.id),defaultProfileId:profiles[0]?.id||'default'};return `<div class=manageChannel><span><b>${esc(u.username)}</b> · ${esc(u.role)} ${u.enabled?'':'· Disabled'}</span><span><select multiple id="ua-${u.id}">${profiles.map(p=>`<option value="${p.id}" ${ua.allowedProfileIds.includes(p.id)?'selected':''}>${esc(p.name)}</option>`).join('')}</select></span><button class=btn onclick="saveUserAccess('${escAttr(u.id)}','${escAttr(u.username)}')">Profiles</button><button class=btn onclick="editUser('${escAttr(u.id)}')">Edit</button><button class=btn onclick="deleteUser('${escAttr(u.id)}','${escAttr(u.username)}')">Remove</button></div>`}).join('')}</div>
+
+  <h2>Media libraries</h2>
+  <div class=card>
+    <div class=formGrid>
+      <div class=field><label>Name</label><input id=mlname></div>
+      <div class=field><label>Type</label><select id=mltype><option value=plex>Plex</option><option value=jellyfin>Jellyfin</option></select></div>
+      <div class=field><label>Server URL</label><input id=mlbase placeholder="https://plex.example or http://192.168.x.x:8096"></div>
+      <div class=field><label>Token / API key</label><input id=mltoken type=password placeholder="Token/API key"></div>
+      <div class=field><label>Status</label><label class=checkline><input id=mlenabled type=checkbox checked> Enabled</label></div>
+    </div>
+    <div class=row><button class=btn id=mlsave>Add media library</button><button class=btn id=mlcancel disabled>Cancel edit</button></div>
+  </div>
+  <div class=grid>${mediaLibraries.map(x=>`<div class=card><h3>${esc(x.name)}</h3><p>${esc(x.type)} · ${esc(x.host||'')}</p><div class=row><button class=btn onclick="editMediaLibrary('${x.id}')">Edit</button><button class=btn onclick="testMediaLibrary('${x.id}')">Test</button><button class=btn onclick="chooseMediaLibraries('${x.id}')">Libraries</button><button class=btn onclick="removeMediaLibrary('${x.id}')">Remove</button></div><div id="mlstat-${x.id}" class=muted></div></div>`).join('')}</div>
 
   <h2>IPTV providers</h2>
   <div class=card>
@@ -712,6 +725,7 @@ async function adminView(){
   $('#manageChannels').onclick=manageChannels;
   $('#addProfile').onclick=async()=>{try{await jpost('/api/profiles',{id:null,name:$('#profileName').value,isKids:$('#profileKids').checked,icon:$('#profileIcon').value});profiles=await api('/api/profiles');adminView()}catch(e){alert(friendlyError(e))}};
 
+  $('#mlsave').onclick=saveMediaLibrary;$('#mlcancel').onclick=()=>{editingMediaLibraryId=null;adminView()};
   $('#saveUser').onclick=saveAdminUser;
   $('#cancelUser').onclick=()=>{editingUserId=null;adminView()};
   $('#savep').onclick=saveProvider;
@@ -798,7 +812,7 @@ function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 function escAttr(s){return esc(s)}
 boot().catch(e=>{$('#auth').classList.remove('hidden');$('#auth').innerHTML=`<div class=authCard><h2>Startup error</h2><pre>${esc(e.message)}</pre></div>`});
 
-// v0.6.0 catalogue cache
+// v0.6.1 catalogue cache
 const CATALOG_CACHE_PREFIX='myonline-catalog-v1:';
 function catalogueCacheKey(kind,provider,category){return `${CATALOG_CACHE_PREFIX}${kind}:${provider}:${category||'all'}`}
 function readCatalogueCache(key,maxAgeMs=10*60*1000){
@@ -808,11 +822,11 @@ function writeCatalogueCache(key,items){
   try{sessionStorage.setItem(key,JSON.stringify({saved:Date.now(),items}))}catch{}
 }
 
-// v0.6.0 player cleanup
+// v0.6.1 player cleanup
 window.addEventListener('pagehide',()=>destroyPlayer());
 window.addEventListener('beforeunload',()=>destroyPlayer());
 
-// v0.6.0 movie favourites
+// v0.6.1 movie favourites
 function mediaFavKey(){return `myonline-media-favourites-v2:${currentProfile||'default'}`}
 function getMediaFavs(){try{return JSON.parse(localStorage.getItem(mediaFavKey())||'[]')}catch{return []}}
 function isMediaFav(type,id){return getMediaFavs().some(x=>x.type===type&&String(x.id)===String(id))}
@@ -823,7 +837,7 @@ function toggleMediaFav(type,item){
   if(type==='movie')filterMedia();else filterSeries();
 }
 
-// v0.6.0 watch history
+// v0.6.1 watch history
 function historyKey(){return `myonline-media-history-v2:${currentProfile||'default'}`}
 function getMediaHistory(){try{return JSON.parse(localStorage.getItem(historyKey())||'[]')}catch{return []}}
 function rememberMediaHistory(type,item){
@@ -832,14 +846,14 @@ function rememberMediaHistory(type,item){
   localStorage.setItem(historyKey(),JSON.stringify(rows.slice(0,100)));
 }
 
-// v0.6.0 home rails
+// v0.6.1 home rails
 function homeMediaRails(){
   const favs=getMediaFavs().slice(0,12),hist=getMediaHistory().slice(0,12);
   return `${favs.length?`<h2>Media favourites</h2><div class=continueRow>${favs.map(x=>`<button class=continueCard onclick="show('${x.type==='movie'?'movies':'series'}')"><span>★</span><b>${esc(x.name)}</b><small>${esc(x.type)}</small></button>`).join('')}</div>`:''}
   ${hist.length?`<h2>Recently watched</h2><div class=continueRow>${hist.map(x=>`<button class=continueCard onclick="show('${x.type==='movie'?'movies':'series'}')"><span>↻</span><b>${esc(x.name)}</b><small>${new Date(x.updated).toLocaleString()}</small></button>`).join('')}</div>`:''}`;
 }
 
-// v0.6.0 quick search
+// v0.6.1 quick search
 function homeQuickSearch(){
   const q=($('#homeSearch')?.value||'').trim();
   if(!q)return;
@@ -847,7 +861,7 @@ function homeQuickSearch(){
   show('movies').then(()=>{const x=$('#mediaq');if(x){x.value=q;filterMedia()}});
 }
 
-// v0.6.0 TV & Remote UX
+// v0.6.1 TV & Remote UX
 let tvRemoteMode=false;
 let tvLastFocusByView={};
 
@@ -993,13 +1007,13 @@ document.addEventListener('keydown',e=>{
 });
 
 
-// v0.6.0 profiles polish
+// v0.6.1 profiles polish
 document.addEventListener('click',e=>{if(!e.target.closest?.('#profilePicker')&&!e.target.closest?.('.profileBadge'))$('#profilePicker')?.remove()});
 
-// v0.6.0 debounce
+// v0.6.1 debounce
 function debounce(fn,ms=180){let t;return (...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms)}}
 
-// v0.6.0 player recovery
+// v0.6.1 player recovery
 function installVideoRecovery(video){
   if(!video||video.dataset.recoveryInstalled)return;
   video.dataset.recoveryInstalled='1';
@@ -1010,10 +1024,10 @@ function installVideoRecovery(video){
 }
 document.addEventListener('play',e=>{if(e.target?.tagName==='VIDEO')installVideoRecovery(e.target)},true);
 
-// v0.6.0 system auto refresh
+// v0.6.1 system auto refresh
 let systemRefreshTimer=null;document.addEventListener('visibilitychange',()=>{if(!document.hidden&&currentView==='system')systemView().catch(()=>{})});
 
-// v0.6.0 accessibility
+// v0.6.1 accessibility
 function syncNavAria(){
   document.querySelectorAll('nav button[data-view]').forEach(b=>b.setAttribute('aria-current',b.dataset.view===currentView?'page':'false'));
 }
@@ -1115,4 +1129,23 @@ async function runGlobalSearch(){
   }catch(e){
     $('#globalSearchStatus').textContent='Search failed: '+friendlyError(e);
   }
+}
+
+let editingMediaLibraryId=null;
+async function editMediaLibrary(id){
+  const x=await api('/api/media-libraries/'+encodeURIComponent(id)+'/edit');editingMediaLibraryId=id;
+  $('#mlname').value=x.name;$('#mltype').value=x.type;$('#mlbase').value=x.baseUrl;$('#mltoken').value='';$('#mltoken').placeholder=x.tokenStored?'Leave blank to keep existing token':'Token/API key';$('#mlenabled').checked=x.enabled;
+  $('#mlsave').textContent='Save media library';$('#mlcancel').disabled=false;$('#mlname').focus();
+}
+async function saveMediaLibrary(){
+  try{await jpost('/api/media-libraries',{id:editingMediaLibraryId||'',name:$('#mlname').value,type:$('#mltype').value,baseUrl:$('#mlbase').value,token:$('#mltoken').value,enabled:$('#mlenabled').checked,libraryIds:[],keepExistingToken:!!editingMediaLibraryId&&!$('#mltoken').value});editingMediaLibraryId=null;adminView()}catch(e){alert(friendlyError(e))}
+}
+async function testMediaLibrary(id){try{const r=await jpost('/api/media-libraries/'+id+'/test',{});$('#mlstat-'+id).textContent=r.ok?'Connection OK':'Connection failed: '+(r.error||r.status)}catch(e){$('#mlstat-'+id).textContent=friendlyError(e)}}
+async function removeMediaLibrary(id){if(!confirm('Remove media library?'))return;try{await api('/api/media-libraries/'+id,{method:'DELETE'});adminView()}catch(e){alert(friendlyError(e))}}
+async function chooseMediaLibraries(id){
+  try{
+    const rows=await api('/api/media-libraries/'+id+'/libraries');
+    const names=rows.map(x=>`${x.name} (${x.type||'library'})`).join('\n');
+    alert(names||'No libraries returned. Library selection UI will be used by unified Movies/Series.');
+  }catch(e){alert(friendlyError(e))}
 }

@@ -72,6 +72,7 @@ var adminFile = Path.Combine(dataDir, "admin.json");
 var usersFile = Path.Combine(dataDir, "users.json");
 var profileAccessFile = Path.Combine(dataDir, "profile-access.json");
 var profilePoliciesFile = Path.Combine(dataDir, "profile-policies.json");
+var mediaLibrariesFile = Path.Combine(dataDir, "media-libraries.json");
 var secretKeyFile = Path.Combine(dataDir, "secrets.key");
 var downloadsDir = Path.Combine(dataDir, "downloads");
 var backupsDir = Path.Combine(dataDir, "backups");
@@ -87,7 +88,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.6.0");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.6.1");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
@@ -261,6 +262,14 @@ bool HasEnabledAdmin(IEnumerable<AppUser> users) =>
     users.Any(x => x.Enabled && x.Role.Equals("Admin", StringComparison.OrdinalIgnoreCase));
 
 
+
+List<MediaLibraryProvider> LoadMediaLibraries() => Load<List<MediaLibraryProvider>>(mediaLibrariesFile) ?? new();
+
+MediaLibraryConnection MediaConnection(MediaLibraryProvider provider) =>
+    Decrypt<MediaLibraryConnection>(provider.Connection) ?? new MediaLibraryConnection("", "");
+
+string PlexHeaders(string token) => token;
+
 Dictionary<string, UserProfileAccess> LoadProfileAccess() =>
     Load<Dictionary<string, UserProfileAccess>>(profileAccessFile) ?? new(StringComparer.OrdinalIgnoreCase);
 
@@ -413,7 +422,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "0.6.0",
+    version = "0.6.1",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -451,14 +460,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = AuthConfigured();
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "0.6.0", checks })
-        : Results.Json(new { status = "not-ready", version = "0.6.0", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "0.6.1", checks })
+        : Results.Json(new { status = "not-ready", version = "0.6.1", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "0.6.0",
+    version = "0.6.1",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = AuthConfigured(),
@@ -1032,6 +1041,115 @@ app.MapPost("/api/series/{providerId}/episode/{episodeId}/token", (string provid
 }).RequireAuthorization();
 
 
+
+app.MapGet("/api/media-libraries", () =>
+{
+    return Results.Ok(LoadMediaLibraries().Select(x =>
+    {
+        var c = MediaConnection(x);
+        return new { x.Id, x.Name, x.Type, x.Enabled, host = SafeHost(c.BaseUrl), x.LibraryIds, hasToken = !string.IsNullOrWhiteSpace(c.Token) };
+    }));
+}).RequireAuthorization(p => p.RequireRole("Admin"));
+
+app.MapGet("/api/media-libraries/{id}/edit", (string id) =>
+{
+    var p = LoadMediaLibraries().FirstOrDefault(x => x.Id == id);
+    if (p is null) return Results.NotFound();
+    var c = MediaConnection(p);
+    return Results.Ok(new { p.Id, p.Name, p.Type, p.Enabled, baseUrl = c.BaseUrl, p.LibraryIds, tokenStored = !string.IsNullOrWhiteSpace(c.Token) });
+}).RequireAuthorization(p => p.RequireRole("Admin"));
+
+app.MapPost("/api/media-libraries", (MediaLibraryInput input) =>
+{
+    var rows = LoadMediaLibraries();
+    var id = string.IsNullOrWhiteSpace(input.Id) ? Guid.NewGuid().ToString("N") : input.Id.Trim();
+    var old = rows.FirstOrDefault(x => x.Id == id);
+    var oldConn = old is null ? null : MediaConnection(old);
+    var token = old is not null && input.KeepExistingToken && string.IsNullOrWhiteSpace(input.Token) ? oldConn?.Token ?? "" : input.Token ?? "";
+    var conn = new MediaLibraryConnection((input.BaseUrl ?? "").Trim().TrimEnd('/'), token);
+    var row = new MediaLibraryProvider(id, input.Name.Trim(), input.Type.Trim().ToLowerInvariant(), input.Enabled, Encrypt(conn), input.LibraryIds ?? Array.Empty<string>());
+    var idx = rows.FindIndex(x => x.Id == id); if (idx >= 0) rows[idx]=row; else rows.Add(row);
+    Save(mediaLibrariesFile, rows);
+    return Results.Ok(new { row.Id, row.Name, row.Type, row.Enabled, row.LibraryIds });
+}).RequireAuthorization(p => p.RequireRole("Admin"));
+
+app.MapDelete("/api/media-libraries/{id}", (string id) =>
+{
+    var rows=LoadMediaLibraries();
+    var next=rows.Where(x=>x.Id!=id).ToList();
+    if(next.Count==rows.Count)return Results.NotFound();
+    Save(mediaLibrariesFile,next);
+    return Results.NoContent();
+}).RequireAuthorization(p => p.RequireRole("Admin"));
+
+app.MapPost("/api/media-libraries/{id}/test", async (string id) =>
+{
+    var p=LoadMediaLibraries().FirstOrDefault(x=>x.Id==id); if(p is null)return Results.NotFound();
+    var c=MediaConnection(p);
+    using var client=new HttpClient{Timeout=TimeSpan.FromSeconds(20)};
+    try
+    {
+        if(p.Type=="plex")
+        {
+            var req=new HttpRequestMessage(HttpMethod.Get,c.BaseUrl+"/identity");
+            req.Headers.TryAddWithoutValidation("X-Plex-Token",c.Token);
+            var r=await client.SendAsync(req);
+            return Results.Ok(new{ok=r.IsSuccessStatusCode,status=(int)r.StatusCode});
+        }
+        if(p.Type=="jellyfin")
+        {
+            var req=new HttpRequestMessage(HttpMethod.Get,c.BaseUrl+"/System/Info");
+            req.Headers.TryAddWithoutValidation("X-Emby-Token",c.Token);
+            var r=await client.SendAsync(req);
+            return Results.Ok(new{ok=r.IsSuccessStatusCode,status=(int)r.StatusCode});
+        }
+        return Results.BadRequest("Unsupported media library type.");
+    }
+    catch(Exception ex){RecordError("media-library-test:"+id,ex);return Results.Ok(new{ok=false,error=ex.Message});}
+}).RequireAuthorization(p => p.RequireRole("Admin"));
+
+app.MapGet("/api/media-libraries/{id}/libraries", async (string id) =>
+{
+    var p=LoadMediaLibraries().FirstOrDefault(x=>x.Id==id); if(p is null)return Results.NotFound();
+    var c=MediaConnection(p);
+    using var client=new HttpClient{Timeout=TimeSpan.FromSeconds(30)};
+    try
+    {
+        if(p.Type=="jellyfin")
+        {
+            var req=new HttpRequestMessage(HttpMethod.Get,c.BaseUrl+"/Library/VirtualFolders");
+            req.Headers.TryAddWithoutValidation("X-Emby-Token",c.Token);
+            var r=await client.SendAsync(req); var txt=await r.Content.ReadAsStringAsync();
+            if(!r.IsSuccessStatusCode)return Results.StatusCode((int)r.StatusCode);
+            using var doc=JsonDocument.Parse(txt);
+            var rows=doc.RootElement.EnumerateArray().Select(x=>new{
+                id=x.TryGetProperty("ItemId",out var i)?i.GetString():"",
+                name=x.TryGetProperty("Name",out var n)?n.GetString():"",
+                type=x.TryGetProperty("CollectionType",out var t)?t.GetString():""
+            }).ToArray();
+            return Results.Ok(rows);
+        }
+        if(p.Type=="plex")
+        {
+            var req=new HttpRequestMessage(HttpMethod.Get,c.BaseUrl+"/library/sections");
+            req.Headers.TryAddWithoutValidation("X-Plex-Token",c.Token);
+            req.Headers.TryAddWithoutValidation("Accept","application/json");
+            var r=await client.SendAsync(req); var txt=await r.Content.ReadAsStringAsync();
+            if(!r.IsSuccessStatusCode)return Results.StatusCode((int)r.StatusCode);
+            using var doc=JsonDocument.Parse(txt);
+            var root=doc.RootElement.GetProperty("MediaContainer");
+            if(!root.TryGetProperty("Directory",out var dirs))return Results.Ok(Array.Empty<object>());
+            return Results.Ok(dirs.EnumerateArray().Select(x=>new{
+                id=x.TryGetProperty("key",out var i)?i.GetString():"",
+                name=x.TryGetProperty("title",out var n)?n.GetString():"",
+                type=x.TryGetProperty("type",out var t)?t.GetString():""
+            }).ToArray());
+        }
+        return Results.BadRequest();
+    }
+    catch(Exception ex){RecordError("media-libraries:"+id,ex);return Results.Problem(ex.Message);}
+}).RequireAuthorization(p=>p.RequireRole("Admin"));
+
 app.MapGet("/api/access/me", (HttpContext ctx) =>
 {
     var username = ctx.User.Identity?.Name ?? "";
@@ -1529,7 +1647,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "0.6.0",
+        version = "0.6.1",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -1653,7 +1771,7 @@ app.MapPost("/api/system/restore/{fileName}", (string fileName) =>
     using var archive = ZipFile.OpenRead(file);
     var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "providers.json", "favourites.json", "continue-watching.json", "channel-preferences.json", "profiles.json", "users.json", "admin.json", "profile-access.json", "profile-policies.json"
+        "providers.json", "favourites.json", "continue-watching.json", "channel-preferences.json", "profiles.json", "users.json", "admin.json", "profile-access.json", "profile-policies.json", "media-libraries.json"
     };
     foreach (var entry in archive.Entries.Where(e => allowed.Contains(e.FullName)))
     {
@@ -1805,7 +1923,7 @@ async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, TimeSpa
     var url = BuildXtreamPlayerApiUrl(c, action, extra);
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.6.0");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.6.1");
     using var cts = new CancellationTokenSource(timeout);
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -1971,7 +2089,7 @@ async Task<List<LiveChannel>> LoadM3uChannels(string url)
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/x-mpegURL,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.6.0");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.6.1");
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -1990,7 +2108,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.6.0");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.6.1");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }
@@ -2236,6 +2354,10 @@ record UserProfileAccess(string[] AllowedProfileIds, string DefaultProfileId);
 record ProfilePolicy(bool Live, bool Movies, bool Series, bool Downloads, string[] AllowedProviderIds, PasswordCredential? PinCredential);
 record ProfilePolicyInput(bool Live, bool Movies, bool Series, bool Downloads, string[]? AllowedProviderIds, string? Pin, bool ClearPin = false);
 record PinRequest(string? Pin);
+record MediaLibraryProvider(string Id, string Name, string Type, bool Enabled, EncryptedBlob Connection, string[] LibraryIds);
+record MediaLibraryInput(string? Id, string Name, string Type, string? BaseUrl, string? Token, bool Enabled, string[]? LibraryIds, bool KeepExistingToken = false);
+record MediaLibraryConnection(string BaseUrl, string Token);
+record UnifiedMediaItem(string Id, string Source, string SourceProviderId, string Kind, string Name, string? Year, string? Rating, string? Poster, string? ParentId, string? StreamUrl, double? Progress, DateTimeOffset? AddedAt);
 record MediaDownloadRequest(string Token, string? Title);
 record ProxyTarget(string Url, string Kind, DateTimeOffset Created);
 record LiveSession(string Id, string Directory, Process Process, StringBuilder ErrorLog, string SourceUrl, DateTimeOffset Started);
