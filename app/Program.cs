@@ -75,6 +75,8 @@ var backupsDir = Path.Combine(dataDir, "backups");
 var versionFile = Path.Combine(dataDir, "version");
 Directory.CreateDirectory(downloadsDir);
 Directory.CreateDirectory(backupsDir);
+var catalogueCacheDir = Path.Combine(dataDir, "catalogue-cache");
+Directory.CreateDirectory(catalogueCacheDir);
 var startedAt = DateTimeOffset.UtcNow;
 
 var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true };
@@ -82,7 +84,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.5.3");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.5.4");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
@@ -107,6 +109,55 @@ void Save<T>(string path, T value)
     var tmp = path + ".tmp";
     File.WriteAllText(tmp, JsonSerializer.Serialize(value, jsonOptions));
     File.Move(tmp, path, true);
+}
+
+string CatalogueCacheFile(string kind, string key)
+{
+    var safe = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(kind + "|" + key))).ToLowerInvariant();
+    return Path.Combine(catalogueCacheDir, $"{kind}-{safe}.json");
+}
+
+bool TryLoadDiskJsonCache(string kind, string key, TimeSpan maxAge, out string json)
+{
+    json = "";
+    try
+    {
+        var path = CatalogueCacheFile(kind, key);
+        if (!File.Exists(path)) return false;
+        var age = DateTimeOffset.UtcNow - File.GetLastWriteTimeUtc(path);
+        if (age > maxAge) return false;
+        json = File.ReadAllText(path);
+        return !string.IsNullOrWhiteSpace(json);
+    }
+    catch { return false; }
+}
+
+void SaveDiskJsonCache(string kind, string key, string json)
+{
+    try
+    {
+        var path = CatalogueCacheFile(kind, key);
+        var tmp = path + ".tmp";
+        File.WriteAllText(tmp, json);
+        File.Move(tmp, path, true);
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Could not persist {Kind} catalogue cache for {Key}.", kind, key);
+    }
+}
+
+void ClearDiskCatalogueCache(string? providerId = null)
+{
+    try
+    {
+        foreach (var file in Directory.EnumerateFiles(catalogueCacheDir, "*.json"))
+            File.Delete(file);
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Could not clear catalogue disk cache.");
+    }
 }
 
 List<ProviderStored> LoadProviders()
@@ -258,7 +309,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "0.5.3",
+    version = "0.5.4",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -296,14 +347,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = File.Exists(adminFile);
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "0.5.3", checks })
-        : Results.Json(new { status = "not-ready", version = "0.5.3", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "0.5.4", checks })
+        : Results.Json(new { status = "not-ready", version = "0.5.4", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "0.5.3",
+    version = "0.5.4",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = File.Exists(adminFile),
@@ -407,6 +458,7 @@ app.MapPost("/api/providers", (ProviderInput input) =>
     foreach (var key in vodItemCache.Keys.Where(k => k.StartsWith(id + ":", StringComparison.Ordinal))) vodItemCache.TryRemove(key, out _);
     foreach (var key in seriesItemCache.Keys.Where(k => k.StartsWith(id + ":", StringComparison.Ordinal))) seriesItemCache.TryRemove(key, out _);
     vodCategoryCache.TryRemove(id, out _); seriesCategoryCache.TryRemove(id, out _);
+    ClearDiskCatalogueCache(id);
 
     return Results.Ok(new { stored.Id, stored.Name, stored.Type });
 }).RequireAuthorization();
@@ -565,6 +617,18 @@ app.MapGet("/api/epg/{providerId}", async (string providerId, int? hours, DateTi
         app.Logger.LogWarning(ex, "Xtream catalogue request failed.");
         return Results.Problem(detail: SafeProviderError(ex), statusCode: StatusCodes.Status502BadGateway);
     }
+}).RequireAuthorization();
+
+app.MapPost("/api/catalogue-cache/clear/{providerId}", (string providerId) =>
+{
+    foreach (var key in vodItemCache.Keys.Where(k => k.StartsWith(providerId + ":", StringComparison.Ordinal)))
+        vodItemCache.TryRemove(key, out _);
+    foreach (var key in seriesItemCache.Keys.Where(k => k.StartsWith(providerId + ":", StringComparison.Ordinal)))
+        seriesItemCache.TryRemove(key, out _);
+    vodCategoryCache.TryRemove(providerId, out _);
+    seriesCategoryCache.TryRemove(providerId, out _);
+    ClearDiskCatalogueCache(providerId);
+    return Results.Ok(new { cleared = true, providerId });
 }).RequireAuthorization();
 
 app.MapGet("/api/vod/{providerId}/categories", async (string providerId) =>
@@ -1209,7 +1273,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "0.5.3",
+        version = "0.5.4",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -1443,7 +1507,7 @@ async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, TimeSpa
     var url = BuildXtreamPlayerApiUrl(c, action, extra);
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.3");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.4");
     using var cts = new CancellationTokenSource(timeout);
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -1475,9 +1539,33 @@ async Task<JsonDocument> CachedXtreamJson(
         DateTimeOffset.UtcNow - hit.Loaded < TimeSpan.FromMinutes(10))
         return JsonDocument.Parse(hit.Json);
 
+    var diskKind = action.StartsWith("get_vod_", StringComparison.Ordinal) ? "vod" :
+                   action.StartsWith("get_series", StringComparison.Ordinal) ? "series" : "generic";
+    var diskKey = action + "|" + key + "|" + (extra?.Value ?? "");
+    if (TryLoadDiskJsonCache(diskKind, diskKey, TimeSpan.FromHours(6), out var diskJson))
+    {
+        cache[key] = new TimedJsonCache(diskJson, DateTimeOffset.UtcNow);
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var refreshed = await XtreamJson(connection, action, timeout, extra);
+                var refreshedJson = refreshed.RootElement.GetRawText();
+                cache[key] = new TimedJsonCache(refreshedJson, DateTimeOffset.UtcNow);
+                SaveDiskJsonCache(diskKind, diskKey, refreshedJson);
+            }
+            catch (Exception ex)
+            {
+                app.Logger.LogInformation(ex, "Background refresh failed for {Action}; stale disk cache retained.", action);
+            }
+        });
+        return JsonDocument.Parse(diskJson);
+    }
+
     using var doc = await XtreamJson(connection, action, timeout, extra);
     var json = doc.RootElement.GetRawText();
     cache[key] = new TimedJsonCache(json, DateTimeOffset.UtcNow);
+    SaveDiskJsonCache(diskKind, diskKey, json);
     return JsonDocument.Parse(json);
 }
 
@@ -1582,7 +1670,7 @@ async Task<List<LiveChannel>> LoadM3uChannels(string url)
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/x-mpegURL,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.3");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.4");
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -1601,7 +1689,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.3");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.4");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }
