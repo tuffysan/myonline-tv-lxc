@@ -65,6 +65,12 @@ jobs:
       - name: Build
         run: dotnet build app/MyOnlineTV.Web.csproj -c Release --no-restore
 
+      - name: Restore linux-x64
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore app/MyOnlineTV.Web.csproj -r linux-x64
+
       - name: Publish linux-x64
         shell: bash
         run: |
