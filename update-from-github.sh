@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+echo "Upgrade preflight: CTID=${CTID:-auto}; repository release will be checksum-verified." >&2
+
 MYONLINE_REPO="${MYONLINE_REPO:-tuffysan/myonline-tv-lxc}"
 MYONLINE_CHANNEL="${MYONLINE_CHANNEL:-stable}"
 MYONLINE_REF="${MYONLINE_REF:-}"

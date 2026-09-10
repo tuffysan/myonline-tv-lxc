@@ -138,6 +138,29 @@ jobs:
           VERSION_IN_JSON="$(python3 -c 'import json; print(json.load(open("release.json"))["version"])')"
           test "${VERSION_IN_JSON}" = "${VERSION}"
 
+      - name: Smoke test published application archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          APP="myonline-tv-web-v${VERSION}-linux-x64.tar.gz"
+          TMP="$(mktemp -d)"
+          trap 'rm -rf "${TMP}"' EXIT
+          tar -xzf "${APP}" -C "${TMP}"
+          test -s "${TMP}/MyOnlineTV.Web.dll"
+          test -s "${TMP}/MyOnlineTV.Web.runtimeconfig.json"
+          test -s "${TMP}/wwwroot/index.html"
+          test -s "${TMP}/wwwroot/app.js"
+          grep -q "MyOnline TV" "${TMP}/wwwroot/index.html"
+          echo "Release smoke test passed."
+
+      - name: Verify release checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum -c SHA256SUMS-RELEASE.txt
+          echo "Release checksums verified."
+
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2

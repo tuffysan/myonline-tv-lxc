@@ -49,3 +49,15 @@ jobs:
           assert meta["artifact"] == f"myonline-tv-web-v{version}-linux-x64.tar.gz"
           print("release.json OK")
           PY
+      - name: Regression markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq '/api/media/start/{token}' app/Program.cs
+          grep -Fq '/api/live/start/{providerId}/{channelKey}' app/Program.cs
+          grep -Fq '/api/vod/{providerId}/{streamId}/token' app/Program.cs
+          grep -Fq '/api/series/{providerId}/episode/{episodeId}/token' app/Program.cs
+          grep -Fq 'playServerMedia(' app/wwwroot/app.js
+          grep -Fq 'playLive(' app/wwwroot/app.js
+          echo "Core regression markers present."
+
