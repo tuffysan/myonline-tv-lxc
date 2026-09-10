@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.7.2 — Media Center UX
+- Added Recently Added media-library rail on Home.
+- Added All / Live / Movies / Series filters to global Search.
+- Plex/Jellyfin search results now open/play the unified item directly.
+- Fixed unified Plex/Jellyfin playback to use `playServerMedia`.
+- Added resume-from-position for unified Continue Watching.
+- Added next-episode context and a Next episode action for unified series.
+- Added TV/remote focus polish for horizontal rails and episode cards.
+- Kept v0.7.1 Plex/Jellyfin library selection and security improvements.
+
+
 ## v0.7.1 — Plex/Jellyfin completion & stability
 - Added persistent Plex/Jellyfin library selection in Admin.
 - Preserves selected libraries when editing a media-library connection.

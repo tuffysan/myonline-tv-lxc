@@ -130,20 +130,35 @@ async function selectProfile(id){
 }
 
 async function home(){
-  let unifiedMovies=[],unifiedSeries=[];try{[unifiedMovies,unifiedSeries]=await Promise.all([api('/api/unified/movies',{timeoutMs:65000}),api('/api/unified/series',{timeoutMs:65000})])}catch{}
+  let unifiedMovies=[],unifiedSeries=[];
+  try{
+    [unifiedMovies,unifiedSeries]=await Promise.all([
+      api('/api/unified/movies',{timeoutMs:65000}),
+      api('/api/unified/series',{timeoutMs:65000})
+    ]);
+  }catch{}
   const cont=await api('/api/continue');
+
+  const recentlyAdded=[...unifiedMovies,...unifiedSeries]
+    .filter(x=>x.addedAt)
+    .sort((a,b)=>new Date(b.addedAt)-new Date(a.addedAt))
+    .slice(0,12);
+
   content.innerHTML=`<div class=hero><div><span class=kicker>MYONLINE TV WEB</span><h2>Everything. One interface.</h2>
-  <p class=muted>Self-hosted on Proxmox. IPTV, EPG, movies, series, secure provider storage, favourites, downloads and browser playback.</p><div class=row><input id=homeSearch placeholder="Search Live, Movies and Series"><button class=btn onclick=homeQuickSearch()>Search</button></div></div></div>
+  <p class=muted>Live TV, Guide, IPTV, Plex and Jellyfin in one self-hosted media center.</p>
+  <div class=row><input id=homeSearch placeholder="Search Live, Movies and Series"><button class=btn id=homeSearchButton>Search</button></div></div></div>
   <div class=stats>
     <div class=stat><b>${providers.length}</b><span>Providers</span></div>
     <div class=stat><b>${fav.size}</b><span>Favourites</span></div>
     <div class=stat><b>${cont.length}</b><span>Continue watching</span></div>
   </div>
   ${cont.length?`<h2>Continue watching</h2><div class=continueRow>${cont.slice(0,12).map(x=>`<button class=continueCard onclick='resumeContinueItem(${JSON.stringify(x)})'><span>▶</span><b>${esc(x.title)}</b><small>Resume around ${Math.floor((x.positionSeconds||0)/60)} min</small></button>`).join('')}</div><div id=mediaPlayer></div>`:''}
-  ${homeMediaRails()}<h2>Quick access</h2><div class=grid>
+  ${recentlyAdded.length?`<div class=sectionHead><h2>Recently added</h2><button class=linkButton onclick="show('search')">Browse all</button></div><div class=posterRail>${recentlyAdded.map(x=>`<button class=posterCard onclick='playUnifiedItem(${JSON.stringify(x)})'>${x.poster?`<img loading=lazy decoding=async src="${escAttr(x.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(x.name)}</b><small><span class=sourceBadge>${esc(x.source||'media')}</span> ${esc(x.year||'')}</small></div></button>`).join('')}</div>`:''}
+  ${homeMediaRails()}
+  <h2>Quick access</h2><div class=grid>
     <button class="card actionCard" onclick="show('live')"><h3>Live TV</h3><p>Channels and groups</p></button>
     <button class="card actionCard" onclick="show('guide')"><h3>TV Guide</h3><p>Timeline EPG</p></button>
-    <button class="card actionCard" onclick="show('movies')"><h3>Movies</h3><p>Xtream VOD library</p></button>
+    <button class="card actionCard" onclick="show('movies')"><h3>Movies</h3><p>IPTV and media libraries</p></button>
     <button class="card actionCard" onclick="show('series')"><h3>Series</h3><p>Seasons and episodes</p></button>
   </div>
   <h2>Official streaming services</h2>
@@ -154,11 +169,12 @@ async function home(){
     <a class=service href="https://www.primevideo.com" target=_blank>Prime Video</a>
     <a class=service href="https://www.svtplay.se" target=_blank>SVT Play</a>
   </div>
-    ${unifiedMovies.length?`<h2>From Plex & Jellyfin</h2><div class=posterGrid>${unifiedMovies.slice(0,12).map(m=>`<button class=posterCard onclick='playUnifiedItem(${JSON.stringify(m)})'>${m.poster?`<img loading=lazy src="${escAttr(m.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(m.name)}</b><small><span class=sourceBadge>${esc(m.source)}</span> ${esc(m.year||'')}</small></div></button>`).join('')}</div>`:''}
-    ${unifiedSeries.length?`<h2>Series from media libraries</h2><div class=posterGrid>${unifiedSeries.slice(0,12).map(s=>`<button class=posterCard onclick='playUnifiedItem(${JSON.stringify(s)})'>${s.poster?`<img loading=lazy src="${escAttr(s.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(s.name)}</b><small><span class=sourceBadge>${esc(s.source)}</span> ${esc(s.year||'')}</small></div></button>`).join('')}</div>`:''}
-`;
-}
+  ${unifiedMovies.length?`<div class=sectionHead><h2>Movies from Plex & Jellyfin</h2></div><div class=posterRail>${unifiedMovies.slice(0,12).map(m=>`<button class=posterCard onclick='playUnifiedItem(${JSON.stringify(m)})'>${m.poster?`<img loading=lazy decoding=async src="${escAttr(m.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(m.name)}</b><small><span class=sourceBadge>${esc(m.source)}</span> ${esc(m.year||'')}</small></div></button>`).join('')}</div>`:''}
+  ${unifiedSeries.length?`<div class=sectionHead><h2>Series from Plex & Jellyfin</h2></div><div class=posterRail>${unifiedSeries.slice(0,12).map(s=>`<button class=posterCard onclick='playUnifiedItem(${JSON.stringify(s)})'>${s.poster?`<img loading=lazy decoding=async src="${escAttr(s.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(s.name)}</b><small><span class=sourceBadge>${esc(s.source)}</span> ${esc(s.year||'')}</small></div></button>`).join('')}</div>`:''}`;
 
+  $('#homeSearchButton').onclick=homeQuickSearch;
+  $('#homeSearch').onkeydown=e=>{if(e.key==='Enter')homeQuickSearch()};
+}
 async function ensureProvider(type){
   providers=await api('/api/providers');
   if(currentProvider && !providers.some(p=>p.id===currentProvider))currentProvider=null;
@@ -369,6 +385,9 @@ function friendlyError(e){
 
 let activeMediaSession=null;
 let mediaFallbackTried=false;
+let pendingResumeSeconds=0;
+let nextUnifiedEpisode=null;
+let unifiedEpisodeContext=[];
 
 async function playServerMedia(token,name,mediaId=null,forceTranscode=false){
   if(!forceTranscode)mediaFallbackTried=false;
@@ -397,6 +416,19 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false){
     if(!video)return;
     const playbackUrl=state.playbackUrl||info.playbackUrl;
 
+    const requestedResume=Math.max(0,Number(pendingResumeSeconds)||0);
+    pendingResumeSeconds=0;
+    if(requestedResume>2){
+      const seek=()=>{
+        try{
+          if(Number.isFinite(video.duration)&&video.duration>0)
+            video.currentTime=Math.min(requestedResume,Math.max(0,video.duration-2));
+          else video.currentTime=requestedResume;
+        }catch{}
+      };
+      video.addEventListener('loadedmetadata',seek,{once:true});
+    }
+
     const installResumeTracking=()=>{
       if(!mediaId)return;
       let last=-1;
@@ -410,6 +442,20 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false){
       video.addEventListener('pause',save);
       video.addEventListener('ended',save);
     };
+
+    video.addEventListener('ended',()=>{
+      if(!nextUnifiedEpisode)return;
+      const next=nextUnifiedEpisode;
+      nextUnifiedEpisode=null;
+      const card=video.closest('.playerCard');
+      if(card){
+        const bar=document.createElement('div');
+        bar.className='nextEpisodeBar';
+        bar.innerHTML=`<span>Up next: <b>${esc(next.name||'Next episode')}</b></span><button class=btn id=playNextUnified>Play next episode</button>`;
+        card.appendChild(bar);
+        $('#playNextUnified').onclick=()=>playUnifiedItem(next);
+      }
+    });
 
     if(window.Hls&&Hls.isSupported()){
       hls=new Hls({enableWorker:true,backBufferLength:60});
@@ -861,8 +907,8 @@ function homeMediaRails(){
 function homeQuickSearch(){
   const q=($('#homeSearch')?.value||'').trim();
   if(!q)return;
-  sessionStorage.setItem('myonline-pending-search',q);
-  show('movies').then(()=>{const x=$('#mediaq');if(x){x.value=q;filterMedia()}});
+  window.__pendingGlobalSearch=q;
+  show('search');
 }
 
 // v0.7.0 TV & Remote UX
@@ -1098,41 +1144,88 @@ async function saveProfilePolicy(id){
   }catch(e){alert(friendlyError(e))}
 }
 
+let globalSearchFilter='all';
+let lastGlobalSearchResult={live:[],movies:[],series:[]};
+
 async function searchView(){
   const initial=window.__pendingGlobalSearch||'';window.__pendingGlobalSearch='';
-  content.innerHTML=`<div class=hero><h2>Search & Discovery</h2><p class=muted>Search the current provider across Live TV, Movies and Series.</p>
-  <div class=row><input id=globalSearchBox value="${escAttr(initial)}" placeholder="Title, channel or programme"><button class=btn id=globalSearchButton>Search</button></div></div>
+  content.innerHTML=`<div class=hero><h2>Search & Discovery</h2><p class=muted>Search Live TV, IPTV, Plex and Jellyfin.</p>
+  <div class=row><input id=globalSearchBox value="${escAttr(initial)}" placeholder="Title, channel or programme"><button class=btn id=globalSearchButton>Search</button></div>
+  <div class=searchFilters>
+    <button class="btn searchFilter activeBtn" data-filter=all>All</button>
+    <button class="btn searchFilter" data-filter=live>Live</button>
+    <button class="btn searchFilter" data-filter=movies>Movies</button>
+    <button class="btn searchFilter" data-filter=series>Series</button>
+  </div></div>
   <div id=globalSearchStatus class=muted></div><div id=globalSearchResults></div>`;
   $('#globalSearchButton').onclick=runGlobalSearch;
   $('#globalSearchBox').onkeydown=e=>{if(e.key==='Enter')runGlobalSearch()};
+  document.querySelectorAll('.searchFilter').forEach(b=>b.onclick=()=>{
+    globalSearchFilter=b.dataset.filter;
+    document.querySelectorAll('.searchFilter').forEach(x=>x.classList.toggle('activeBtn',x===b));
+    renderGlobalSearchResults($('#globalSearchBox').value.trim());
+  });
   if(initial)await runGlobalSearch();
 }
+
+function searchScore(x,q){
+  const n=String(x.name||x.title||'').toLowerCase();
+  if(n===q)return 0;
+  if(n.startsWith(q))return 1;
+  const at=n.indexOf(q);
+  return at<0?999:10+at;
+}
+
 async function runGlobalSearch(){
-  const q=$('#globalSearchBox').value.trim().toLowerCase();
+  const original=$('#globalSearchBox').value.trim(),q=original.toLowerCase();
   if(q.length<2){$('#globalSearchStatus').textContent='Enter at least 2 characters.';return}
   if(!currentProvider){$('#globalSearchStatus').textContent='No provider selected.';return}
   $('#globalSearchStatus').textContent='Searching…';
   $('#globalSearchResults').innerHTML='';
   try{
-    const p=currentPolicy();
-    const tasks=[];
+    const p=currentPolicy(),tasks=[];
     if(p.live!==false)tasks.push(api('/api/channels/'+currentProvider).then(x=>({kind:'live',rows:x})).catch(()=>({kind:'live',rows:[]})));
-    if(p.movies!==false){tasks.push(api('/api/vod/'+currentProvider+'/items?categoryId=',{timeoutMs:125000}).then(x=>({kind:'movies',rows:x})).catch(()=>({kind:'movies',rows:[]})));tasks.push(api('/api/unified/movies',{timeoutMs:65000}).then(x=>({kind:'movies-extra',rows:x})).catch(()=>({kind:'movies-extra',rows:[]})))}
-    if(p.series!==false){tasks.push(api('/api/series/'+currentProvider+'/items?categoryId=',{timeoutMs:60000}).then(x=>({kind:'series',rows:x})).catch(()=>({kind:'series',rows:[]})));tasks.push(api('/api/unified/series',{timeoutMs:65000}).then(x=>({kind:'series-extra',rows:x})).catch(()=>({kind:'series-extra',rows:[]})))}
+    if(p.movies!==false){
+      tasks.push(api('/api/vod/'+currentProvider+'/items?categoryId=',{timeoutMs:125000}).then(x=>({kind:'movies',rows:x})).catch(()=>({kind:'movies',rows:[]})));
+      tasks.push(api('/api/unified/movies',{timeoutMs:65000}).then(x=>({kind:'movies-extra',rows:x})).catch(()=>({kind:'movies-extra',rows:[]})));
+    }
+    if(p.series!==false){
+      tasks.push(api('/api/series/'+currentProvider+'/items?categoryId=',{timeoutMs:60000}).then(x=>({kind:'series',rows:x})).catch(()=>({kind:'series',rows:[]})));
+      tasks.push(api('/api/unified/series',{timeoutMs:65000}).then(x=>({kind:'series-extra',rows:x})).catch(()=>({kind:'series-extra',rows:[]})));
+    }
     const groups=await Promise.all(tasks),result={live:[],movies:[],series:[]};
     for(const g of groups){
-      const rk=g.kind==='movies-extra'?'movies':g.kind==='series-extra'?'series':g.kind;result[rk]=[...(result[rk]||[]),...(g.rows||[]).filter(x=>String(x.name||x.title||'').toLowerCase().includes(q)).slice(0,80)];
+      const rk=g.kind==='movies-extra'?'movies':g.kind==='series-extra'?'series':g.kind;
+      result[rk]=[...(result[rk]||[]),...(g.rows||[]).filter(x=>searchScore(x,q)<999)];
     }
-    const total=result.live.length+result.movies.length+result.series.length;
-    $('#globalSearchStatus').textContent=`${total} result${total===1?'':'s'} for “${$('#globalSearchBox').value.trim()}”`;
-    $('#globalSearchResults').innerHTML=`
-      ${result.live.length?`<h2>Live TV</h2><div class=grid>${result.live.map(c=>`<button class="card actionCard" onclick="show('live').then(()=>{const q=$('#q');if(q){q.value=${JSON.stringify('')} }})"><h3>${esc(c.name||c.title||'Channel')}</h3><p>${esc(c.group||'')}</p></button>`).join('')}</div>`:''}
-      ${result.movies.length?`<h2>Movies</h2><div class=posterGrid>${result.movies.map(m=>`<button class=posterCard onclick="window.__searchSeed=this.querySelector('b').textContent;show('movies').then(()=>{const q=$('#mediaq');if(q){q.value=window.__searchSeed;filterMedia()}})">${m.poster?`<img loading=lazy src="${escAttr(m.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(m.name)}</b><small>${m.source?`<span class=sourceBadge>${esc(m.source)}</span> `:''}${esc(m.year||'')} ${esc(m.rating||'')}</small></div></button>`).join('')}</div>`:''}
-      ${result.series.length?`<h2>Series</h2><div class=posterGrid>${result.series.map(s=>`<button class=posterCard onclick="window.__searchSeed=this.querySelector('b').textContent;show('series').then(()=>{const q=$('#seriesq');if(q){q.value=window.__searchSeed;filterSeries()}})">${s.poster?`<img loading=lazy src="${escAttr(s.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(s.name)}</b><small>${s.source?`<span class=sourceBadge>${esc(s.source)}</span> `:''}${esc(s.year||'')} ${esc(s.rating||'')}</small></div></button>`).join('')}</div>`:''}
-      ${!total?'<div class=card>No matching channels, movies or series were found.</div>':''}`;
-  }catch(e){
-    $('#globalSearchStatus').textContent='Search failed: '+friendlyError(e);
-  }
+    for(const kind of Object.keys(result))
+      result[kind]=result[kind].sort((a,b)=>searchScore(a,q)-searchScore(b,q)).slice(0,80);
+    lastGlobalSearchResult=result;
+    renderGlobalSearchResults(original);
+  }catch(e){$('#globalSearchStatus').textContent='Search failed: '+friendlyError(e)}
+}
+
+function renderGlobalSearchResults(original=''){
+  const result=lastGlobalSearchResult||{live:[],movies:[],series:[]};
+  const visible=k=>globalSearchFilter==='all'||globalSearchFilter===k;
+  const total=(visible('live')?result.live.length:0)+(visible('movies')?result.movies.length:0)+(visible('series')?result.series.length:0);
+  $('#globalSearchStatus').textContent=`${total} result${total===1?'':'s'}${original?' for “'+original+'”':''}`;
+  $('#globalSearchResults').innerHTML=`
+    ${visible('live')&&result.live.length?`<h2>Live TV</h2><div class=grid>${result.live.map(c=>`<button class="card actionCard" onclick="show('live').then(()=>{const q=$('#q');if(q){q.value=${JSON.stringify(c.name||c.title||'')};renderFilter()}})"><h3>${esc(c.name||c.title||'Channel')}</h3><p>${esc(c.group||'')}</p></button>`).join('')}</div>`:''}
+    ${visible('movies')&&result.movies.length?`<h2>Movies</h2><div class=posterGrid>${result.movies.map(m=>`<button class=posterCard onclick='searchOpenMovie(${JSON.stringify(m)})'>${m.poster?`<img loading=lazy decoding=async src="${escAttr(m.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(m.name)}</b><small>${m.source?`<span class=sourceBadge>${esc(m.source)}</span> `:''}${esc(m.year||'')} ${esc(m.rating||'')}</small></div></button>`).join('')}</div>`:''}
+    ${visible('series')&&result.series.length?`<h2>Series</h2><div class=posterGrid>${result.series.map(s=>`<button class=posterCard onclick='searchOpenSeries(${JSON.stringify(s)})'>${s.poster?`<img loading=lazy decoding=async src="${escAttr(s.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(s.name)}</b><small>${s.source?`<span class=sourceBadge>${esc(s.source)}</span> `:''}${esc(s.year||'')} ${esc(s.rating||'')}</small></div></button>`).join('')}</div>`:''}
+    ${!total?'<div class=card>No matching channels, movies or series were found.</div>':''}`;
+}
+
+async function searchOpenMovie(item){
+  if(item?.source)return playUnifiedItem(item);
+  await show('movies');
+  const q=$('#mediaq');if(q){q.value=item.name||'';filterMedia()}
+}
+async function searchOpenSeries(item){
+  if(item?.source)return playUnifiedItem({...item,kind:'series'});
+  await show('series');
+  const q=$('#seriesq');if(q){q.value=item.name||'';filterSeries()}
 }
 
 let editingMediaLibraryId=null;
@@ -1192,8 +1285,16 @@ async function playUnifiedItem(item){
     const parts=String(item.id||'').split(':');
     if(parts.length<3)return false;
     const source=parts[0],providerId=parts[1],itemId=parts.slice(2).join(':');
+
+    nextUnifiedEpisode=null;
+    if(item?.kind==='episode'&&Array.isArray(unifiedEpisodeContext)){
+      const idx=unifiedEpisodeContext.findIndex(x=>String(x.id)===String(item.id));
+      if(idx>=0&&idx+1<unifiedEpisodeContext.length)
+        nextUnifiedEpisode={...unifiedEpisodeContext[idx+1],kind:'episode'};
+    }
+
     const r=await api(`/api/unified/${encodeURIComponent(source)}/${encodeURIComponent(providerId)}/${encodeURIComponent(itemId)}/play`);
-    await startMediaToken(r.playToken,item.name||'Media','unified:'+String(item.id||''));
+    await playServerMedia(r.playToken,item.name||'Media','unified:'+String(item.id||''));
     return true;
   }catch(e){alert(friendlyError(e));return true}
 }
@@ -1205,6 +1306,7 @@ async function unifiedSeriesDetails(item){
   content.innerHTML=`<div class=hero><button class=btn onclick="show('series')">← Series</button><h2>${esc(item.name||'Series')}</h2><p class=muted><span class=sourceBadge>${esc(source)}</span> Loading episodes…</p></div><div id=unifiedEpisodeList></div><div id=mediaPlayer></div>`;
   try{
     const episodes=await api(`/api/unified/${encodeURIComponent(source)}/${encodeURIComponent(providerId)}/${encodeURIComponent(seriesId)}/episodes`,{timeoutMs:65000});
+    unifiedEpisodeContext=episodes.map(x=>({...x,kind:'episode'}));
     const host=$('#unifiedEpisodeList');
     if(!episodes.length){host.innerHTML='<div class=empty>No episodes found.</div>';return}
     let lastSeason=null,html='';
@@ -1220,13 +1322,13 @@ async function unifiedSeriesDetails(item){
 }
 
 async function resumeContinueItem(item){
+  pendingResumeSeconds=Math.max(0,Number(item?.positionSeconds)||0);
   if(item?.id?.startsWith('unified:')){
     const unifiedId=item.id.substring('unified:'.length);
     const parts=unifiedId.split(':');
-    if(parts.length>=3){
-      return playUnifiedItem({id:unifiedId,kind:'episode',name:item.title||'Media'});
-    }
+    if(parts.length>=3)return playUnifiedItem({id:unifiedId,kind:'episode',name:item.title||'Media'});
   }
   if(item?.url)return playMedia(item.url,item.title,item.id);
+  pendingResumeSeconds=0;
   return false;
 }

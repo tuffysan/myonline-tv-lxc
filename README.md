@@ -1,4 +1,4 @@
-# MyOnline TV Web v0.7.1 — Proxmox LXC
+# MyOnline TV Web v0.7.2 — Proxmox LXC
 
 MyOnline TV Web is a self-hosted entertainment appliance for Proxmox VE.
 
@@ -347,3 +347,15 @@ v0.7.1 keeps the working v0.7.0 baseline and finishes the first media-library in
 - Episodes can be started through the existing server-side playback pipeline.
 - Unified-media playback gets stable Continue Watching IDs so Plex/Jellyfin items can be resumed through the app.
 - `PUBLISH.ps1` retains the local .NET build preflight when the SDK is installed.
+
+## v0.7.2 — Media Center UX
+
+v0.7.2 builds on v0.7.1 with a more TV-like day-to-day experience:
+
+- Smarter Home with Recently Added Plex/Jellyfin media.
+- Improved global Search with result-type filters and direct Plex/Jellyfin actions.
+- Unified Plex/Jellyfin playback now uses the proven server-side FFmpeg/HLS player path.
+- Continue Watching resumes Plex/Jellyfin media at the saved position.
+- Unified Series keeps episode context and offers the next episode after playback.
+- Better remote-control focus treatment for horizontal media rails.
+- Existing Live TV, Guide, IPTV Movies/Series and Admin functionality remains cumulative from v0.7.1.

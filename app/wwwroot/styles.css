@@ -224,3 +224,15 @@ img{content-visibility:auto}
 .episodeCard span{padding:8px 10px 8px 0}
 .episodeCard small{display:block;margin-top:5px;opacity:.72}
 @media(max-width:700px){.episodeGrid{grid-template-columns:1fr}.episodeCard{grid-template-columns:96px 1fr}.episodeCard img,.episodeCard .posterPlaceholder{width:96px;height:68px}}
+
+
+/* v0.7.2 Media Center UX */
+.sectionHead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:24px}
+.sectionHead h2{margin:0}
+.linkButton{border:0;background:transparent;color:inherit;opacity:.78;cursor:pointer;padding:8px}
+.posterRail{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(150px,190px);gap:14px;overflow-x:auto;overscroll-behavior-inline:contain;padding:10px 2px 18px;scroll-snap-type:x proximity}
+.posterRail .posterCard{scroll-snap-align:start}
+.searchFilters{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.nextEpisodeBar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-top:1px solid var(--line);background:var(--panel)}
+.posterRail .posterCard:focus,.episodeCard:focus,.continueCard:focus{outline:3px solid currentColor;outline-offset:3px;transform:translateY(-2px)}
+@media(max-width:700px){.posterRail{grid-auto-columns:minmax(135px,44vw)}.nextEpisodeBar{align-items:flex-start;flex-direction:column}}
