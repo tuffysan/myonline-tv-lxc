@@ -1,5 +1,8 @@
-# MyOnline TV v0.5.2
+# MyOnline TV v0.5.3
 
-This maintenance release targets the Movies catalogue only.
+This is a focused regression-fix release for:
+1. Movies catalogue loading.
+2. Series/Movie artwork.
+3. Easier commit/push/tag/release publishing from Windows.
 
-The Xtream VOD catalogue request (`get_vod_streams`) now allows up to 120 seconds instead of 20 seconds, which is important for providers with large movie libraries. Live TV and Series behavior is unchanged.
+Run `PUBLISH-v0.5.3.cmd` from the repository root after replacing the repo contents with this version.

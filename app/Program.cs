@@ -82,7 +82,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.5.2");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.5.3");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
@@ -258,7 +258,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "0.5.2",
+    version = "0.5.3",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -296,14 +296,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = File.Exists(adminFile);
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "0.5.2", checks })
-        : Results.Json(new { status = "not-ready", version = "0.5.2", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "0.5.3", checks })
+        : Results.Json(new { status = "not-ready", version = "0.5.3", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "0.5.2",
+    version = "0.5.3",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = File.Exists(adminFile),
@@ -596,8 +596,12 @@ app.MapGet("/api/vod/{providerId}/items", async (string providerId, string? cate
     {
         (string Key, string Value)? extra = string.IsNullOrWhiteSpace(categoryId) ? null : ("category_id", categoryId!);
         var cacheKey = providerId + ":" + (categoryId ?? "");
+        var vodSw = Stopwatch.StartNew();
         using var doc = await CachedXtreamJson(vodItemCache, cacheKey, resolved.Value.Connection,
             "get_vod_streams", TimeSpan.FromSeconds(120), extra);
+        vodSw.Stop();
+        app.Logger.LogInformation("Loaded VOD catalogue for provider {ProviderId} category {CategoryId} in {ElapsedMs} ms.",
+            providerId, categoryId ?? "(all)", vodSw.ElapsedMilliseconds);
         var rows = new List<object>();
         foreach (var x in doc.RootElement.EnumerateArray().Take(5000))
         {
@@ -612,9 +616,12 @@ app.MapGet("/api/vod/{providerId}/items", async (string providerId, string? cate
                 rating = JsonString(x, "rating"),
                 plot = JsonString(x, "plot"),
                 genre = JsonString(x, "genre"),
-                poster = ProxyArtwork(JsonString(x, "stream_icon"))
+                poster = JsonString(x, "stream_icon")
             });
         }
+        if (rows.Count == 0)
+            app.Logger.LogWarning("VOD catalogue returned zero items for provider {ProviderId} category {CategoryId}.",
+                providerId, categoryId ?? "(all)");
         return Results.Ok(rows);
     }
     catch (Exception ex)
@@ -663,7 +670,7 @@ app.MapGet("/api/series/{providerId}/items", async (string providerId, string? c
             rating = JsonString(x, "rating"),
             plot = JsonString(x, "plot"),
             genre = JsonString(x, "genre"),
-            poster = ProxyArtwork(JsonString(x, "cover"))
+            poster = JsonString(x, "cover")
         }).ToList();
         return Results.Ok(rows);
     }
@@ -710,7 +717,7 @@ app.MapGet("/api/series/{providerId}/{seriesId}", async (string providerId, stri
         {
             name = info.ValueKind == JsonValueKind.Object ? JsonString(info, "name") : "",
             plot = info.ValueKind == JsonValueKind.Object ? JsonString(info, "plot") : "",
-            cover = info.ValueKind == JsonValueKind.Object ? ProxyArtwork(JsonString(info, "cover")) : "",
+            cover = info.ValueKind == JsonValueKind.Object ? JsonString(info, "cover") : "",
             episodes
         });
     }
@@ -1202,7 +1209,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "0.5.2",
+        version = "0.5.3",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -1436,7 +1443,7 @@ async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, TimeSpa
     var url = BuildXtreamPlayerApiUrl(c, action, extra);
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.2");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.3");
     using var cts = new CancellationTokenSource(timeout);
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -1575,7 +1582,7 @@ async Task<List<LiveChannel>> LoadM3uChannels(string url)
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/x-mpegURL,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.2");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.3");
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -1594,7 +1601,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.2");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.3");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }
