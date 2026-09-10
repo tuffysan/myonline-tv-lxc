@@ -1,4 +1,4 @@
-# MyOnline TV Web v0.9.0 — Proxmox LXC
+# MyOnline TV Web v1.0.0 — Proxmox LXC
 
 MyOnline TV Web is a self-hosted entertainment appliance for Proxmox VE.
 
@@ -453,3 +453,56 @@ This milestone introduces dedicated interaction and layout behavior for mobile, 
 - Improves fullscreen video sizing for televisions.
 
 Existing IPTV, Plex/Jellyfin, DVR, duration, Continue Watching, Recently Watched and poster recovery functionality remains cumulative.
+
+
+## v0.9.1 — Stabilization
+- Stops desktop arrow keys from being globally hijacked unless remote navigation is actually eligible.
+- Improves Mobile More-sheet close/Escape behavior and background scroll locking.
+- Keeps the v0.9.0 responsive layouts cumulative.
+- Adds `RELEASE-SMOKE-TEST.md` covering IPTV, Plex/Jellyfin, DVR, mobile, tablet and TV regression checks.
+
+
+## v0.9.2 — Continue Watching
+- Stores total duration together with Continue Watching progress.
+- Shows elapsed / total time and a progress bar on each Continue Watching card.
+- Does not create resume entries before five seconds of playback.
+- Automatically removes an item when playback reaches about 92% or ends.
+- Adds a per-item “Mark as watched” action.
+- Existing remove-one and Clear all controls remain.
+
+
+## v0.9.3 — Series UX
+- Adds profile-specific watched state for episodes.
+- Shows watched episodes with a check mark and a Replay action.
+- Adds Play next unwatched to IPTV and Plex/Jellyfin series.
+- Adds a Watched / Unwatch toggle per IPTV episode.
+- Automatically marks an episode watched when playback ends.
+- Offers the next episode after both IPTV and unified Plex/Jellyfin episode playback.
+
+
+## v0.9.4 — Home redesign
+- Replaces the old Quick access section with source-aware media-center cards.
+- Shows Plex and Jellyfin Home shortcuts only when those connections exist.
+- Prioritizes Continue Watching, Recently Added and Recently Watched.
+- Adds a poster-based My favourites rail.
+- Keeps media-library Movies and Series as dedicated Home rails.
+- Moves official external streaming-service launchers into a collapsible secondary section.
+- Uses the same responsive mobile/tablet/TV behavior introduced in v0.9.0.
+
+
+## v1.0.0 — First stable milestone
+v1.0.0 is the cumulative first major milestone of MyOnline TV Web.
+
+It contains:
+- IPTV Live TV, EPG Guide, Movies and Series.
+- Server-side browser-compatible HLS playback.
+- Movie/episode duration and resume.
+- Continue Watching and Recently Watched with posters and management.
+- Episode watched state and next-episode UX.
+- Plex and Jellyfin as separate dynamic menu sources.
+- Downloads and DVR recordings.
+- Responsive mobile, tablet, desktop and TV layouts.
+- D-pad/remote navigation.
+- Home media-center redesign.
+
+`RELEASE-CHECKLIST.md` is included and should be completed on the target system before declaring the installation the production baseline.

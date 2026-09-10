@@ -697,3 +697,41 @@ button,a,input,select{touch-action:manipulation}
   max-height:100vh;
   object-fit:contain;
 }
+
+/* v0.9.1 stabilization */
+body.mobileSheetOpen{overflow:hidden}
+@media(max-width:719px){
+  .mobileBottomNav button,.mobileMoreGrid button{cursor:pointer}
+  .mobileBottomNav button:focus-visible,.mobileMoreGrid button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+}
+
+/* v0.9.2 Continue Watching */
+.continueProgress{height:5px;border-radius:999px;background:rgba(255,255,255,.1);overflow:hidden;margin-top:3px}
+.continueProgress span{display:block;height:100%;background:var(--accent);border-radius:inherit}
+.historyActions{position:absolute;right:7px;top:7px;z-index:4;display:flex;gap:5px}
+.historyActions .historyRemove,.historyActions .historyWatched{position:static;width:29px;height:29px;border-radius:999px;border:1px solid rgba(255,255,255,.26);background:rgba(5,17,26,.82);color:#fff;cursor:pointer}
+.historyWatched:hover,.historyWatched:focus{background:#164c38;outline:2px solid #6ee7a4}
+
+/* v0.9.3 Series UX */
+.episodeWatched{opacity:.72;border-color:rgba(110,231,164,.35)!important}
+.watchedBadge{display:inline-flex;align-items:center;gap:5px;color:#86efac;font-weight:700}
+.primaryBtn{background:#17618e!important;border-color:#3aa6e8!important}
+.seriesNextBar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0 18px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:#0d1c29}
+
+/* v0.9.4 Home redesign */
+.homeHero{margin-bottom:16px}
+.homeSourceGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin-bottom:18px}
+.homeSourceCard{display:grid;gap:5px;text-align:left;padding:15px;border:1px solid var(--line);border-radius:15px;background:linear-gradient(145deg,#102a3d,#0c1d2b);color:#fff;cursor:pointer}
+.homeSourceCard span{font-size:1.35rem;color:var(--accent)}
+.homeSourceCard b{font-size:1rem}.homeSourceCard small{opacity:.62}
+.homeSourceCard:hover,.homeSourceCard:focus-visible{transform:translateY(-2px);border-color:#3d779c}
+.streamingServices{margin:26px 0 8px;border-top:1px solid var(--line);padding-top:14px}
+.streamingServices summary{cursor:pointer;font-weight:700;opacity:.82;margin-bottom:12px}
+@media(max-width:719px){
+  .homeSourceGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .homeSourceCard{padding:12px}
+}
+@media(min-width:1400px) and (pointer:coarse){
+  .homeSourceGrid{grid-template-columns:repeat(6,minmax(0,1fr));gap:16px}
+  .homeSourceCard{min-height:120px;padding:20px}
+}

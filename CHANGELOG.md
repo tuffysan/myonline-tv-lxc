@@ -1,5 +1,43 @@
 # Changelog
 
+## v1.0.0 — First stable milestone
+- Promoted the cumulative v0.9.4 feature set to the first 1.0 milestone.
+- Added release and device regression checklist.
+- Added v1.0.0 upgrade notes.
+- No deliberate feature expansion over v0.9.4; focus is release readiness and a stable baseline.
+
+
+## v0.9.4 — Home redesign
+- Rebuilt Home around source shortcuts and media rails.
+- Added conditional Plex/Jellyfin Home shortcuts.
+- Added poster-based favourites rail.
+- Reordered Continue Watching, Recently Added and Recently Watched.
+- Moved external streaming links into a collapsible section.
+
+
+## v0.9.3 — Series UX
+- Added episode watched-state store per profile.
+- Added Play next unwatched.
+- Added IPTV Watched/Unwatch controls.
+- Added watched styling for IPTV and unified episodes.
+- Added next-episode prompt after playback completion.
+
+
+## v0.9.2 — Continue Watching
+- Added duration-aware Continue Watching records.
+- Added progress bars and elapsed/total time.
+- Added Mark as watched.
+- Suppressed zero/very-short resume entries.
+- Auto-removes completed playback from Continue Watching.
+
+
+## v0.9.1 — Stabilization
+- Hardened remote-key detection.
+- Fixed Mobile More-sheet close state and Escape handling.
+- Added release smoke-test checklist.
+- No new major feature surface; this release is deliberately regression-focused.
+
+
 ## v0.9.0 — Responsive & TV UX
 - Added dedicated mobile, tablet, desktop and TV breakpoints.
 - Added mobile bottom navigation and More sheet.
