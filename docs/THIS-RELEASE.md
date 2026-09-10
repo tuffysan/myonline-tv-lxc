@@ -1,5 +1,5 @@
-# MyOnline TV v0.5.0
+# MyOnline TV v0.5.1
 
-Focus: **Stable 0.5.0**
+This release fixes the Proxmox updater failure seen during the v0.5.0 upgrade.
 
-This package is cumulative and is intended to be released and tested after the immediately preceding version.
+The application itself is unchanged from v0.5.0. The updater now handles the release archive in distinct, diagnosable stages and does not delete it until extraction has been verified.

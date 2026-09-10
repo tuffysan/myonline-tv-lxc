@@ -13,6 +13,18 @@ on_update_error() {
   echo " Command : ${BASH_COMMAND}" >&2
   echo " Exit    : ${rc}" >&2
   echo "============================================================" >&2
+  if [[ "${CURRENT_STEP}" == 3/8* ]]; then
+    echo " Staging diagnostics:" >&2
+    pct exec "$CTID" -- bash -lc '
+      echo "--- /tmp release artifact ---"
+      ls -lh /tmp/myonline-tv-release.tar.gz 2>&1 || true
+      echo "--- publish.new ---"
+      ls -lah /opt/myonlinetv/publish.new 2>&1 | head -40 || true
+      echo "--- disk ---"
+      df -h /opt/myonlinetv /tmp 2>&1 || true
+    ' >&2 2>&1 || true
+    echo "============================================================" >&2
+  fi
   exit "$rc"
 }
 trap on_update_error ERR
@@ -69,12 +81,31 @@ if [[ -n "$ARTIFACT" ]]; then
   [[ -f "$ARTIFACT" ]] || { echo "Release artifact not found: $ARTIFACT" >&2; exit 1; }
   echo "  - Uploading release artifact to CT ${CTID}..."
   pct push "$CTID" "$ARTIFACT" /tmp/myonline-tv-release.tar.gz
-  echo "  - Verifying uploaded artifact..."
+
+  echo "  - Verifying uploaded artifact exists and is non-empty..."
+  CURRENT_STEP="3/8 Verify uploaded release artifact"
   pct exec "$CTID" -- test -s /tmp/myonline-tv-release.tar.gz
+
+  echo "  - Verifying gzip integrity..."
+  CURRENT_STEP="3/8 Verify gzip integrity"
+  pct exec "$CTID" -- gzip -t /tmp/myonline-tv-release.tar.gz
+
   echo "  - Extracting release artifact..."
-  pct exec "$CTID" -- bash -lc 'tar -tzf /tmp/myonline-tv-release.tar.gz >/dev/null && tar -xzf /tmp/myonline-tv-release.tar.gz -C /opt/myonlinetv/publish.new && rm -f /tmp/myonline-tv-release.tar.gz'
+  CURRENT_STEP="3/8 Extract release artifact"
+  pct exec "$CTID" -- tar -xzf /tmp/myonline-tv-release.tar.gz -C /opt/myonlinetv/publish.new
+
   echo "  - Verifying extracted application..."
-  pct exec "$CTID" -- test -f /opt/myonlinetv/publish.new/MyOnlineTV.Web.dll
+  CURRENT_STEP="3/8 Verify extracted application"
+  pct exec "$CTID" -- test -s /opt/myonlinetv/publish.new/MyOnlineTV.Web.dll
+  pct exec "$CTID" -- test -s /opt/myonlinetv/publish.new/MyOnlineTV.Web.runtimeconfig.json
+  pct exec "$CTID" -- test -s /opt/myonlinetv/publish.new/wwwroot/index.html
+  pct exec "$CTID" -- test -s /opt/myonlinetv/publish.new/wwwroot/app.js
+
+  echo "  - Cleaning uploaded release artifact..."
+  CURRENT_STEP="3/8 Cleanup uploaded release artifact"
+  pct exec "$CTID" -- rm -f /tmp/myonline-tv-release.tar.gz
+
+  CURRENT_STEP="3/8 Preparing new application"
 else
   pct exec "$CTID" -- mkdir -p /opt/myonlinetv/src/wwwroot
   pct push "$CTID" "${REPO_DIR}/app/MyOnlineTV.Web.csproj" /opt/myonlinetv/src/MyOnlineTV.Web.csproj
