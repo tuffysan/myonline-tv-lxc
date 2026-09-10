@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.8.5 — Poster recovery
+- Added IPTV catalogue-based poster backfill for Continue Watching and Recently Watched.
+- Added legacy title normalization for `SC - ...` history entries.
+- Added poster-only Continue Watching update endpoint that preserves Updated/order.
+- Added Series-list poster fallback when series detail has no cover.
+- Recovered posters are persisted to avoid repeated catalogue repair.
+
+
+## v0.8.4 — Separate Plex and Jellyfin menus
+- Added dynamic Plex navigation item when an enabled Plex connection exists.
+- Added dynamic Jellyfin navigation item when an enabled Jellyfin connection exists.
+- Added dedicated Plex Movies / Series view.
+- Added dedicated Jellyfin Movies / Series view.
+- Multiple same-type media servers are aggregated inside their own menu.
+- IPTV Movies and Series remain separate.
+- Media-library navigation refreshes after add/remove in Admin.
+
+
 ## v0.8.3 — Poster rails & modern scrollbars
 - Added poster persistence to Continue Watching.
 - Added poster artwork to Continue Watching and Recently Watched cards.

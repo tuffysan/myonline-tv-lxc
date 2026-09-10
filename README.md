@@ -1,4 +1,4 @@
-# MyOnline TV Web v0.8.3 — Proxmox LXC
+# MyOnline TV Web v0.8.5 — Proxmox LXC
 
 MyOnline TV Web is a self-hosted entertainment appliance for Proxmox VE.
 
@@ -405,3 +405,24 @@ v0.8.0 introduces the first DVR milestone:
 - Added polished poster cards with hover/focus effects and overlay remove buttons.
 - Replaced the old browser-looking horizontal scrollbar with a thin, rounded media-center style scrollbar.
 - Modern scrollbar styling applies to Continue Watching, Recently Watched and other horizontal poster rails.
+
+## v0.8.4 — Separate Plex and Jellyfin menus
+
+- Plex is shown as its own navigation item when at least one enabled Plex connection exists.
+- Jellyfin is shown as its own navigation item when at least one enabled Jellyfin connection exists.
+- The menu items are hidden automatically when no enabled connection of that type exists.
+- Plex and Jellyfin each get their own Movies / Series tabs.
+- Multiple servers of the same type are combined inside that source-specific view.
+- IPTV Movies and IPTV Series remain separate and no longer describe themselves as mixed media-library views.
+- Adding or removing a Plex/Jellyfin connection updates navigation immediately from Admin.
+- Existing global Search and Home Continue/Recently Watched remain cross-source by design.
+
+## v0.8.5 — Poster recovery
+
+- Repairs missing artwork in Continue Watching and Recently Watched from IPTV catalogues.
+- Handles legacy titles such as `SC - Series Name (2018...)` by matching them against the actual Series catalogue.
+- Groups artwork repair by IPTV provider and only performs it when missing posters exist.
+- Persists recovered Continue Watching posters without changing watch position or the original Updated timestamp.
+- Persists recovered Recently Watched posters in local history.
+- IPTV episode playback now falls back to the poster from the Series catalogue when `get_series_info` does not return a cover.
+- Existing Plex/Jellyfin dedicated menus from v0.8.4 remain unchanged.

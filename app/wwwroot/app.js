@@ -1,5 +1,5 @@
 const $=s=>document.querySelector(s), content=$('#content'), title=$('#title');
-let providers=[], currentProvider=null, channels=[], epg=[], fav=new Set(), hls=null, currentView='home', profiles=[], currentProfile=localStorage.getItem('myonline-profile')||'default', channelPrefs={hiddenGroups:[],hiddenChannels:[],aliases:{}}, authState={user:'',role:''}, accessState={allowedProfileIds:[],defaultProfileId:'default',policies:{}};
+let providers=[], currentProvider=null, channels=[], epg=[], fav=new Set(), hls=null, currentView='home', profiles=[], currentProfile=localStorage.getItem('myonline-profile')||'default', channelPrefs={hiddenGroups:[],hiddenChannels:[],aliases:{}}, authState={user:'',role:''}, accessState={allowedProfileIds:[],defaultProfileId:'default',policies:{}}, mediaLibraries=[];
 
 async function api(url,opt={}){
   const method=(opt.method||'GET').toUpperCase();
@@ -79,22 +79,39 @@ async function enterApp(st){
   $('#userBadge').textContent=authState.user||'user';
   const s=await api('/api/status');$('#status').textContent=`${s.version} · ${s.platform}`;
   const brandVersion=$('#brandVersion');if(brandVersion)brandVersion.textContent=`Web v${s.version} · Unified Media Center`;
-  providers=await api('/api/providers');fav=new Set(await api('/api/favourites'));profiles=await api('/api/profiles');try{accessState=await api('/api/access/me')}catch{accessState={allowedProfileIds:profiles.map(p=>p.id),defaultProfileId:profiles[0]?.id||'default',policies:{}}}profiles=profiles.filter(p=>authState.role==='Admin'||(accessState.allowedProfileIds||[]).includes(p.id));if(!profiles.some(p=>p.id===currentProfile))currentProfile=accessState.defaultProfileId||profiles[0]?.id||'default';applyPermissions();renderProfileBadge();
+  providers=await api('/api/providers');fav=new Set(await api('/api/favourites'));profiles=await api('/api/profiles');try{mediaLibraries=await api('/api/media-libraries')}catch{mediaLibraries=[]}try{accessState=await api('/api/access/me')}catch{accessState={allowedProfileIds:profiles.map(p=>p.id),defaultProfileId:profiles[0]?.id||'default',policies:{}}}profiles=profiles.filter(p=>authState.role==='Admin'||(accessState.allowedProfileIds||[]).includes(p.id));if(!profiles.some(p=>p.id===currentProfile))currentProfile=accessState.defaultProfileId||profiles[0]?.id||'default';applyPermissions();renderMediaLibraryNav();renderProfileBadge();
   if(!currentProvider&&providers.length)currentProvider=providers[0].id;
   show('home');
 }
 $('#logout').onclick=async()=>{await api('/api/auth/logout',{method:'POST'});await authGate()};
 document.querySelectorAll('nav button[data-view]').forEach(b=>b.onclick=()=>show(b.dataset.view));
 
+function renderMediaLibraryNav(){
+  const enabled=(mediaLibraries||[]).filter(x=>x.enabled!==false);
+  const hasPlex=enabled.some(x=>String(x.type||'').toLowerCase()==='plex');
+  const hasJellyfin=enabled.some(x=>String(x.type||'').toLowerCase()==='jellyfin');
+  const plex=document.querySelector('nav button[data-view="plex"]');
+  const jelly=document.querySelector('nav button[data-view="jellyfin"]');
+  if(plex)plex.classList.toggle('hidden',!hasPlex);
+  if(jelly)jelly.classList.toggle('hidden',!hasJellyfin);
+}
+
+async function refreshMediaLibraryNav(){
+  try{mediaLibraries=await api('/api/media-libraries')}catch{mediaLibraries=[]}
+  renderMediaLibraryNav();
+}
+
 async function show(v){
   if(!viewAllowed(v)){v='home'}
   currentView=v;destroyPlayer();
-  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',downloads:'Downloads',recordings:'Recordings',search:'Search',system:'System',admin:'Admin'})[v]||v;
+  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'Recordings',search:'Search',system:'System',admin:'Admin'})[v]||v;
   if(v==='home')await home();
   if(v==='live')await live();
   if(v==='guide')await guide();
   if(v==='movies')await movies();
   if(v==='series')await series();
+  if(v==='plex')await mediaLibraryView('plex');
+  if(v==='jellyfin')await mediaLibraryView('jellyfin');
   if(v==='downloads')await downloadView();
   if(v==='recordings')await recordingsView();
   if(v==='search')await searchView();
@@ -139,8 +156,13 @@ async function home(){
     ]);
   }catch{}
   const cont=await api('/api/continue');
-  const homeHistory=getMediaHistory();
-  const continueItems=cont.map(x=>({...x,poster:findLegacyPoster(x,homeHistory,unifiedMovies,unifiedSeries)}));
+  let homeHistory=getMediaHistory();
+  let continueItems=cont.map(x=>({...x,poster:findLegacyPoster(x,homeHistory,unifiedMovies,unifiedSeries)}));
+  if(continueItems.some(x=>!x.poster)||homeHistory.some(x=>!x.poster)){
+    const repaired=await repairMissingHomePosters(continueItems,homeHistory);
+    continueItems=repaired.continueItems;
+    homeHistory=repaired.history;
+  }
 
   const recentlyAdded=[...unifiedMovies,...unifiedSeries]
     .filter(x=>x.addedAt)
@@ -157,12 +179,12 @@ async function home(){
   </div>
   ${continueItems.length?`<div class=sectionHead><h2>Continue watching</h2><button class=linkButton onclick="clearContinueWatching()">Clear all</button></div><div class="continueRow mediaHistoryRail">${continueItems.slice(0,12).map(x=>`<div class="continueCard historyCard"><button class=historyMain onclick='resumeContinueItem(${JSON.stringify(x)})'>${mediaPosterMarkup(x.poster,x.title)}<div class=historyCardBody><b>${esc(x.title)}</b><small>${formatMediaTime(x.positionSeconds||0)} watched</small></div></button><button class=historyRemove title="Remove from Continue Watching" aria-label="Remove from Continue Watching" onclick='removeContinueWatching(${JSON.stringify(x.id)})'>×</button></div>`).join('')}</div><div id=mediaPlayer></div>`:''}
   ${recentlyAdded.length?`<div class=sectionHead><h2>Recently added</h2><button class=linkButton onclick="show('search')">Browse all</button></div><div class=posterRail>${recentlyAdded.map(x=>`<button class=posterCard onclick='playUnifiedItem(${JSON.stringify(x)})'>${x.poster?`<img loading=lazy decoding=async src="${escAttr(x.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(x.name)}</b><small><span class=sourceBadge>${esc(x.source||'media')}</span> ${esc(x.year||'')}</small></div></button>`).join('')}</div>`:''}
-  ${homeMediaRails()}
+  ${homeMediaRails(homeHistory)}
   <h2>Quick access</h2><div class=grid>
     <button class="card actionCard" onclick="show('live')"><h3>Live TV</h3><p>Channels and groups</p></button>
     <button class="card actionCard" onclick="show('guide')"><h3>TV Guide</h3><p>Timeline EPG</p></button>
-    <button class="card actionCard" onclick="show('movies')"><h3>Movies</h3><p>IPTV and media libraries</p></button>
-    <button class="card actionCard" onclick="show('series')"><h3>Series</h3><p>Seasons and episodes</p></button>
+    <button class="card actionCard" onclick="show('movies')"><h3>Movies</h3><p>IPTV movie library</p></button>
+    <button class="card actionCard" onclick="show('series')"><h3>Series</h3><p>IPTV series library</p></button>
   </div>
   <h2>Official streaming services</h2>
   <div class=serviceRow>
@@ -403,14 +425,119 @@ function normalizeHistoryTitle(value){
   return String(value||'').toLowerCase().replace(/\s+/g,' ').trim();
 }
 
+function posterMatchTitle(value){
+  return normalizeHistoryTitle(value)
+    .replace(/^sc\s*[-–—:]\s*/i,'')
+    .replace(/^episode\s*[-–—:]\s*/i,'')
+    .replace(/\s*\((?:19|20)\d{2}[^)]*\).*$/,'')
+    .replace(/\s+s\d{1,2}\s*e\d{1,3}.*$/i,'')
+    .replace(/\s*[-–—:]\s*(?:s\d{1,2}\s*)?e\d{1,3}.*$/i,'')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+
+function bestPosterMatch(title,rows){
+  const q=posterMatchTitle(title);
+  if(!q)return null;
+  let best=null,bestScore=0;
+  for(const x of rows||[]){
+    if(!x?.poster)continue;
+    const n=posterMatchTitle(x.name||x.title);
+    if(!n)continue;
+    let score=0;
+    if(n===q)score=100;
+    else if(q.startsWith(n)||n.startsWith(q))score=85-Math.min(20,Math.abs(q.length-n.length));
+    else if(q.includes(n)||n.includes(q))score=70-Math.min(20,Math.abs(q.length-n.length));
+    if(score>bestScore){bestScore=score;best=x}
+  }
+  return bestScore>=50?best:null;
+}
+
 function findLegacyPoster(item,history,unifiedMovies,unifiedSeries){
   if(item?.poster)return item.poster;
-  const title=normalizeHistoryTitle(item?.title||item?.name);
-  if(!title)return '';
-  const h=(history||[]).find(x=>normalizeHistoryTitle(x.name)===title&&x.poster);
+  const title=item?.title||item?.name||'';
+  const exact=normalizeHistoryTitle(title);
+  if(!exact)return '';
+  const h=(history||[]).find(x=>normalizeHistoryTitle(x.name)===exact&&x.poster);
   if(h?.poster)return h.poster;
-  const u=[...(unifiedMovies||[]),...(unifiedSeries||[])].find(x=>normalizeHistoryTitle(x.name)===title&&x.poster);
+  const u=bestPosterMatch(title,[...(unifiedMovies||[]),...(unifiedSeries||[])]);
   return u?.poster||'';
+}
+
+async function repairMissingHomePosters(continueItems,history){
+  const missingContinue=(continueItems||[]).filter(x=>!x.poster);
+  const missingHistory=(history||[]).filter(x=>!x.poster);
+  if(!missingContinue.length&&!missingHistory.length)return {continueItems,history};
+
+  const providerIds=new Set();
+  const addProviderFromId=id=>{
+    const s=String(id||'');
+    if(s.startsWith('iptv-movie:')||s.startsWith('iptv-episode:')){
+      const parts=s.split(':');
+      if(parts.length>=3&&parts[1])providerIds.add(parts[1]);
+    }
+  };
+  missingContinue.forEach(x=>addProviderFromId(x.id));
+  missingHistory.forEach(x=>{if(x.providerId)providerIds.add(x.providerId)});
+
+  // Legacy rows can predate provider-aware history. In that case use the current provider.
+  if(!providerIds.size&&currentProvider)providerIds.add(currentProvider);
+
+  const catalogByProvider=new Map();
+  await Promise.all([...providerIds].map(async providerId=>{
+    const bucket={movies:[],series:[]};
+    try{bucket.movies=await api(`/api/vod/${encodeURIComponent(providerId)}/items?categoryId=`,{timeoutMs:125000})}catch{}
+    try{bucket.series=await api(`/api/series/${encodeURIComponent(providerId)}/items?categoryId=`,{timeoutMs:65000})}catch{}
+    catalogByProvider.set(providerId,bucket);
+  }));
+
+  let historyChanged=false;
+  const repairedHistory=(history||[]).map(x=>{
+    if(x.poster)return x;
+    const providerId=x.providerId||currentProvider;
+    const bucket=catalogByProvider.get(providerId)||{movies:[],series:[]};
+    const candidates=x.type==='movie'?bucket.movies:bucket.series;
+    const title=x.seriesName||x.name;
+    const match=bestPosterMatch(title,candidates);
+    if(!match?.poster)return x;
+    historyChanged=true;
+    return {...x,poster:match.poster};
+  });
+  if(historyChanged)saveMediaHistory(repairedHistory);
+
+  const repairedContinue=(continueItems||[]).map(x=>{
+    if(x.poster)return x;
+    const title=x.title||'';
+    const hist=repairedHistory.find(h=>h.poster&&(
+      normalizeHistoryTitle(h.name)===normalizeHistoryTitle(title) ||
+      posterMatchTitle(h.seriesName||h.name)===posterMatchTitle(title)
+    ));
+    if(hist?.poster)return {...x,poster:hist.poster};
+
+    const id=String(x.id||'');
+    let providerId=currentProvider,type='series';
+    if(id.startsWith('iptv-movie:')){const p=id.split(':');providerId=p[1]||providerId;type='movie'}
+    else if(id.startsWith('iptv-episode:')){const p=id.split(':');providerId=p[1]||providerId;type='series'}
+    const bucket=catalogByProvider.get(providerId)||{movies:[],series:[]};
+    const match=bestPosterMatch(title,type==='movie'?bucket.movies:bucket.series);
+    return match?.poster?{...x,poster:match.poster}:x;
+  });
+
+  // Persist recovered artwork without touching watch position or Updated timestamp.
+  await Promise.all(repairedContinue.map(async x=>{
+    const before=(continueItems||[]).find(y=>String(y.id)===String(x.id));
+    if(!before?.poster&&x.poster){
+      try{
+        await api('/api/continue/'+encodeURIComponent(x.id)+'/poster',{
+          method:'PUT',
+          headers:{'content-type':'application/json'},
+          body:JSON.stringify({poster:x.poster})
+        });
+      }catch{}
+    }
+  }));
+
+  return {continueItems:repairedContinue,history:repairedHistory};
 }
 
 function formatMediaTime(seconds){
@@ -609,6 +736,55 @@ function showProgramDetails(channelKey,channelNameText,payload){
   playLive(channelKey,channelNameText);
 }
 
+let mediaLibraryTabs={plex:'movies',jellyfin:'movies'};
+
+async function mediaLibraryView(type){
+  const source=String(type||'').toLowerCase();
+  const label=source==='plex'?'Plex':'Jellyfin';
+  const configured=(mediaLibraries||[]).filter(x=>x.enabled!==false&&String(x.type||'').toLowerCase()===source);
+  if(!configured.length){
+    content.innerHTML=`<div class=card>No enabled ${label} connection is configured. Add one in Admin → Media libraries.</div>`;
+    return;
+  }
+
+  const tab=mediaLibraryTabs[source]||'movies';
+  content.innerHTML=`<div class=hero><h2>${label}</h2><p class=muted>${configured.length} connected ${label} server${configured.length===1?'':'s'} · Movies and Series are kept separate from IPTV.</p>
+    <div class=mediaSourceTabs>
+      <button class="btn ${tab==='movies'?'activeBtn':''}" id=sourceMovies>Movies</button>
+      <button class="btn ${tab==='series'?'activeBtn':''}" id=sourceSeries>Series</button>
+      <button class=btn id=sourceRefresh>Refresh</button>
+    </div>
+  </div><div id=mediaPlayer></div><div id=sourceLibraryContent><div class=card>Loading ${label} ${tab}…</div></div>`;
+
+  $('#sourceMovies').onclick=()=>{mediaLibraryTabs[source]='movies';mediaLibraryView(source)};
+  $('#sourceSeries').onclick=()=>{mediaLibraryTabs[source]='series';mediaLibraryView(source)};
+  $('#sourceRefresh').onclick=()=>mediaLibraryView(source);
+
+  try{
+    const endpoint=tab==='movies'?'/api/unified/movies':'/api/unified/series';
+    const rows=(await api(endpoint,{timeoutMs:65000}))
+      .filter(x=>String(x.source||'').toLowerCase()===source);
+
+    const host=$('#sourceLibraryContent');
+    if(!rows.length){
+      host.innerHTML=`<div class=card>No ${tab} were returned from the configured ${label} libraries.</div>`;
+      return;
+    }
+
+    host.innerHTML=`<div class=sourceLibrarySummary><span>${rows.length} ${tab}</span><input id=sourceFilter placeholder="Search ${label} ${tab}"></div><div id=sourcePosterGrid class=posterGrid></div>`;
+    const render=()=>{
+      const q=($('#sourceFilter')?.value||'').trim().toLowerCase();
+      const filtered=rows.filter(x=>!q||String(x.name||'').toLowerCase().includes(q));
+      $('#sourcePosterGrid').innerHTML=filtered.map(item=>`<button class=posterCard onclick='playUnifiedItem(${JSON.stringify(tab==='series'?{...item,kind:"series"}:item)})'>${item.poster?`<img loading=lazy decoding=async src="${escAttr(item.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(item.name)}</b><small>${esc(item.year||'')} ${item.rating?'· ★ '+esc(item.rating):''}</small>${configured.length>1?`<small class=sourceBadge>${esc(configured.find(x=>x.id===item.sourceProviderId)?.name||label)}</small>`:''}</div></button>`).join('');
+    };
+    $('#sourceFilter').oninput=debounce(render);
+    render();
+  }catch(e){
+    const host=$('#sourceLibraryContent');
+    if(host)host.innerHTML=errorCard(new Error(`${label} library could not be loaded. ${friendlyError(e)}`));
+  }
+}
+
 async function movies(){
   if(!await ensureProvider('xtream')){content.innerHTML='<div class=card>Movies require an Xtream-compatible provider.</div>';return}
   content.innerHTML='<div class=card>Loading movies… The first load can take up to 2 minutes for large Xtream libraries.</div>';
@@ -670,9 +846,11 @@ async function openSeries(id){
   $('#seriesContent').innerHTML='<div class=card>Loading episodes…</div>';
   try{
     const s=await api(`/api/series/${currentProvider}/${encodeURIComponent(id)}`);
+    const listPoster=seriesItems.find(x=>String(x.id)===String(id))?.poster||'';
+    const seriesPoster=s.cover||listPoster||'';
     const by={};s.episodes.forEach(e=>(by[e.season]??=[]).push(e));
-    $('#seriesContent').innerHTML=`<div class=seriesHero>${s.cover?`<img src="${escAttr(s.cover)}">`:''}<div><button class=btn onclick=filterSeries()>← Back</button><h2>${esc(s.name)}</h2><p>${esc(s.plot||'')}</p></div></div>
-    ${Object.keys(by).sort((a,b)=>Number(a)-Number(b)).map(season=>`<section><h3>Season ${esc(season)}</h3><div class=episodeList>${by[season].map(e=>`<div class=episode><span><b>E${esc(e.episode)}</b> ${esc(e.title||'Episode')}</span><div class=row><button class=btn onclick='playEpisode(${JSON.stringify(e.id)},${JSON.stringify(e.extension||'mp4')},${JSON.stringify(e.title||'Episode')},${JSON.stringify('iptv-episode:'+currentProvider+':'+e.id+':'+(e.extension||'mp4'))},${JSON.stringify(e.poster||s.cover||'')},${JSON.stringify(s.id||id)},${JSON.stringify(s.name||'')},${JSON.stringify(season)},${JSON.stringify(e.episode)})'>Play</button><button class=btn onclick='downloadEpisode(${JSON.stringify(e.id)},${JSON.stringify(e.extension||'mp4')},${JSON.stringify((s.name||'Series')+' - S'+season+'E'+e.episode)})'>↓</button></div></div>`).join('')}</div></section>`).join('')}`;
+    $('#seriesContent').innerHTML=`<div class=seriesHero>${seriesPoster?`<img src="${escAttr(seriesPoster)}">`:''}<div><button class=btn onclick=filterSeries()>← Back</button><h2>${esc(s.name)}</h2><p>${esc(s.plot||'')}</p></div></div>
+    ${Object.keys(by).sort((a,b)=>Number(a)-Number(b)).map(season=>`<section><h3>Season ${esc(season)}</h3><div class=episodeList>${by[season].map(e=>`<div class=episode><span><b>E${esc(e.episode)}</b> ${esc(e.title||'Episode')}</span><div class=row><button class=btn onclick='playEpisode(${JSON.stringify(e.id)},${JSON.stringify(e.extension||'mp4')},${JSON.stringify(e.title||'Episode')},${JSON.stringify('iptv-episode:'+currentProvider+':'+e.id+':'+(e.extension||'mp4'))},${JSON.stringify(e.poster||seriesPoster||'')},${JSON.stringify(s.id||id)},${JSON.stringify(s.name||'')},${JSON.stringify(season)},${JSON.stringify(e.episode)})'>Play</button><button class=btn onclick='downloadEpisode(${JSON.stringify(e.id)},${JSON.stringify(e.extension||'mp4')},${JSON.stringify((s.name||'Series')+' - S'+season+'E'+e.episode)})'>↓</button></div></div>`).join('')}</div></section>`).join('')}`;
   }catch(e){$('#seriesContent').innerHTML=errorCard(e)}
 }
 
@@ -765,7 +943,7 @@ let editingProviderId=null, editingUserId=null;
 async function adminView(){
   if(authState.role!=='Admin'){content.innerHTML='<div class=card>Administrator access is required.</div>';return}
   providers=await api('/api/providers');profiles=await api('/api/profiles');
-  const users=await api('/api/admin/users');const accessCfg=await api('/api/admin/profile-access');const mediaLibraries=await api('/api/media-libraries');
+  const users=await api('/api/admin/users');const accessCfg=await api('/api/admin/profile-access');mediaLibraries=await api('/api/media-libraries');renderMediaLibraryNav();
 
   content.innerHTML=`
   <div class=hero><h2>Administration</h2><p class=muted>Manage users, IPTV providers, Plex/Jellyfin libraries and viewer profiles.</p></div>
@@ -975,8 +1153,8 @@ function rememberMediaHistory(type,item){
 }
 
 // v0.7.0 home rails
-function homeMediaRails(){
-  const favs=getMediaFavs().slice(0,12),hist=getMediaHistory().slice(0,12);
+function homeMediaRails(historyRows=null){
+  const favs=getMediaFavs().slice(0,12),hist=(historyRows||getMediaHistory()).slice(0,12);
   return `${favs.length?`<h2>Media favourites</h2><div class=continueRow>${favs.map(x=>`<button class=continueCard onclick="show('${x.type==='movie'?'movies':'series'}')"><span>★</span><b>${esc(x.name)}</b><small>${esc(x.type)}</small></button>`).join('')}</div>`:''}
   ${hist.length?`<div class=sectionHead><h2>Recently watched</h2><button class=linkButton onclick="clearRecentlyWatched()">Clear all</button></div><div class="continueRow mediaHistoryRail">${hist.map(x=>`<div class="continueCard historyCard"><button class=historyMain onclick='openRecentlyWatched(${JSON.stringify(x)})'>${mediaPosterMarkup(x.poster,x.name)}<div class=historyCardBody><b>${esc(x.name)}</b><small>${new Date(x.updated).toLocaleString()}</small></div></button><button class=historyRemove title="Remove from Recently Watched" aria-label="Remove from Recently Watched" onclick='removeRecentlyWatched(${JSON.stringify(x.type)},${JSON.stringify(x.id)})'>×</button></div>`).join('')}</div>`:''}`;
 }
@@ -1452,11 +1630,11 @@ async function saveMediaLibrary(){
       libraryIds:editingMediaLibraryId?editingMediaLibraryIds:[],
       keepExistingToken:!!editingMediaLibraryId&&!$('#mltoken').value
     });
-    editingMediaLibraryId=null;editingMediaLibraryIds=[];adminView()
+    editingMediaLibraryId=null;editingMediaLibraryIds=[];await refreshMediaLibraryNav();adminView()
   }catch(e){alert(friendlyError(e))}
 }
 async function testMediaLibrary(id){try{const r=await jpost('/api/media-libraries/'+id+'/test',{});$('#mlstat-'+id).textContent=r.ok?'Connection OK':'Connection failed: '+(r.error||r.status)}catch(e){$('#mlstat-'+id).textContent=friendlyError(e)}}
-async function removeMediaLibrary(id){if(!confirm('Remove media library?'))return;try{await api('/api/media-libraries/'+id,{method:'DELETE'});adminView()}catch(e){alert(friendlyError(e))}}
+async function removeMediaLibrary(id){if(!confirm('Remove media library?'))return;try{await api('/api/media-libraries/'+id,{method:'DELETE'});await refreshMediaLibraryNav();adminView()}catch(e){alert(friendlyError(e))}}
 async function chooseMediaLibraries(id){
   try{
     const [rows,current]=await Promise.all([

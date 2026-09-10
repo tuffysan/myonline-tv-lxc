@@ -386,3 +386,44 @@ img{content-visibility:auto}
 @media(max-width:700px){
   .mediaHistoryRail{grid-auto-columns:minmax(170px,72vw)}
 }
+
+
+/* v0.8.4 dedicated Plex / Jellyfin navigation */
+.media-library-nav{position:relative}
+.media-library-nav::after{
+  content:"";
+  position:absolute;
+  right:12px;
+  top:50%;
+  width:7px;
+  height:7px;
+  margin-top:-3px;
+  border-radius:50%;
+  background:var(--accent);
+  box-shadow:0 0 10px var(--accent);
+}
+.mediaSourceTabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.sourceLibrarySummary{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:14px 0}
+.sourceLibrarySummary input{max-width:360px}
+@media(max-width:700px){
+  .sourceLibrarySummary{align-items:stretch;flex-direction:column}
+  .sourceLibrarySummary input{max-width:none;width:100%}
+}
+
+
+/* v0.8.5 poster recovery */
+.historyPoster.posterFailed{
+  background:
+    radial-gradient(circle at 28% 28%,rgba(56,167,235,.20),transparent 34%),
+    linear-gradient(135deg,#17364d,#081823);
+}
+.historyPoster.posterFailed::after{
+  content:"Artwork unavailable";
+  position:absolute;
+  left:10px;
+  right:10px;
+  bottom:9px;
+  text-align:center;
+  font-size:.72rem;
+  opacity:.55;
+}
