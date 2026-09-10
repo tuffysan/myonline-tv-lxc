@@ -2329,3 +2329,135 @@ async function adminOverview(){try{return await api('/api/admin/overview')}catch
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&matchMedia('(pointer:coarse)').matches){document.querySelector('nav button:not(.hidden):not(.navConfigHidden)')?.focus({preventScroll:true})}});
 window.addEventListener('pageshow',()=>{document.body.dataset.clientMode=innerWidth<721?'mobile':innerWidth>1400?'tv':'desktop'});
 window.addEventListener('resize',()=>{document.body.dataset.clientMode=innerWidth<721?'mobile':innerWidth>1400?'tv':'desktop'});
+
+
+// v4.2.0 Sources 2.0
+async function refreshSourceAvailability(){
+  try{
+    const s=await api('/api/sources/effective');
+    document.body.dataset.iptvSourceMode=(s&&s.iptv&&s.iptv.mode)||'unknown';
+    document.body.dataset.plexSourceMode=(s&&s.plex&&s.plex.mode)||'unknown';
+    document.body.dataset.jellyfinSourceMode=(s&&s.jellyfin&&s.jellyfin.mode)||'unknown';
+    document.querySelectorAll('[data-requires-source]').forEach(el=>{
+      const k=el.dataset.requiresSource, state=s&&s[k];
+      el.classList.toggle('sourceUnavailable',!!state&&!state.available);
+      el.setAttribute('aria-disabled',state&&!state.available?'true':'false');
+    });
+    return s;
+  }catch{return null;}
+}
+window.addEventListener('pageshow',refreshSourceAvailability);
+
+
+// v4.3.0 Unified Home
+const homeSections=['continue','live','nextup','recent','favorites','library'];
+function applyHomeLayout(order){
+ const host=document.querySelector('#homeView,#view-home,[data-view="home"]'); if(!host)return;
+ (order||homeSections).forEach(id=>{const el=host.querySelector(`[data-home-section="${id}"]`);if(el)host.appendChild(el)});
+}
+function personalizeHome(){
+ const h=new Date().getHours();
+ document.body.dataset.daypart=h<11?'morning':h<17?'day':h<22?'evening':'night';
+ applyHomeLayout();
+}
+window.addEventListener('pageshow',personalizeHome);
+
+
+// v4.4.0 Player 4.0
+function attachPlayerRecovery(video){
+ if(!video||video.dataset.recoveryAttached)return; video.dataset.recoveryAttached='1';
+ let retries=0;
+ video.addEventListener('stalled',()=>{
+   if(retries++<2&&video.currentTime>0){
+     const pos=video.currentTime; video.load();
+     try{video.currentTime=pos}catch{}
+     video.play().catch(()=>{});
+   }
+ });
+ video.addEventListener('playing',()=>{retries=0});
+ video.addEventListener('dblclick',()=>video.requestFullscreen&&video.requestFullscreen().catch(()=>{}));
+}
+function scanPlayers(){document.querySelectorAll('video').forEach(attachPlayerRecovery)}
+new MutationObserver(scanPlayers).observe(document.documentElement,{childList:true,subtree:true});
+window.addEventListener('pageshow',scanPlayers);
+
+
+// v4.5.0 Live TV & EPG 4.0
+document.addEventListener('keydown',e=>{
+ if(!['PageUp','PageDown'].includes(e.key))return;
+ const rows=[...document.querySelectorAll('[data-channel-key],.channelRow,.liveChannel')].filter(x=>x.offsetParent!==null);
+ if(!rows.length)return;
+ const current=rows.indexOf(document.activeElement);
+ const i=current<0?0:current;
+ const n=e.key==='PageDown'?Math.min(rows.length-1,i+1):Math.max(0,i-1);
+ if(rows[n]&&rows[n].focus){rows[n].focus();rows[n].scrollIntoView({block:'nearest'});e.preventDefault()}
+});
+
+
+// v4.6.0 DVR 4.0
+async function refreshDvrOverview(){
+ try{
+  const values=await Promise.all([api('/api/dvr/engine'),api('/api/dvr/upcoming'),api('/api/dvr/conflicts')]);
+  window.__myOnlineDvr={engine:values[0],upcoming:values[1],conflicts:values[2],refreshedAt:new Date().toISOString()};
+  document.body.dataset.dvrConflicts=Array.isArray(values[2])&&values[2].length?'true':'false';
+  return window.__myOnlineDvr;
+ }catch{return null;}
+}
+window.addEventListener('pageshow',refreshDvrOverview);
+
+
+// v4.7.0 Household
+async function refreshHouseholdState(){
+ try{
+  const values=await Promise.all([api('/api/household/preferences'),api('/api/household/sync-status')]);
+  window.__myOnlineHousehold={prefs:values[0],sync:values[1]};
+  document.body.dataset.handoffEnabled=values[0]&&values[0].handoffEnabled===false?'false':'true';
+  return window.__myOnlineHousehold;
+ }catch{return null;}
+}
+window.addEventListener('pageshow',refreshHouseholdState);
+
+
+// v4.8.0 PWA 3.0
+let myOnlineInstallPrompt=null;
+window.addEventListener('online',()=>{document.body.dataset.network='online'});
+window.addEventListener('offline',()=>{document.body.dataset.network='offline'});
+window.addEventListener('beforeinstallprompt',e=>{
+ e.preventDefault();
+ myOnlineInstallPrompt=e;
+ document.body.dataset.pwaInstallable='true';
+});
+async function installMyOnlineTv(){
+ if(!myOnlineInstallPrompt)return false;
+ myOnlineInstallPrompt.prompt();
+ await myOnlineInstallPrompt.userChoice;
+ myOnlineInstallPrompt=null;
+ document.body.dataset.pwaInstallable='false';
+ return true;
+}
+window.addEventListener('pageshow',()=>{document.body.dataset.network=navigator.onLine?'online':'offline'});
+
+
+// v4.9.0 Appliance Manager
+async function applianceManagerSnapshot(){
+ try{
+  const values=await Promise.all([
+   api('/api/appliance/health'),
+   api('/api/appliance/readiness'),
+   api('/api/platform/status'),
+   api('/api/system/backup-readiness')
+  ]);
+  window.__myOnlineAppliance={health:values[0],readiness:values[1],platform:values[2],backup:values[3],checkedAt:new Date().toISOString()};
+  return window.__myOnlineAppliance;
+ }catch{return null;}
+}
+
+
+// v5.0.0 Unified Media Appliance
+window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'5.0.0',generation:5,experience:'Unified Media Appliance'};
+async function unifiedMediaReadiness(){
+ const result={version:'5.0.0',network:navigator.onLine,checkedAt:new Date().toISOString()};
+ try{result.sources=await api('/api/sources/effective')}catch{}
+ try{result.appliance=await api('/api/appliance/readiness')}catch{}
+ return result;
+}

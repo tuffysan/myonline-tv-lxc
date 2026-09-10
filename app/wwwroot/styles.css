@@ -821,3 +821,7 @@ html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px 
   button,input,select{min-height:44px}
 }
 :focus-visible{outline:3px solid currentColor;outline-offset:3px}
+
+
+/* v4.2.0 Sources 2.0 */
+.sourceUnavailable{opacity:.48;filter:saturate(.45)}

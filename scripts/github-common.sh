@@ -16,11 +16,17 @@ MYONLINE_REF="${MYONLINE_REF:-}"
 
 github_latest_release_tag() {
   local repo="$1"
+  local tag
+  tag="$(curl -fsSL --retry 3 --connect-timeout 15 \
+    -H 'Accept: application/vnd.github+json' \
+    "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null \
+    | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+    | head -1 || true)"
+  if [[ -n "$tag" ]]; then printf '%s\n' "$tag"; return; fi
+
   local effective
   effective="$(curl -fsSL -o /dev/null -w '%{url_effective}' "https://github.com/${repo}/releases/latest" 2>/dev/null || true)"
-  if [[ -n "$effective" && "$effective" == *"/tag/"* ]]; then
-    basename "$effective"
-  fi
+  if [[ -n "$effective" && "$effective" == *"/tag/"* ]]; then basename "$effective"; fi
 }
 
 resolve_ref() {
