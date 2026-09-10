@@ -1,4 +1,4 @@
-# MyOnline TV Web v0.7.2 — Proxmox LXC
+# MyOnline TV Web v0.8.0 — Proxmox LXC
 
 MyOnline TV Web is a self-hosted entertainment appliance for Proxmox VE.
 
@@ -359,3 +359,16 @@ v0.7.2 builds on v0.7.1 with a more TV-like day-to-day experience:
 - Unified Series keeps episode context and offers the next episode after playback.
 - Better remote-control focus treatment for horizontal media rails.
 - Existing Live TV, Guide, IPTV Movies/Series and Admin functionality remains cumulative from v0.7.1.
+
+## v0.8.0 — DVR & Live TV Recording
+
+v0.8.0 introduces the first DVR milestone:
+
+- Schedule Live TV recordings from a dedicated Recordings view.
+- Shift+click a programme in Guide to schedule the programme window directly.
+- Server-side FFmpeg recording with stream-copy to MPEG-TS.
+- Persistent recording queue across application restarts.
+- Recording states: Scheduled, Recording, Completed, Failed, Missed and Cancelled.
+- Cancel active/scheduled recordings.
+- Play/save completed recordings through the authenticated web app.
+- Existing v0.7.2 Media Center UX remains cumulative.

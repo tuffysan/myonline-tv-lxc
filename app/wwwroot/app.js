@@ -89,13 +89,14 @@ document.querySelectorAll('nav button[data-view]').forEach(b=>b.onclick=()=>show
 async function show(v){
   if(!viewAllowed(v)){v='home'}
   currentView=v;destroyPlayer();
-  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',downloads:'Downloads',search:'Search',system:'System',admin:'Admin'})[v]||v;
+  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',downloads:'Downloads',recordings:'Recordings',search:'Search',system:'System',admin:'Admin'})[v]||v;
   if(v==='home')await home();
   if(v==='live')await live();
   if(v==='guide')await guide();
   if(v==='movies')await movies();
   if(v==='series')await series();
   if(v==='downloads')await downloadView();
+  if(v==='recordings')await recordingsView();
   if(v==='search')await searchView();
   if(v==='system')await systemView();
   if(v==='admin')await adminView();
@@ -103,7 +104,7 @@ async function show(v){
 
 function currentPolicy(){return (accessState.policies||{})[currentProfile]||{live:true,movies:true,series:true,downloads:true,allowedProviderIds:[]}}
 function applyPermissions(){
-  const p=currentPolicy(),map={live:p.live,guide:p.live,movies:p.movies,series:p.series,downloads:p.downloads};
+  const p=currentPolicy(),map={live:p.live,guide:p.live,movies:p.movies,series:p.series,downloads:p.downloads,recordings:p.live};
   document.querySelectorAll('nav button[data-view]').forEach(b=>{
     if(Object.prototype.hasOwnProperty.call(map,b.dataset.view))b.classList.toggle('hidden',!map[b.dataset.view]);
   });
@@ -112,7 +113,7 @@ function applyPermissions(){
     if(!providers.some(x=>x.id===currentProvider))currentProvider=providers[0]?.id||null;
   }
 }
-function featureForView(v){return ({live:'live',guide:'live',movies:'movies',series:'series',downloads:'downloads'})[v]||''}
+function featureForView(v){return ({live:'live',guide:'live',movies:'movies',series:'series',downloads:'downloads',recordings:'live'})[v]||''}
 function viewAllowed(v){const f=featureForView(v);return !f||currentPolicy()[f]!==false}
 
 function renderProfileBadge(){const p=profiles.find(x=>x.id===currentProfile);const b=$('#userBadge');if(b&&p)b.innerHTML=`<button class=profileBadge onclick="profilePicker()">${esc(p.icon)} ${esc(p.name)} ▾</button>`}
@@ -550,7 +551,7 @@ function timelineRowV319(c,progs,start,end,span){
     const a=Math.max(new Date(pr.start).getTime(),start.getTime()),b=Math.min(new Date(pr.stop).getTime(),end.getTime());if(b<=a)return '';
     const left=(a-start.getTime())/span*100,width=Math.max(.8,(b-a)/span*100),isNow=a<=Date.now()&&b>Date.now();
     const payload=encodeURIComponent(JSON.stringify(pr));
-    return `<button class="prog ${isNow?'currentProgram':''}" style="left:${left}%;width:${width}%" onclick='playLive(${JSON.stringify(c.key)},${JSON.stringify(channelName(c))})' title="Play ${escAttr(pr.title)} live"><b>${esc(pr.title)}</b><small>${new Date(pr.start).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</small></button>`;
+    return `<button class="prog ${isNow?'currentProgram':''}" style="left:${left}%;width:${width}%" onclick='if(event.shiftKey){event.preventDefault();scheduleGuideRecording(${JSON.stringify(c.key)},${JSON.stringify(channelName(c))},decodeURIComponent("${payload}"));return}playLive(${JSON.stringify(c.key)},${JSON.stringify(channelName(c))})' title="Play ${escAttr(pr.title)} live · Shift+click to record"><b>${esc(pr.title)}</b><small>${new Date(pr.start).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</small></button>`;
   }).join('');
   return `<div class=timelineRow><button class=timelineChannel onclick='playLive(${JSON.stringify(c.key)},${JSON.stringify(channelName(c))})'>${c.logo?`<img src="${escAttr(c.logo)}">`:''}<span>${esc(channelName(c))}</span><small>▶ Live</small></button><div class=programLane>${line}${blocks}</div></div>`;
 }
@@ -1146,6 +1147,70 @@ async function saveProfilePolicy(id){
 
 let globalSearchFilter='all';
 let lastGlobalSearchResult={live:[],movies:[],series:[]};
+
+
+function toLocalInputValue(d){
+  const x=new Date(d),pad=n=>String(n).padStart(2,'0');
+  return `${x.getFullYear()}-${pad(x.getMonth()+1)}-${pad(x.getDate())}T${pad(x.getHours())}:${pad(x.getMinutes())}`;
+}
+
+async function scheduleGuideRecording(channelKey,channelName,programJson){
+  try{
+    const pr=JSON.parse(programJson);
+    await jpost('/api/recordings',{
+      providerId:currentProvider,
+      channelKey,
+      channelName,
+      title:pr.title||channelName,
+      start:pr.start,
+      end:pr.stop
+    });
+    alert('Recording scheduled: '+(pr.title||channelName));
+  }catch(e){alert(friendlyError(e))}
+}
+
+async function recordingsView(){
+  if(!await ensureProvider()){content.innerHTML=noProvider();return}
+  const rows=await api('/api/recordings');
+  const ch=await api('/api/channels/'+currentProvider);
+  const now=new Date(),later=new Date(now.getTime()+60*60*1000);
+  content.innerHTML=`<div class=hero><h2>Recordings & DVR</h2><p class=muted>Schedule Live TV recordings on the MyOnline TV server. Tip: Shift+click a programme in Guide to schedule it directly.</p></div>
+  <div class=card><h3>New recording</h3><div class=recordForm>
+    ${providerSelect()}
+    <select id=recChannel>${ch.map(x=>`<option value="${escAttr(x.key)}">${esc(x.name)}</option>`).join('')}</select>
+    <input id=recTitle placeholder="Recording title">
+    <label>Start <input id=recStart type=datetime-local value="${toLocalInputValue(now)}"></label>
+    <label>End <input id=recEnd type=datetime-local value="${toLocalInputValue(later)}"></label>
+    <button class=btn id=recSchedule>Schedule recording</button>
+  </div></div>
+  <div class=recordingList>${rows.length?rows.map(recordingCard).join(''):'<div class=card>No recordings scheduled yet.</div>'}</div>`;
+
+  $('#provider').onchange=async e=>{currentProvider=e.target.value;await recordingsView()};
+  $('#recSchedule').onclick=async()=>{
+    const c=$('#recChannel'),opt=c.options[c.selectedIndex];
+    const start=new Date($('#recStart').value),end=new Date($('#recEnd').value);
+    if(!(end>start)){alert('End must be after start.');return}
+    try{
+      await jpost('/api/recordings',{
+        providerId:currentProvider,channelKey:c.value,channelName:opt?.textContent||'Channel',
+        title:$('#recTitle').value||opt?.textContent||'Recording',
+        start:start.toISOString(),end:end.toISOString()
+      });
+      recordingsView();
+    }catch(e){alert(friendlyError(e))}
+  };
+}
+
+function recordingCard(r){
+  const duration=Math.max(0,Math.round((new Date(r.end)-new Date(r.start))/60000));
+  return `<article class=recordingCard><div><span class="recordDot ${r.status==='Recording'?'active':''}">●</span><h3>${esc(r.title)}</h3><p>${esc(r.channelName)} · ${new Date(r.start).toLocaleString()} · ${duration} min</p>${r.error?`<p class=danger>${esc(r.error)}</p>`:''}</div>
+  <div class=row><span class="status ${r.status==='Failed'?'bad':''}">${esc(r.status)}</span>
+  ${r.completed?`<a class=btn href="/api/recordings/${r.id}/file">Play / save</a>`:''}
+  ${r.status==='Scheduled'||r.status==='Recording'?`<button class=btn onclick="cancelRecording('${r.id}')">Cancel</button>`:''}
+  <button class=btn onclick="deleteRecording('${r.id}')">Remove</button></div></article>`;
+}
+async function cancelRecording(id){await jpost('/api/recordings/'+id+'/cancel',{});recordingsView()}
+async function deleteRecording(id){if(!confirm('Remove recording and file?'))return;await api('/api/recordings/'+id,{method:'DELETE'});recordingsView()}
 
 async function searchView(){
   const initial=window.__pendingGlobalSearch||'';window.__pendingGlobalSearch='';

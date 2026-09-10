@@ -72,12 +72,15 @@ var usersFile = Path.Combine(dataDir, "users.json");
 var profileAccessFile = Path.Combine(dataDir, "profile-access.json");
 var profilePoliciesFile = Path.Combine(dataDir, "profile-policies.json");
 var mediaLibrariesFile = Path.Combine(dataDir, "media-libraries.json");
+var recordingsFile = Path.Combine(dataDir, "recordings.json");
+var recordingsDir = Path.Combine(dataDir, "recordings");
 var secretKeyFile = Path.Combine(dataDir, "secrets.key");
 var downloadsDir = Path.Combine(dataDir, "downloads");
 var backupsDir = Path.Combine(dataDir, "backups");
 var versionFile = Path.Combine(dataDir, "version");
 Directory.CreateDirectory(downloadsDir);
 Directory.CreateDirectory(backupsDir);
+Directory.CreateDirectory(recordingsDir);
 var catalogueCacheDir = Path.Combine(dataDir, "catalogue-cache");
 Directory.CreateDirectory(catalogueCacheDir);
 var startedAt = DateTimeOffset.UtcNow;
@@ -87,12 +90,13 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.7.2");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.8.0");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
 var downloads = new ConcurrentDictionary<string, DownloadJob>();
 var liveSessions = new ConcurrentDictionary<string, LiveSession>();
+var recordingProcesses = new ConcurrentDictionary<string, Process>();
 var channelCache = new ConcurrentDictionary<string, ChannelCacheEntry>();
 var vodCategoryCache = new ConcurrentDictionary<string, TimedJsonCache>();
 var vodItemCache = new ConcurrentDictionary<string, TimedJsonCache>();
@@ -348,6 +352,126 @@ ChannelPreferences PreferencesFor(string providerId)
 }
 
 
+List<RecordingJob> LoadRecordingJobs() => Load<List<RecordingJob>>(recordingsFile) ?? new();
+
+void SaveRecordingJobs(List<RecordingJob> jobs) => Save(recordingsFile, jobs);
+
+string SafeRecordingFileName(string name)
+{
+    var invalid = Path.GetInvalidFileNameChars();
+    var cleaned = new string((name ?? "Recording").Select(ch => invalid.Contains(ch) ? '_' : ch).ToArray()).Trim();
+    if (string.IsNullOrWhiteSpace(cleaned)) cleaned = "Recording";
+    return cleaned.Length > 100 ? cleaned[..100] : cleaned;
+}
+
+async Task StartScheduledRecording(RecordingJob job)
+{
+    if (recordingProcesses.ContainsKey(job.Id)) return;
+    var provider = LoadProviders().FirstOrDefault(x => x.Id == job.ProviderId);
+    if (provider is null) throw new InvalidOperationException("Provider not found.");
+    var channels = await GetCachedChannels(provider);
+    var channel = channels.FirstOrDefault(x => x.Key == job.ChannelKey);
+    if (channel is null) throw new InvalidOperationException("Channel not found.");
+    if (!Uri.TryCreate(channel.SourceUrl, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
+        throw new InvalidOperationException("Invalid channel stream URL.");
+    var ffmpeg = FindExecutable("ffmpeg") ?? throw new InvalidOperationException("FFmpeg is not installed.");
+
+    var fileName = $"{job.Start.LocalDateTime:yyyyMMdd-HHmm}-{SafeRecordingFileName(job.Title)}.ts";
+    var filePath = Path.Combine(recordingsDir, fileName);
+    var duration = Math.Max(1, (int)Math.Ceiling((job.End - DateTimeOffset.Now).TotalSeconds));
+
+    var psi = new ProcessStartInfo
+    {
+        FileName = ffmpeg,
+        UseShellExecute = false,
+        RedirectStandardError = true,
+        RedirectStandardOutput = true,
+        CreateNoWindow = true
+    };
+    foreach (var a in new[] {
+        "-hide_banner","-loglevel","warning","-nostdin","-rw_timeout","15000000",
+        "-i",channel.SourceUrl,"-map","0:v:0?","-map","0:a:0?","-t",duration.ToString(),
+        "-c","copy","-f","mpegts",filePath
+    }) psi.ArgumentList.Add(a);
+
+    var process = Process.Start(psi) ?? throw new InvalidOperationException("Could not start FFmpeg.");
+    recordingProcesses[job.Id] = process;
+
+    var jobs = LoadRecordingJobs();
+    var idx = jobs.FindIndex(x => x.Id == job.Id);
+    if (idx >= 0)
+    {
+        jobs[idx] = jobs[idx] with { Status = "Recording", FileName = fileName, Error = null };
+        SaveRecordingJobs(jobs);
+    }
+
+    _ = Task.Run(async () =>
+    {
+        try
+        {
+            await process.WaitForExitAsync();
+            var rows = LoadRecordingJobs();
+            var i = rows.FindIndex(x => x.Id == job.Id);
+            if (i >= 0)
+            {
+                var status = process.ExitCode == 0 ? "Completed" : "Failed";
+                rows[i] = rows[i] with { Status = status, Error = process.ExitCode == 0 ? null : $"FFmpeg exited with code {process.ExitCode}." };
+                SaveRecordingJobs(rows);
+            }
+        }
+        catch (Exception ex)
+        {
+            RecordError("recording:" + job.Id, ex);
+        }
+        finally
+        {
+            recordingProcesses.TryRemove(job.Id, out _);
+            process.Dispose();
+        }
+    });
+}
+
+async Task RecordingSchedulerLoop()
+{
+    while (true)
+    {
+        try
+        {
+            var now = DateTimeOffset.Now;
+            var jobs = LoadRecordingJobs();
+            foreach (var job in jobs.Where(x => x.Status == "Scheduled" && x.Start <= now && x.End > now).ToList())
+            {
+                try { await StartScheduledRecording(job); }
+                catch (Exception ex)
+                {
+                    var rows = LoadRecordingJobs();
+                    var i = rows.FindIndex(x => x.Id == job.Id);
+                    if (i >= 0)
+                    {
+                        rows[i] = rows[i] with { Status = "Failed", Error = ex.GetBaseException().Message };
+                        SaveRecordingJobs(rows);
+                    }
+                    RecordError("recording-start:" + job.Id, ex);
+                }
+            }
+            // Missed recordings are marked instead of silently remaining scheduled forever.
+            var stale = LoadRecordingJobs();
+            var changed = false;
+            for (var i = 0; i < stale.Count; i++)
+            {
+                if (stale[i].Status == "Scheduled" && stale[i].End <= now)
+                {
+                    stale[i] = stale[i] with { Status = "Missed", Error = "Recording window ended before the scheduler could start it." };
+                    changed = true;
+                }
+            }
+            if (changed) SaveRecordingJobs(stale);
+        }
+        catch (Exception ex) { RecordError("recording-scheduler", ex); }
+        await Task.Delay(TimeSpan.FromSeconds(15));
+    }
+}
+
 string RegisterProxy(string url, string kind = "media")
 {
     var token = Guid.NewGuid().ToString("N");
@@ -439,7 +563,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "0.7.2",
+    version = "0.8.0",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -477,14 +601,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = AuthConfigured();
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "0.7.2", checks })
-        : Results.Json(new { status = "not-ready", version = "0.7.2", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "0.8.0", checks })
+        : Results.Json(new { status = "not-ready", version = "0.8.0", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "0.7.2",
+    version = "0.8.0",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = AuthConfigured(),
@@ -1935,7 +2059,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "0.7.2",
+        version = "0.8.0",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -2107,6 +2231,88 @@ app.MapPost("/api/system/recover", async () =>
     return Results.Ok(new { recovered = true, cleaned = removed, activeLiveStreams = liveSessions.Count });
 }).RequireAuthorization(p => p.RequireRole("Admin"));
 
+app.MapGet("/api/recordings", () =>
+{
+    var rows = LoadRecordingJobs()
+        .OrderByDescending(x => x.Start)
+        .Select(x => new
+        {
+            x.Id, x.ProviderId, x.ChannelKey, x.ChannelName, x.Title, x.Start, x.End,
+            x.Status, x.FileName, x.Error,
+            completed = x.Status == "Completed" && !string.IsNullOrWhiteSpace(x.FileName) && File.Exists(Path.Combine(recordingsDir, x.FileName))
+        });
+    return Results.Ok(rows);
+}).RequireAuthorization();
+
+app.MapPost("/api/recordings", (RecordingRequest input) =>
+{
+    if (string.IsNullOrWhiteSpace(input.ProviderId) || string.IsNullOrWhiteSpace(input.ChannelKey))
+        return Results.BadRequest("Provider and channel are required.");
+    if (input.End <= input.Start) return Results.BadRequest("End must be after start.");
+
+    var rows = LoadRecordingJobs();
+    var job = new RecordingJob(
+        Guid.NewGuid().ToString("N"),
+        input.ProviderId.Trim(),
+        input.ChannelKey.Trim(),
+        string.IsNullOrWhiteSpace(input.ChannelName) ? "Channel" : input.ChannelName.Trim(),
+        string.IsNullOrWhiteSpace(input.Title) ? "Recording" : input.Title.Trim(),
+        input.Start,
+        input.End,
+        "Scheduled",
+        null,
+        null);
+    rows.Add(job);
+    SaveRecordingJobs(rows);
+    return Results.Ok(job);
+}).RequireAuthorization();
+
+app.MapPost("/api/recordings/{id}/cancel", (string id) =>
+{
+    var rows = LoadRecordingJobs();
+    var idx = rows.FindIndex(x => x.Id == id);
+    if (idx < 0) return Results.NotFound();
+
+    if (recordingProcesses.TryRemove(id, out var process))
+    {
+        try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+    }
+
+    rows[idx] = rows[idx] with { Status = "Cancelled" };
+    SaveRecordingJobs(rows);
+    return Results.Ok();
+}).RequireAuthorization();
+
+app.MapDelete("/api/recordings/{id}", (string id) =>
+{
+    var rows = LoadRecordingJobs();
+    var job = rows.FirstOrDefault(x => x.Id == id);
+    if (job is null) return Results.NotFound();
+    if (recordingProcesses.TryRemove(id, out var process))
+    {
+        try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+    }
+    if (!string.IsNullOrWhiteSpace(job.FileName))
+    {
+        var path = Path.Combine(recordingsDir, job.FileName);
+        try { if (File.Exists(path)) File.Delete(path); } catch { }
+    }
+    rows.RemoveAll(x => x.Id == id);
+    SaveRecordingJobs(rows);
+    return Results.Ok();
+}).RequireAuthorization();
+
+app.MapGet("/api/recordings/{id}/file", (string id) =>
+{
+    var job = LoadRecordingJobs().FirstOrDefault(x => x.Id == id);
+    if (job is null || string.IsNullOrWhiteSpace(job.FileName)) return Results.NotFound();
+    var path = Path.Combine(recordingsDir, job.FileName);
+    if (!File.Exists(path)) return Results.NotFound();
+    return Results.File(path, "video/mp2t", job.FileName, enableRangeProcessing: true);
+}).RequireAuthorization();
+
+_ = Task.Run(RecordingSchedulerLoop);
+
 app.MapFallbackToFile("index.html");
 app.Run();
 
@@ -2211,7 +2417,7 @@ async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, TimeSpa
     var url = BuildXtreamPlayerApiUrl(c, action, extra);
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.7.2");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.8.0");
     using var cts = new CancellationTokenSource(timeout);
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -2377,7 +2583,7 @@ async Task<List<LiveChannel>> LoadM3uChannels(string url)
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/x-mpegURL,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.7.2");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.8.0");
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -2396,7 +2602,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.7.2");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.8.0");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }
@@ -2648,6 +2854,8 @@ record MediaLibrarySelectionInput(string[]? LibraryIds);
 record MediaLibraryConnection(string BaseUrl, string Token);
 record UnifiedEpisodeItem(string Id, string Source, string SourceProviderId, string ItemId, string SeriesId, int SeasonNumber, int EpisodeNumber, string Name, string? Year, string? Rating, string? Poster);
 record UnifiedMediaItem(string Id, string Source, string SourceProviderId, string Kind, string Name, string? Year, string? Rating, string? Poster, string? ParentId, string? StreamUrl, double? Progress, DateTimeOffset? AddedAt);
+record RecordingRequest(string ProviderId, string ChannelKey, string? ChannelName, string? Title, DateTimeOffset Start, DateTimeOffset End);
+record RecordingJob(string Id, string ProviderId, string ChannelKey, string ChannelName, string Title, DateTimeOffset Start, DateTimeOffset End, string Status, string? FileName, string? Error);
 record MediaDownloadRequest(string Token, string? Title);
 record ProxyTarget(string Url, string Kind, DateTimeOffset Created);
 record LiveSession(string Id, string Directory, Process Process, StringBuilder ErrorLog, string SourceUrl, DateTimeOffset Started);

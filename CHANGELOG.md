@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.8.0 — DVR & Live TV Recording
+- Added persistent DVR recording queue.
+- Added dedicated Recordings navigation and management view.
+- Added manual recording scheduling by provider/channel/start/end.
+- Added Shift+click recording from TV Guide programmes.
+- Added FFmpeg stream-copy recording to MPEG-TS.
+- Added cancel/remove/download endpoints and recording status tracking.
+- Added scheduler recovery for missed windows.
+- Kept v0.7.2 Media Center UX and Plex/Jellyfin features cumulative.
+
+
 ## v0.7.2 — Media Center UX
 - Added Recently Added media-library rail on Home.
 - Added All / Live / Movies / Series filters to global Search.
