@@ -94,7 +94,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/2.0.1");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/2.2.1");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
@@ -656,7 +656,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "2.0.1",
+    version = "2.2.1",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -694,14 +694,14 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = AuthConfigured();
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "2.0.1", checks })
-        : Results.Json(new { status = "not-ready", version = "2.0.1", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "2.2.1", checks })
+        : Results.Json(new { status = "not-ready", version = "2.2.1", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "2.0.1",
+    version = "2.2.1",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = AuthConfigured(),
@@ -2301,7 +2301,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "2.0.1",
+        version = "2.2.1",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -2717,7 +2717,7 @@ app.MapGet("/api/appliance/health", () =>
 {
     var drive=new DriveInfo(Path.GetPathRoot(dataDir)!);
     return Results.Ok(new {
-        version="2.0.1", dataDirectory=dataDir,
+        version="2.2.1", dataDirectory=dataDir,
         storageTargets=LoadStorageTargets().Count,
         dvrRules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count,
         rooms=(Load<List<RoomDevice>>(roomsFile)??new()).Count,
@@ -2733,6 +2733,50 @@ app.MapGet("/api/appliance/backup", (HttpContext ctx) =>
     using(var z=ZipFile.Open(temp,ZipArchiveMode.Create))foreach(var f in files)z.CreateEntryFromFile(f,Path.GetFileName(f));
     return Results.File(temp,"application/zip",Path.GetFileName(temp));
 }).RequireAuthorization();
+
+
+app.MapGet("/api/diagnostics", async (HttpContext ctx) =>
+{
+    if(!ctx.User.IsInRole("Admin")) return Results.Forbid();
+    var checks=new List<object>();
+    void Add(string name,bool ok,string detail)=>checks.Add(new {name,ok,detail});
+    Add("FFmpeg",FindExecutable("ffmpeg") is not null,FindExecutable("ffmpeg")??"Not found");
+    Add("FFprobe",FindExecutable("ffprobe") is not null,FindExecutable("ffprobe")??"Not found");
+    Add("rclone",FindExecutable("rclone") is not null,FindExecutable("rclone")??"Not found");
+    var targets=LoadStorageTargets();
+    Add("Storage configuration",targets.Any(x=>x.Enabled),$"{targets.Count(x=>x.Enabled)} enabled target(s)");
+    var ps=LoadProviders();
+    Add("IPTV providers",ps.Any(),$"{ps.Count} configured provider(s)");
+    var libs=LoadMediaLibraries();
+    Add("Media libraries",libs.Any(x=>x.Enabled),$"{libs.Count(x=>x.Enabled)} enabled library/libraries");
+    var drive=new DriveInfo(Path.GetPathRoot(dataDir)!);
+    Add("Disk space",drive.AvailableFreeSpace>1024L*1024*1024*2,$"{drive.AvailableFreeSpace/1073741824.0:F1} GB free");
+    await Task.CompletedTask;
+    return Results.Ok(new {utc=DateTimeOffset.UtcNow,checks});
+}).RequireAuthorization();
+
+
+
+app.MapGet("/api/dvr/conflicts", () =>
+{
+    var jobs=LoadRecordingJobs().Where(x=>x.Status is "Scheduled" or "Recording").OrderBy(x=>x.Start).ToList();
+    var conflicts=new List<object>();
+    for(var i=0;i<jobs.Count;i++) for(var j=i+1;j<jobs.Count;j++)
+        if(jobs[i].ProviderId==jobs[j].ProviderId && jobs[i].Start<jobs[j].End && jobs[j].Start<jobs[i].End)
+            conflicts.Add(new {first=jobs[i],second=jobs[j],reason="Overlapping recordings on the same IPTV provider"});
+    return Results.Ok(conflicts);
+}).RequireAuthorization();
+
+app.MapGet("/api/dvr/status", () =>
+{
+    var jobs=LoadRecordingJobs();
+    return Results.Ok(new {
+        scheduled=jobs.Count(x=>x.Status=="Scheduled"),recording=jobs.Count(x=>x.Status=="Recording"),
+        failed=jobs.Count(x=>x.Status=="Failed"),completed=jobs.Count(x=>x.Status=="Completed"),
+        rules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count(x=>x.Enabled)
+    });
+}).RequireAuthorization();
+
 
 app.Run();
 
@@ -2837,7 +2881,7 @@ async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, TimeSpa
     var url = BuildXtreamPlayerApiUrl(c, action, extra);
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/2.0.1");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/2.2.1");
     using var cts = new CancellationTokenSource(timeout);
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -3003,7 +3047,7 @@ async Task<List<LiveChannel>> LoadM3uChannels(string url)
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/x-mpegURL,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/2.0.1");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/2.2.1");
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -3022,7 +3066,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/2.0.1");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/2.2.1");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }

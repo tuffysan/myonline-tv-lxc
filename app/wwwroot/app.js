@@ -79,7 +79,7 @@ function toggleMobileMore(){
     ['jellyfin','◇','Jellyfin'],
     ['downloads','↓','Downloads'],
     ['recordings','●','DVR'],
-    ['appliance','⚙','Appliance'],['notifications','●','Alerts'],['rooms','▣','Rooms'],['library','▦','Library'],['search','⌕','Search'],
+    ['diagnostics','✓','Diagnostics'],['appliance','⚙','Appliance'],['notifications','●','Alerts'],['rooms','▣','Rooms'],['library','▦','Library'],['search','⌕','Search'],
     ['system','◉','System'],
     ['admin','🛡','Admin']
   ];
@@ -181,7 +181,7 @@ async function show(v){
   currentView=v;destroyPlayer();
   renderMobileNavigation();
   const moreSheet=$('#mobileMoreSheet');if(moreSheet){moreSheet.classList.add('hidden');moreSheet.setAttribute('aria-hidden','true');document.body.classList.remove('mobileSheetOpen')}
-  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'Recordings',appliance:'Appliance',notifications:'Notifications',rooms:'Rooms',library:'Library',search:'Search',system:'System',admin:'Admin'})[v]||v;
+  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'Recordings',diagnostics:'Diagnostics',appliance:'Appliance',notifications:'Notifications',rooms:'Rooms',library:'Library',search:'Search',system:'System',admin:'Admin'})[v]||v;
   if(v==='home')await home();
   if(v==='live')await live();
   if(v==='guide')await guide();
@@ -191,6 +191,7 @@ async function show(v){
   if(v==='jellyfin')await mediaLibraryView('jellyfin');
   if(v==='downloads')await downloadView();
   if(v==='recordings')await recordingsView();
+  if(v==='diagnostics')await diagnosticsView();
   if(v==='appliance')await applianceView();
   if(v==='notifications')await notificationsView();
   if(v==='rooms')await roomsView();
@@ -1779,7 +1780,7 @@ async function scheduleGuideRecording(channelKey,channelName,programJson){
 
 async function recordingsView(){
   if(!await ensureProvider()){content.innerHTML=noProvider();return}
-  const [rows,targets,dvrRules]=await Promise.all([api('/api/recordings'),storageTargets(),api('/api/dvr/rules')]);
+  const [rows,targets,dvrRules,dvrStatus,dvrConflicts]=await Promise.all([api('/api/recordings'),storageTargets(),api('/api/dvr/rules'),api('/api/dvr/status'),api('/api/dvr/conflicts')]);
   const ch=await api('/api/channels/'+currentProvider);
   const now=new Date(),later=new Date(now.getTime()+60*60*1000);
   content.innerHTML=`<div class=hero><h2>DVR · Live TV recordings</h2><p class=muted>Record Live TV now or schedule programmes from Guide. Recordings are written to your configured Storage target, not kept permanently in the LXC.</p><div class=row><button class=btn onclick="show('live')">● Record Live TV</button><button class=btn onclick="show('guide')">▤ Schedule from Guide</button>${authState.role==='Admin'?'<button class=btn onclick="show(\'admin\')">Storage settings</button>':''}</div></div>
@@ -1793,7 +1794,7 @@ async function recordingsView(){
     <label>End <input id=recEnd type=datetime-local value="${toLocalInputValue(later)}"></label>
     <button class=btn id=recSchedule>Schedule recording</button>
   </div></div>
-  <div class=card><h3>Series recording rules</h3>${dvrRules.length?dvrRules.map(r=>`<div class=episode><span><b>${esc(r.titlePattern)}</b><small>${esc(r.channelName)} · ${r.newOnly?'New episodes only':'All episodes'} · ${r.paddingBeforeMinutes}m before / ${r.paddingAfterMinutes}m after · keep ${r.keepLatest}</small></span><button class=btn onclick="deleteDvrRule('${r.id}')">Remove</button></div>`).join(''):'<p class=muted>No series recording rules yet. Create one from Guide.</p>'}</div><div class=sectionHead><h2>DVR Library</h2></div>${dvrLibraryMarkup(rows)}<div class=recordingList>${rows.length?rows.map(recordingCard).join(''):'<div class=card>No recordings scheduled yet.</div>'}</div>`;
+  <div class=dvrStatusBar><span>Scheduled <b>${dvrStatus.scheduled}</b></span><span>Recording <b>${dvrStatus.recording}</b></span><span>Completed <b>${dvrStatus.completed}</b></span><span>Failed <b>${dvrStatus.failed}</b></span><span>Conflicts <b>${dvrConflicts.length}</b></span></div>${dvrConflicts.length?`<div class="card warningCard"><b>DVR conflicts detected</b><p>${dvrConflicts.length} overlapping recording pair(s). Review scheduled recordings.</p></div>`:''}<div class=card><h3>Series recording rules</h3>${dvrRules.length?dvrRules.map(r=>`<div class=episode><span><b>${esc(r.titlePattern)}</b><small>${esc(r.channelName)} · ${r.newOnly?'New episodes only':'All episodes'} · ${r.paddingBeforeMinutes}m before / ${r.paddingAfterMinutes}m after · keep ${r.keepLatest}</small></span><button class=btn onclick="deleteDvrRule('${r.id}')">Remove</button></div>`).join(''):'<p class=muted>No series recording rules yet. Create one from Guide.</p>'}</div><div class=sectionHead><h2>DVR Library</h2></div>${dvrLibraryMarkup(rows)}<div class=recordingList>${rows.length?rows.map(recordingCard).join(''):'<div class=card>No recordings scheduled yet.</div>'}</div>`;
 
   $('#provider').onchange=async e=>{currentProvider=e.target.value;await recordingsView()};
   $('#recSchedule').onclick=async()=>{
@@ -2119,3 +2120,14 @@ async function applianceView(){
   const pct=h.diskTotalBytes?Math.round((1-h.diskFreeBytes/h.diskTotalBytes)*100):0;
   content.innerHTML=`<div class=hero><span class=kicker>MYONLINE TV 2.0</span><h2>Appliance</h2><p class=muted>Health, backup and setup status for the self-hosted MyOnline TV appliance.</p></div><div class=statsGrid><div class=statCard><b>v${esc(h.version)}</b><small>Version</small></div><div class=statCard><b>${h.storageTargets}</b><small>Storage targets</small></div><div class=statCard><b>${h.dvrRules}</b><small>DVR rules</small></div><div class=statCard><b>${h.rooms}</b><small>Rooms</small></div></div><div class=card><h3>System storage</h3><div class=progress><div style="width:${pct}%"></div></div><p>${pct}% used · ${Math.round(h.diskFreeBytes/1073741824)} GB free</p></div>${authState.role==='Admin'?`<div class=card><h3>Backup</h3><p>Download the core MyOnline TV configuration as a ZIP backup.</p><a class=btn href="/api/appliance/backup">Download backup</a></div>`:''}<div class=card><h3>Setup checklist</h3><p>${h.storageTargets?'✓':'○'} Storage configured</p><p>${h.dvrRules?'✓':'○'} Smart DVR rules</p><p>${h.rooms?'✓':'○'} Multi-room device registered</p><p>✓ PWA install support</p></div>`;
 }
+
+
+
+async function diagnosticsView(){
+  content.innerHTML='<div class=card>Running diagnostics…</div>';
+  try{
+    const d=await api('/api/diagnostics');
+    content.innerHTML=`<div class=hero><span class=kicker>STABILITY & DIAGNOSTICS</span><h2>Diagnostics</h2><p class=muted>Runtime prerequisites and configuration health.</p><button class=btn onclick="diagnosticsView()">Run diagnostics</button></div><div class=diagGrid>${d.checks.map(c=>`<div class="card diagCard ${c.ok?'diagOk':'diagBad'}"><b>${c.ok?'✓':'!'} ${esc(c.name)}</b><small>${esc(c.detail)}</small></div>`).join('')}</div>`;
+  }catch(e){content.innerHTML=errorCard(e)}
+}
+

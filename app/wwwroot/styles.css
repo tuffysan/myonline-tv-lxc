@@ -776,3 +776,9 @@ body.mobileSheetOpen{overflow:hidden}
 
 
 .statsGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px}.statCard{padding:18px;border:1px solid var(--line);border-radius:15px;background:#0d1c29}.statCard b{display:block;font-size:1.5rem}.statCard small{opacity:.62}
+
+
+.diagGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}.diagCard{display:grid;gap:6px}.diagOk{border-color:#275f4a}.diagBad{border-color:#8b3e45}.diagCard small{opacity:.7}
+
+
+.dvrStatusBar{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.dvrStatusBar span{padding:8px 11px;border:1px solid var(--line);border-radius:999px;background:#0d1c29}.dvrStatusBar b{margin-left:5px}

@@ -1,6 +1,6 @@
 # Changelog
 
-## v2.0.1 — Navigation hotfix
+## v2.2.1 — Navigation hotfix
 - Fixed Appliance menu click not dispatching `applianceView()`.
 - Fixed Alerts menu click not dispatching `notificationsView()`.
 - Fixed Rooms menu click not dispatching `roomsView()`.
@@ -8,7 +8,7 @@
 - Added regression validation for every menu view registered in the v2.0 navigation.
 
 
-## v2.0.1 — DVR & Storage
+## v2.2.1 — DVR & Storage
 - Exposed Live TV recording directly in Live TV and the player.
 - Reworked Guide programme click into Play / Record actions.
 - Added Admin → Storage.
@@ -766,3 +766,7 @@
 
 ## 0.2.0
 - GitHub-ready Proxmox LXC release.
+
+## v2.2.1 — Compile hotfix
+- Fixed diagnostics code referencing non-existent `MediaLibraryConfig`.
+- Diagnostics now uses existing `LoadMediaLibraries()` / `MediaLibraryProvider` model.
