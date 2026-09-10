@@ -79,7 +79,6 @@ function toggleMobileMore(){
     ['jellyfin','◇','Jellyfin'],
     ['downloads','↓','Downloads'],
     ['recordings','●','DVR'],
-    ['platform','◆','Platform'],['profile-sync','↻','Profile Sync'],['diagnostics','✓','Diagnostics'],['appliance','⚙','Appliance'],['notifications','●','Alerts'],['rooms','▣','Rooms'],['library','▦','Library'],['search','⌕','Search'],
     ['system','◉','System'],
     ['admin','🛡','Admin']
   ];
@@ -1138,6 +1137,13 @@ async function adminView(){
 
   content.innerHTML=`
   <div class=hero><h2>Administration</h2><p class=muted>Manage users, IPTV providers, Plex/Jellyfin libraries and viewer profiles.</p></div>
+  <h2>System tools</h2>
+  <div class="grid adminSystemTools">
+    <div class=card><h3>System overview</h3><p class=muted>Platform status, configured services and capabilities.</p><button class=btn onclick="show('platform')">Open system overview</button></div>
+    <div class=card><h3>Diagnostics</h3><p class=muted>Check FFmpeg, FFprobe, rclone, storage, providers and disk space.</p><button class=btn onclick="show('diagnostics')">Open diagnostics</button></div>
+    <div class=card><h3>Appliance</h3><p class=muted>Health, backup and appliance maintenance.</p><button class=btn onclick="show('appliance')">Open appliance tools</button></div>
+  </div>
+
 
   <h2>Users</h2>
   <div class=card>

@@ -1,6 +1,6 @@
 # Changelog
 
-## v3.0.1 — Navigation hotfix
+## v3.0.2 — Navigation hotfix
 - Fixed Appliance menu click not dispatching `applianceView()`.
 - Fixed Alerts menu click not dispatching `notificationsView()`.
 - Fixed Rooms menu click not dispatching `roomsView()`.
@@ -8,7 +8,7 @@
 - Added regression validation for every menu view registered in the v2.0 navigation.
 
 
-## v3.0.1 — DVR & Storage
+## v3.0.2 — DVR & Storage
 - Exposed Live TV recording directly in Live TV and the player.
 - Reworked Guide programme click into Play / Record actions.
 - Added Admin → Storage.
@@ -767,7 +767,14 @@
 ## 0.2.0
 - GitHub-ready Proxmox LXC release.
 
-## v3.0.1 — Compile hotfix
+## v3.0.2 — Compile hotfix
 - Added missing `profileStateFile` path declaration for server-side profile sync.
 - Retained the v2.2.1 diagnostics compile fix (`LoadMediaLibraries()`).
 - Retained the v2.0.1 menu-dispatch fixes.
+
+## v3.0.2 — Navigation cleanup
+- Removed Platform, Profile Sync, Diagnostics and Appliance from the viewer navigation.
+- Platform is now exposed to administrators as **System overview** under Admin.
+- Diagnostics and Appliance are now Admin system tools.
+- Profile Sync remains background functionality and no longer has a user-facing menu item.
+- Existing APIs and views are retained; this is a navigation/UX cleanup, not feature removal.
