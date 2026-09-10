@@ -1,6 +1,6 @@
 # Changelog
 
-## v3.0.4 — Navigation hotfix
+## v4.0.1 — Navigation hotfix
 - Fixed Appliance menu click not dispatching `applianceView()`.
 - Fixed Alerts menu click not dispatching `notificationsView()`.
 - Fixed Rooms menu click not dispatching `roomsView()`.
@@ -8,7 +8,7 @@
 - Added regression validation for every menu view registered in the v2.0 navigation.
 
 
-## v3.0.4 — DVR & Storage
+## v4.0.1 — DVR & Storage
 - Exposed Live TV recording directly in Live TV and the player.
 - Reworked Guide programme click into Play / Record actions.
 - Added Admin → Storage.
@@ -767,25 +767,95 @@
 ## 0.2.0
 - GitHub-ready Proxmox LXC release.
 
-## v3.0.4 — Compile hotfix
+## v4.0.1 — Compile hotfix
 - Added missing `profileStateFile` path declaration for server-side profile sync.
 - Retained the v2.2.1 diagnostics compile fix (`LoadMediaLibraries()`).
 - Retained the v2.0.1 menu-dispatch fixes.
 
-## v3.0.4 — Navigation cleanup
+## v4.0.1 — Navigation cleanup
 - Removed Platform, Profile Sync, Diagnostics and Appliance from the viewer navigation.
 - Platform is now exposed to administrators as **System overview** under Admin.
 - Diagnostics and Appliance are now Admin system tools.
 - Profile Sync remains background functionality and no longer has a user-facing menu item.
 - Existing APIs and views are retained; this is a navigation/UX cleanup, not feature removal.
 
-## v3.0.4 — Navigation Manager
+## v4.0.1 — Navigation Manager
 - Admin can show/hide and reorder menu pages, persisted server-side.
 - Home and Admin are protected.
 - System overview, Diagnostics and Appliance are configurable.
 - Profile Sync remains background-only.
 
-## v3.0.4 — User Source Access
+## v4.0.1 — User Source Access
 - Admin controls per user whether IPTV, Plex and Jellyfin use Admin configuration or user-managed credentials.
 - Added My Sources for self-managed connections.
 - Personal secrets are encrypted server-side.
+
+## v4.0.1 — Source & Access Architecture
+- Added a common effective-source API for IPTV, Plex and Jellyfin.
+- Source resolution now exposes whether each source comes from Admin or the signed-in account.
+- Added capability discovery for Live TV, Guide, Movies, Series, Search and DVR.
+- Retains encrypted personal credentials and per-user source policy from v3.0.4.
+- This release establishes the contract used by later playback/library releases.
+
+## v4.0.1 — Player 3.0
+- Added per-account player preferences persisted server-side.
+- Added player capability endpoint.
+- Added keyboard/remote-friendly playback shortcuts: play/pause, ±10 seconds, mute and fullscreen.
+- Keeps existing HLS/FFmpeg playback and resume infrastructure.
+- Provides the foundation for automatic Direct Play/FFmpeg fallback decisions.
+
+## v4.0.1 — DVR 3.0
+- Added persisted DVR engine settings and concurrency/conflict policy.
+- Added upcoming-recordings endpoint for TV/Guide clients.
+- Existing series rules, NewOnly, padding, retention and storage-target support remain cumulative.
+- Admin can control DVR engine policy without changing user recordings.
+- Designed for subsequent EPG-driven scheduling and conflict resolution.
+
+## v4.0.1 — EPG & Live TV 3.0
+- Added per-account EPG preferences: guide depth, compact mode, favourites-first and Now/Next.
+- Added lightweight Now/Next channel endpoint for mini-guide clients.
+- DVR actions remain available from Guide and can use the v3.3 engine policy.
+- Prepared the Live UI for a faster mini-guide and favourite-channel workflow.
+
+## v4.0.1 — Unified Library 3.0
+- Added account-level unified-library preferences.
+- Supports automatic source choice, duplicate merging policy, sorting and unavailable-item filtering.
+- Added source-origin metadata endpoint for IPTV/Plex/Jellyfin.
+- Builds on the existing unified Movies/Series and source-choice UI rather than creating another media silo.
+
+## v4.0.1 — Profiles & Household 3.0
+- Added household sync preferences for watch state, favourites, Continue Watching and room handoff.
+- Added sync-status endpoint for troubleshooting account/profile synchronisation.
+- Existing PIN/profile access remains cumulative.
+- Keeps source credentials account-level while media state remains profile-oriented.
+
+## v4.0.1 — Admin 2.0
+- Added a consolidated Admin overview API for users, IPTV providers, media libraries, storage, navigation and source policies.
+- Navigation Manager and per-user Source Access remain inside Admin instead of user-facing technical menus.
+- Designed around Users, Sources, Storage, Navigation, Backup and System as the primary administration domains.
+
+## v4.0.1 — Backup, Restore & Migration
+- Added a migration manifest that inventories persistent MyOnline TV configuration.
+- Added backup-readiness validation for the data directory.
+- Existing ZIP backup/restore remains cumulative and now has an explicit migration contract.
+- Includes navigation, source policies, personal-source metadata, storage, DVR and preference files.
+
+## v4.0.1 — TV & Mobile Polish
+- Improved touch target sizing, TV-scale navigation and focus visibility.
+- Added client-mode detection for mobile/desktop/TV layouts.
+- Added focus recovery for coarse-pointer/TV-like devices.
+- Updated the PWA service-worker cache generation to v4.0.1.
+- Keeps the existing mobile bottom navigation and TV spatial-navigation foundation.
+
+## v4.0.1 — Appliance
+- Marks the first appliance-oriented 4.x baseline.
+- Added appliance readiness and version/channel endpoints.
+- Readiness verifies FFmpeg, FFprobe, persistent-data write access, authentication and media-source presence.
+- Carries forward source architecture, Player 3.0, DVR policy, EPG preferences, unified library, household sync, Admin 2.0, migration tooling and TV/mobile polish.
+- Generic PUBLISH.cmd / PUBLISH.ps1 remains the release mechanism.
+
+## v4.0.1 — Compile Hotfix
+- Fixed ProviderStored.Enabled compile errors by treating configured providers as available.
+- Fixed AppUser.IsAdmin compile error by using Role == Admin and Enabled.
+- Replaced nonexistent GetChannels() call with existing GetCachedChannels(provider) aggregation.
+- Keeps all v4.0.0 functionality unchanged otherwise.

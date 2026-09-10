@@ -808,3 +808,16 @@ html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px 
 .navConfigHidden{display:none!important}
 #navigationManager .manageChannel{align-items:center}
 #navigationManager .row{margin-left:auto}
+
+/* v3.9.0 TV & Mobile Polish */
+@media (max-width:720px){
+  .card button,.btn{min-height:44px}
+  .manageChannel{gap:.65rem}
+}
+@media (min-width:1600px){
+  aside nav button{min-height:48px;font-size:1.03rem}
+}
+@media (pointer:coarse){
+  button,input,select{min-height:44px}
+}
+:focus-visible{outline:3px solid currentColor;outline-offset:3px}

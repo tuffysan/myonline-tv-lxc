@@ -2290,3 +2290,42 @@ async function platformView(){
   content.innerHTML=`<div class="hero platformHero"><span class=kicker>MYONLINE TV 3.0</span><h2>${esc(s.platform)}</h2><p>One self-hosted platform for Live TV, DVR, Movies, Series and personal media.</p></div><div class=statsGrid><div class=statCard><b>${s.providers}</b><small>IPTV providers</small></div><div class=statCard><b>${s.storageTargets}</b><small>Storage targets</small></div><div class=statCard><b>${s.dvrRules}</b><small>DVR rules</small></div><div class=statCard><b>${s.rooms}</b><small>Rooms</small></div></div><div class=card><h3>Platform capabilities</h3><div class=capabilityGrid>${s.features.map(x=>`<span>✓ ${esc(x)}</span>`).join('')}</div></div><div class=row><button class=btn onclick="show('diagnostics')">Run diagnostics</button><button class=btn onclick="show('appliance')">Appliance</button><button class=btn onclick="show('library')">Library</button><button class=btn onclick="show('recordings')">DVR</button></div>`;
 }
 
+
+
+// v3.1.0 Source architecture
+let effectiveSources=null;
+async function refreshEffectiveSources(){try{effectiveSources=await api('/api/sources/effective')}catch{effectiveSources=null}}
+
+
+// v3.2.0 Player 3.0 shortcuts and preferences
+document.addEventListener('keydown',e=>{
+ const v=document.querySelector('video'); if(!v||['INPUT','TEXTAREA'].includes(document.activeElement?.tagName))return;
+ if(e.key===' '){e.preventDefault();v.paused?v.play():v.pause()}
+ if(e.key==='ArrowRight')v.currentTime=Math.min(v.duration||1e12,v.currentTime+10);
+ if(e.key==='ArrowLeft')v.currentTime=Math.max(0,v.currentTime-10);
+ if(e.key.toLowerCase()==='m')v.muted=!v.muted;
+ if(e.key.toLowerCase()==='f'&&v.requestFullscreen)v.requestFullscreen().catch(()=>{});
+});
+
+
+// v3.3.0 DVR helpers
+async function dvrEngineStatus(){try{return await api('/api/dvr/engine')}catch{return null}}
+
+
+// v3.4.0 Live mini-guide state
+let miniGuideEnabled=true;
+function toggleMiniGuide(){miniGuideEnabled=!miniGuideEnabled;document.body.classList.toggle('miniGuideOff',!miniGuideEnabled)}
+
+
+// v3.5.0 Unified-library preference helper
+async function libraryPreferences(){try{return await api('/api/library/preferences')}catch{return {mergeDuplicates:true,preferredSource:'auto'}}}
+
+
+// v3.7.0 Admin overview helper
+async function adminOverview(){try{return await api('/api/admin/overview')}catch{return null}}
+
+
+// v3.9.0 TV/mobile focus recovery
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&matchMedia('(pointer:coarse)').matches){document.querySelector('nav button:not(.hidden):not(.navConfigHidden)')?.focus({preventScroll:true})}});
+window.addEventListener('pageshow',()=>{document.body.dataset.clientMode=innerWidth<721?'mobile':innerWidth>1400?'tv':'desktop'});
+window.addEventListener('resize',()=>{document.body.dataset.clientMode=innerWidth<721?'mobile':innerWidth>1400?'tv':'desktop'});
