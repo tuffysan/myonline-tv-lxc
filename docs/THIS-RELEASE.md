@@ -1,25 +1,19 @@
-# MyOnline TV v0.5.6 — TV & Remote UX
+# MyOnline TV v0.5.7 — Admin & Provider Management
 
-This release focuses on television and remote-control use without changing the working Live, Movies or Series playback APIs.
+## Users
+The original administrator is migrated automatically to the new multi-user store. Administrators can create and edit users with Admin/User roles, enable or disable accounts, reset passwords and remove users. At least one enabled administrator must remain.
 
-## Navigation
-- Arrow keys move spatially to the nearest control in that direction.
-- Enter/OK activates the focused control.
-- Escape/Backspace returns to Home, unless fullscreen is active.
-- Focus is remembered per view during the current browser session.
+Passwords remain PBKDF2-SHA256 hashes with individual salts.
 
-## Playback remote keys
-- Media Play / Pause are supported.
-- F enters fullscreen.
-- Movies and Series: Media Rewind / Fast Forward or J / L seek 10 seconds.
-- Live TV playback behavior is intentionally left unchanged.
+## Provider editing
+Admin → IPTV providers now includes Edit. URL, username and non-secret fields are loaded into the form. The stored provider password is never returned to the browser. Leave Password blank while editing to retain the existing password.
 
-## TV presentation
-Remote use enables a stronger focus ring, larger cards and controls on large displays, plus a short remote-help overlay.
+## Branding
+The web UI now includes a MyOnline TV application icon, favicon and web-app manifest.
 
 ## Publishing
-Use the same permanent script as future releases:
+Use the permanent:
 
     PUBLISH.cmd
 
-It reads the release version from VERSION.
+It reads the version from VERSION and is reused for future releases.

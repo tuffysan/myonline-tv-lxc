@@ -1,5 +1,5 @@
 const $=s=>document.querySelector(s), content=$('#content'), title=$('#title');
-let providers=[], currentProvider=null, channels=[], epg=[], fav=new Set(), hls=null, currentView='home', profiles=[], currentProfile=localStorage.getItem('myonline-profile')||'default', channelPrefs={hiddenGroups:[],hiddenChannels:[],aliases:{}};
+let providers=[], currentProvider=null, channels=[], epg=[], fav=new Set(), hls=null, currentView='home', profiles=[], currentProfile=localStorage.getItem('myonline-profile')||'default', channelPrefs={hiddenGroups:[],hiddenChannels:[],aliases:{}}, authState={user:'',role:''};
 
 async function api(url,opt={}){
   const method=(opt.method||'GET').toUpperCase();
@@ -59,7 +59,7 @@ async function authGate(state){
       <button id=setup class=btn>Create administrator</button><div id=authmsg></div></div>`;
     $('#setup').onclick=async()=>{
       const p=$('#sp').value;if(p!==$('#sp2').value){$('#authmsg').textContent='Passwords do not match.';return}
-      try{await jpost('/api/auth/setup',{username:$('#su').value,password:p});await enterApp({authenticated:true,user:$('#su').value})}
+      try{const r=await jpost('/api/auth/setup',{username:$('#su').value,password:p});await enterApp({authenticated:true,user:r.user,role:r.role})}
       catch(e){$('#authmsg').textContent=e.message}
     }
   }else{
@@ -67,13 +67,16 @@ async function authGate(state){
       <label>Username</label><input id=lu value=admin autocomplete=username>
       <label>Password</label><input id=lp type=password autocomplete=current-password>
       <button id=login class=btn>Sign in</button><div id=authmsg></div></div>`;
-    const go=async()=>{try{const r=await jpost('/api/auth/login',{username:$('#lu').value,password:$('#lp').value});await enterApp({authenticated:true,user:r.user})}catch(e){$('#authmsg').textContent='Sign-in failed.'}};
+    const go=async()=>{try{const r=await jpost('/api/auth/login',{username:$('#lu').value,password:$('#lp').value});await enterApp({authenticated:true,user:r.user,role:r.role})}catch(e){$('#authmsg').textContent='Sign-in failed.'}};
     $('#login').onclick=go;$('#lp').onkeydown=e=>{if(e.key==='Enter')go()}
   }
 }
 async function enterApp(st){
   $('#auth').classList.add('hidden');$('#app').classList.remove('hidden');
-  $('#userBadge').textContent=st.user||'admin';
+  authState={user:st.user||'',role:st.role||''};
+  if(!authState.role){const a=await fetch('/api/auth/status',{credentials:'same-origin'}).then(r=>r.json());authState={user:a.user||authState.user,role:a.role||''}}
+  document.querySelectorAll('[data-admin-only]').forEach(x=>x.classList.toggle('hidden',authState.role!=='Admin'));
+  $('#userBadge').textContent=authState.user||'user';
   const s=await api('/api/status');$('#status').textContent=`${s.version} · ${s.platform}`;
   const brandVersion=$('#brandVersion');if(brandVersion)brandVersion.textContent=`Web v${s.version} · Stable`;
   providers=await api('/api/providers');fav=new Set(await api('/api/favourites'));profiles=await api('/api/profiles');if(!profiles.some(p=>p.id===currentProfile))currentProfile=profiles[0]?.id||'default';renderProfileBadge();
@@ -85,7 +88,7 @@ document.querySelectorAll('nav button[data-view]').forEach(b=>b.onclick=()=>show
 
 async function show(v){
   currentView=v;destroyPlayer();
-  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',downloads:'Downloads',system:'System',settings:'Settings'})[v]||v;
+  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',downloads:'Downloads',system:'System',admin:'Admin'})[v]||v;
   if(v==='home')await home();
   if(v==='live')await live();
   if(v==='guide')await guide();
@@ -93,11 +96,11 @@ async function show(v){
   if(v==='series')await series();
   if(v==='downloads')await downloadView();
   if(v==='system')await systemView();
-  if(v==='settings')await settings();
+  if(v==='admin')await adminView();
 }
 
 function renderProfileBadge(){const p=profiles.find(x=>x.id===currentProfile);const b=$('#userBadge');if(b&&p)b.innerHTML=`<button class=profileBadge onclick="profilePicker()">${esc(p.icon)} ${esc(p.name)} ▾</button>`}
-function profilePicker(){let box=$('#profilePicker');if(box){box.remove();return}box=document.createElement('div');box.id='profilePicker';box.className='profilePicker';box.innerHTML=profiles.map(p=>`<button onclick="selectProfile('${escAttr(p.id)}')">${esc(p.icon)} ${esc(p.name)}${p.isKids?' · Kids':''}</button>`).join('')+`<button onclick="show('settings')">⚙ Manage profiles</button>`;document.body.appendChild(box)}
+function profilePicker(){let box=$('#profilePicker');if(box){box.remove();return}box=document.createElement('div');box.id='profilePicker';box.className='profilePicker';box.innerHTML=profiles.map(p=>`<button onclick="selectProfile('${escAttr(p.id)}')">${esc(p.icon)} ${esc(p.name)}${p.isKids?' · Kids':''}</button>`).join('')+(authState.role==='Admin'?`<button onclick="show('admin')">⚙ Admin</button>`:'');document.body.appendChild(box)}
 function selectProfile(id){currentProfile=id;localStorage.setItem('myonline-profile',id);$('#profilePicker')?.remove();renderProfileBadge();show('home')}
 
 async function home(){
@@ -615,26 +618,103 @@ async function systemView(){
 
 async function restoreBackup(fileName){if(!confirm('Restore data from '+fileName+'? Restart is recommended afterwards.'))return;try{await api('/api/system/restore/'+encodeURIComponent(fileName),{method:'POST'});alert('Restore complete. Restart MyOnline TV when convenient.');systemView()}catch(e){alert(friendlyError(e))}}
 
-async function settings(){
+let editingProviderId=null, editingUserId=null;
+
+async function adminView(){
+  if(authState.role!=='Admin'){content.innerHTML='<div class=card>Administrator access is required.</div>';return}
   providers=await api('/api/providers');profiles=await api('/api/profiles');
-  content.innerHTML=`<div class=hero><h2>IPTV providers</h2><p class=muted>Connection details are encrypted at rest with an AES-256-GCM key stored only on this server.</p>
-  <div class=formGrid><div class=field><label>Name</label><input id=pname></div><div class=field><label>Type</label><select id=ptype><option value=m3u>M3U + XMLTV</option><option value=xtream>Xtream-compatible</option></select></div>
-  <div class=field><label>M3U playlist URL</label><input id=purl placeholder="https://.../playlist.m3u"></div><div class=field><label>XMLTV EPG URL</label><input id=pepg placeholder="https://.../epg.xml"></div>
-  <div class=field><label>Xtream base URL</label><input id=pbase placeholder="https://provider.example:443"></div><div class=field><label>Username</label><input id=puser></div>
-  <div class=field><label>Password</label><input id=ppass type=password></div></div><button class=btn id=savep>Add provider</button></div>
-  <div class=grid>${providers.map(p=>`<div class=card><h3>${esc(p.name)}</h3><div class=muted>${esc(p.type)} · ${esc(p.host||'')}</div><p>${p.hasEpg?'EPG configured':'No explicit EPG'} · ${p.hasCredentials?'Credentials stored':'No credentials'}</p><div class=row><button class=btn onclick="testProvider('${p.id}',this)">Test</button><button class=btn onclick="removeProvider('${p.id}')">Remove</button></div><div id="ptest-${p.id}" class=muted></div></div>`).join('')}</div>
-  <div class=card style="margin-top:18px"><h3>Channels & groups</h3><p class=muted>Hide groups/channels or give a channel a local display name. Settings are stored on the server.</p><div class=row><select id=manageProvider>${providers.map(p=>`<option value="${p.id}" ${p.id===currentProvider?'selected':''}>${esc(p.name)}</option>`).join('')}</select><button class=btn id=manageChannels>Manage channels</button></div><div id=channelManager></div></div>
-  <div class=card style="margin-top:18px"><h3>Viewer profiles</h3><p class=muted>Create simple profiles and switch from the badge in the top-right corner.</p><div class=formGrid><div class=field><label>Name</label><input id=profileName placeholder="Profile name"></div><div class=field><label>Icon</label><select id=profileIcon><option>👤</option><option>🧑</option><option>👩</option><option>👨</option><option>🧒</option><option>🎬</option></select></div></div><label><input id=profileKids type=checkbox> Kids profile</label><button class=btn id=addProfile>Add profile</button><div class=manageList>${profiles.map(p=>`<div class=manageChannel><span>${esc(p.icon)} ${esc(p.name)} ${p.isKids?'· Kids':''}</span><span></span><button class=btn onclick="deleteProfile('${escAttr(p.id)}')" ${profiles.length<=1?'disabled':''}>Remove</button></div>`).join('')}</div></div>
-  <div class=card style="margin-top:18px"><h3>Security</h3><p>Provider connection fields are never returned to the browser after saving. The password is not stored in plaintext.</p><p class=muted>For Internet exposure, use HTTPS and preferably Tailscale/VPN or an authenticated reverse proxy.</p></div>`;
-  $('#manageChannels').onclick=manageChannels;$('#addProfile').onclick=async()=>{try{await jpost('/api/profiles',{id:null,name:$('#profileName').value,isKids:$('#profileKids').checked,icon:$('#profileIcon').value});profiles=await api('/api/profiles');settings()}catch(e){alert(friendlyError(e))}};
-  $('#savep').onclick=async()=>{
-    const p={id:'',name:$('#pname').value,type:$('#ptype').value,playlistUrl:$('#purl').value,epgUrl:$('#pepg').value,baseUrl:$('#pbase').value,username:$('#puser').value,password:$('#ppass').value,keepExistingConnection:false};
-    try{await jpost('/api/providers',p);providers=await api('/api/providers');settings()}catch(e){alert(e.message)}
-  };
+  const users=await api('/api/admin/users');
+
+  content.innerHTML=`
+  <div class=hero><h2>Administration</h2><p class=muted>Manage users, IPTV providers and viewer profiles.</p></div>
+
+  <h2>Users</h2>
+  <div class=card>
+    <div class=formGrid>
+      <div class=field><label>Username</label><input id=auser autocomplete=off></div>
+      <div class=field><label>Role</label><select id=arole><option value=User>User</option><option value=Admin>Admin</option></select></div>
+      <div class=field><label>Password</label><input id=apass type=password autocomplete=new-password placeholder="Required for new user"></div>
+      <div class=field><label>Status</label><label class=checkline><input id=aenabled type=checkbox checked> Enabled</label></div>
+    </div>
+    <div class=row><button class=btn id=saveUser>Add user</button><button class=btn id=cancelUser disabled>Cancel edit</button></div>
+  </div>
+  <div class=manageList>${users.map(u=>`<div class=manageChannel><span><b>${esc(u.username)}</b> · ${esc(u.role)} ${u.enabled?'':'· Disabled'}</span><span></span><button class=btn onclick="editUser('${escAttr(u.id)}')">Edit</button><button class=btn onclick="deleteUser('${escAttr(u.id)}','${escAttr(u.username)}')">Remove</button></div>`).join('')}</div>
+
+  <h2>IPTV providers</h2>
+  <div class=card>
+    <p class=muted>Connection details are encrypted at rest. Existing passwords are never returned to the browser.</p>
+    <input id=pid type=hidden>
+    <div class=formGrid>
+      <div class=field><label>Name</label><input id=pname></div>
+      <div class=field><label>Type</label><select id=ptype><option value=m3u>M3U + XMLTV</option><option value=xtream>Xtream-compatible</option></select></div>
+      <div class=field><label>M3U playlist URL</label><input id=purl placeholder="https://.../playlist.m3u"></div>
+      <div class=field><label>XMLTV EPG URL</label><input id=pepg placeholder="https://.../epg.xml"></div>
+      <div class=field><label>Xtream base URL</label><input id=pbase placeholder="https://provider.example:443"></div>
+      <div class=field><label>Username</label><input id=puser autocomplete=off></div>
+      <div class=field><label>Password</label><input id=ppass type=password autocomplete=new-password placeholder="Leave blank to keep existing password"></div>
+    </div>
+    <div class=row><button class=btn id=savep>Add provider</button><button class=btn id=cancelProvider disabled>Cancel edit</button></div>
+  </div>
+
+  <div class=grid>${providers.map(p=>`<div class=card><h3>${esc(p.name)}</h3><div class=muted>${esc(p.type)} · ${esc(p.host||'')}</div><p>${p.hasEpg?'EPG configured':'No explicit EPG'} · ${p.hasCredentials?'Credentials stored':'No credentials'}</p><div class=row><button class=btn onclick="editProvider('${p.id}')">Edit</button><button class=btn onclick="testProvider('${p.id}',this)">Test</button><button class=btn onclick="removeProvider('${p.id}')">Remove</button></div><div id="ptest-${p.id}" class=muted></div></div>`).join('')}</div>
+
+  <div class=card style="margin-top:18px"><h3>Channels & groups</h3><p class=muted>Hide groups/channels or give a channel a local display name.</p><div class=row><select id=manageProvider>${providers.map(p=>`<option value="${p.id}" ${p.id===currentProvider?'selected':''}>${esc(p.name)}</option>`).join('')}</select><button class=btn id=manageChannels>Manage channels</button></div><div id=channelManager></div></div>
+
+  <div class=card style="margin-top:18px"><h3>Viewer profiles</h3><div class=formGrid><div class=field><label>Name</label><input id=profileName placeholder="Profile name"></div><div class=field><label>Icon</label><select id=profileIcon><option>👤</option><option>🧑</option><option>👩</option><option>👨</option><option>🧒</option><option>🎬</option></select></div></div><label><input id=profileKids type=checkbox> Kids profile</label><button class=btn id=addProfile>Add profile</button><div class=manageList>${profiles.map(p=>`<div class=manageChannel><span>${esc(p.icon)} ${esc(p.name)} ${p.isKids?'· Kids':''}</span><span></span><button class=btn onclick="deleteProfile('${escAttr(p.id)}')" ${profiles.length<=1?'disabled':''}>Remove</button></div>`).join('')}</div></div>
+
+  <div class=card style="margin-top:18px"><h3>Security</h3><p>User passwords use PBKDF2-SHA256 with unique salts. Provider credentials are AES-GCM encrypted at rest.</p><p class=muted>Only administrators can manage users/providers or access System administration.</p></div>`;
+
+  $('#manageChannels').onclick=manageChannels;
+  $('#addProfile').onclick=async()=>{try{await jpost('/api/profiles',{id:null,name:$('#profileName').value,isKids:$('#profileKids').checked,icon:$('#profileIcon').value});profiles=await api('/api/profiles');adminView()}catch(e){alert(friendlyError(e))}};
+
+  $('#saveUser').onclick=saveAdminUser;
+  $('#cancelUser').onclick=()=>{editingUserId=null;adminView()};
+  $('#savep').onclick=saveProvider;
+  $('#cancelProvider').onclick=()=>{editingProviderId=null;adminView()};
+}
+
+async function editUser(id){
+  const users=await api('/api/admin/users');
+  const u=users.find(x=>x.id===id);if(!u)return;
+  editingUserId=id;
+  $('#auser').value=u.username;$('#arole').value=u.role;$('#aenabled').checked=u.enabled;$('#apass').value='';
+  $('#apass').placeholder='Leave blank to keep current password';
+  $('#saveUser').textContent='Save user';$('#cancelUser').disabled=false;$('#auser').focus();
+}
+
+async function saveAdminUser(){
+  try{
+    const body={id:editingUserId||'',username:$('#auser').value,password:$('#apass').value,role:$('#arole').value,enabled:$('#aenabled').checked};
+    await jpost('/api/admin/users',body);editingUserId=null;await adminView();
+  }catch(e){alert(friendlyError(e))}
+}
+
+async function deleteUser(id,username){
+  if(username.toLowerCase()===(authState.user||'').toLowerCase()){alert('You cannot remove the account you are signed in with.');return}
+  if(!confirm('Remove user '+username+'?'))return;
+  try{await api('/api/admin/users/'+encodeURIComponent(id),{method:'DELETE'});adminView()}catch(e){alert(friendlyError(e))}
+}
+
+async function editProvider(id){
+  try{
+    const p=await api('/api/providers/'+encodeURIComponent(id)+'/edit');
+    editingProviderId=id;
+    $('#pid').value=p.id;$('#pname').value=p.name;$('#ptype').value=p.type;
+    $('#purl').value=p.playlistUrl||'';$('#pepg').value=p.epgUrl||'';$('#pbase').value=p.baseUrl||'';
+    $('#puser').value=p.username||'';$('#ppass').value='';
+    $('#ppass').placeholder=p.passwordStored?'Leave blank to keep existing password':'Password';
+    $('#savep').textContent='Save provider';$('#cancelProvider').disabled=false;
+    $('#pname').scrollIntoView({behavior:'smooth',block:'center'});$('#pname').focus();
+  }catch(e){alert(friendlyError(e))}
+}
+
+async function saveProvider(){
+  const p={id:editingProviderId||'',name:$('#pname').value,type:$('#ptype').value,playlistUrl:$('#purl').value,epgUrl:$('#pepg').value,baseUrl:$('#pbase').value,username:$('#puser').value,password:$('#ppass').value,keepExistingConnection:false,keepExistingPassword:!!editingProviderId&&!$('#ppass').value};
+  try{await jpost('/api/providers',p);editingProviderId=null;providers=await api('/api/providers');await adminView()}catch(e){alert(friendlyError(e))}
 }
 
 
-async function deleteProfile(id){if(!confirm('Remove this viewer profile?'))return;try{await api('/api/profiles/'+encodeURIComponent(id),{method:'DELETE'});profiles=await api('/api/profiles');if(currentProfile===id){currentProfile=profiles[0].id;localStorage.setItem('myonline-profile',currentProfile)}renderProfileBadge();settings()}catch(e){alert(friendlyError(e))}}
+async function deleteProfile(id){if(!confirm('Remove this viewer profile?'))return;try{await api('/api/profiles/'+encodeURIComponent(id),{method:'DELETE'});profiles=await api('/api/profiles');if(currentProfile===id){currentProfile=profiles[0].id;localStorage.setItem('myonline-profile',currentProfile)}renderProfileBadge();adminView()}catch(e){alert(friendlyError(e))}}
 
 async function manageChannels(){
   currentProvider=$('#manageProvider').value;await loadChannelPrefs();const box=$('#channelManager');box.innerHTML='<p class=muted>Loading…</p>';
@@ -665,7 +745,7 @@ async function testProvider(id,button){
   finally{if(button)button.disabled=false}
 }
 
-async function removeProvider(id){if(!confirm('Remove this provider?'))return;await api('/api/providers/'+id,{method:'DELETE'});providers=await api('/api/providers');if(currentProvider===id)currentProvider=null;settings()}
+async function removeProvider(id){if(!confirm('Remove this provider?'))return;await api('/api/providers/'+id,{method:'DELETE'});providers=await api('/api/providers');if(currentProvider===id)currentProvider=null;adminView()}
 
 function noProvider(){return '<div class=card>No IPTV provider configured. Open Settings and add one.</div>'}
 function errorCard(e){return `<div class="card danger"><b>Error</b><p>${esc(friendlyError(e))}</p><button class=btn onclick="show(currentView)">Retry</button></div>`}
@@ -673,7 +753,7 @@ function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 function escAttr(s){return esc(s)}
 boot().catch(e=>{$('#auth').classList.remove('hidden');$('#auth').innerHTML=`<div class=authCard><h2>Startup error</h2><pre>${esc(e.message)}</pre></div>`});
 
-// v0.5.6 catalogue cache
+// v0.5.7 catalogue cache
 const CATALOG_CACHE_PREFIX='myonline-catalog-v1:';
 function catalogueCacheKey(kind,provider,category){return `${CATALOG_CACHE_PREFIX}${kind}:${provider}:${category||'all'}`}
 function readCatalogueCache(key,maxAgeMs=10*60*1000){
@@ -683,11 +763,11 @@ function writeCatalogueCache(key,items){
   try{sessionStorage.setItem(key,JSON.stringify({saved:Date.now(),items}))}catch{}
 }
 
-// v0.5.6 player cleanup
+// v0.5.7 player cleanup
 window.addEventListener('pagehide',()=>destroyPlayer());
 window.addEventListener('beforeunload',()=>destroyPlayer());
 
-// v0.5.6 movie favourites
+// v0.5.7 movie favourites
 function mediaFavKey(){return `myonline-media-favourites-v2:${currentProfile||'default'}`}
 function getMediaFavs(){try{return JSON.parse(localStorage.getItem(mediaFavKey())||'[]')}catch{return []}}
 function isMediaFav(type,id){return getMediaFavs().some(x=>x.type===type&&String(x.id)===String(id))}
@@ -698,7 +778,7 @@ function toggleMediaFav(type,item){
   if(type==='movie')filterMedia();else filterSeries();
 }
 
-// v0.5.6 watch history
+// v0.5.7 watch history
 function historyKey(){return `myonline-media-history-v2:${currentProfile||'default'}`}
 function getMediaHistory(){try{return JSON.parse(localStorage.getItem(historyKey())||'[]')}catch{return []}}
 function rememberMediaHistory(type,item){
@@ -707,14 +787,14 @@ function rememberMediaHistory(type,item){
   localStorage.setItem(historyKey(),JSON.stringify(rows.slice(0,100)));
 }
 
-// v0.5.6 home rails
+// v0.5.7 home rails
 function homeMediaRails(){
   const favs=getMediaFavs().slice(0,12),hist=getMediaHistory().slice(0,12);
   return `${favs.length?`<h2>Media favourites</h2><div class=continueRow>${favs.map(x=>`<button class=continueCard onclick="show('${x.type==='movie'?'movies':'series'}')"><span>★</span><b>${esc(x.name)}</b><small>${esc(x.type)}</small></button>`).join('')}</div>`:''}
   ${hist.length?`<h2>Recently watched</h2><div class=continueRow>${hist.map(x=>`<button class=continueCard onclick="show('${x.type==='movie'?'movies':'series'}')"><span>↻</span><b>${esc(x.name)}</b><small>${new Date(x.updated).toLocaleString()}</small></button>`).join('')}</div>`:''}`;
 }
 
-// v0.5.6 quick search
+// v0.5.7 quick search
 function homeQuickSearch(){
   const q=($('#homeSearch')?.value||'').trim();
   if(!q)return;
@@ -722,7 +802,7 @@ function homeQuickSearch(){
   show('movies').then(()=>{const x=$('#mediaq');if(x){x.value=q;filterMedia()}});
 }
 
-// v0.5.6 TV & Remote UX
+// v0.5.7 TV & Remote UX
 let tvRemoteMode=false;
 let tvLastFocusByView={};
 
@@ -868,13 +948,13 @@ document.addEventListener('keydown',e=>{
 });
 
 
-// v0.5.6 profiles polish
+// v0.5.7 profiles polish
 document.addEventListener('click',e=>{if(!e.target.closest?.('#profilePicker')&&!e.target.closest?.('.profileBadge'))$('#profilePicker')?.remove()});
 
-// v0.5.6 debounce
+// v0.5.7 debounce
 function debounce(fn,ms=180){let t;return (...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms)}}
 
-// v0.5.6 player recovery
+// v0.5.7 player recovery
 function installVideoRecovery(video){
   if(!video||video.dataset.recoveryInstalled)return;
   video.dataset.recoveryInstalled='1';
@@ -885,10 +965,10 @@ function installVideoRecovery(video){
 }
 document.addEventListener('play',e=>{if(e.target?.tagName==='VIDEO')installVideoRecovery(e.target)},true);
 
-// v0.5.6 system auto refresh
+// v0.5.7 system auto refresh
 let systemRefreshTimer=null;document.addEventListener('visibilitychange',()=>{if(!document.hidden&&currentView==='system')systemView().catch(()=>{})});
 
-// v0.5.6 accessibility
+// v0.5.7 accessibility
 function syncNavAria(){
   document.querySelectorAll('nav button[data-view]').forEach(b=>b.setAttribute('aria-current',b.dataset.view===currentView?'page':'false'));
 }

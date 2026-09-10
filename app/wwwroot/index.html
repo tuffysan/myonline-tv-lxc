@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MyOnline TV</title>
+<meta name="theme-color" content="#0b1622">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="apple-touch-icon" href="/app-icon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -11,6 +15,7 @@
 <div id="app" class="hidden">
   <aside>
     <div class="brand">
+      <img class="brandIcon" src="/app-icon.svg" alt="">
       <h1>MyOnline TV</h1>
       <small id="brandVersion">Web</small>
     </div>
@@ -21,8 +26,8 @@
       <button data-view="movies">▶ Movies</button>
       <button data-view="series">▦ Series</button>
       <button data-view="downloads">↓ Downloads</button>
-      <button data-view="system">◉ System</button>
-      <button data-view="settings">⚙ Settings</button>
+      <button data-view="system" data-admin-only>◉ System</button>
+      <button data-view="admin" data-admin-only>🛡 Admin</button>
     </nav>
     <button id="logout" class="logout">Sign out</button>
   </aside>

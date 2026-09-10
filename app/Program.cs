@@ -69,6 +69,7 @@ var continueFile = Path.Combine(dataDir, "continue-watching.json");
 var channelPreferencesFile = Path.Combine(dataDir, "channel-preferences.json");
 var profilesFile = Path.Combine(dataDir, "profiles.json");
 var adminFile = Path.Combine(dataDir, "admin.json");
+var usersFile = Path.Combine(dataDir, "users.json");
 var secretKeyFile = Path.Combine(dataDir, "secrets.key");
 var downloadsDir = Path.Combine(dataDir, "downloads");
 var backupsDir = Path.Combine(dataDir, "backups");
@@ -84,7 +85,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.5.6");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/0.5.7");
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
@@ -228,6 +229,35 @@ List<ViewerProfile> LoadProfiles()
     Save(profilesFile, defaults);
     return defaults;
 }
+
+List<AppUser> LoadUsers()
+{
+    var users = Load<List<AppUser>>(usersFile);
+    if (users is { Count: > 0 }) return users;
+
+    // Migrate the original single administrator account to the multi-user store.
+    var legacyAdmin = Load<PasswordCredential>(adminFile);
+    if (legacyAdmin is not null)
+    {
+        users = new List<AppUser>
+        {
+            new(Guid.NewGuid().ToString("N"), legacyAdmin.Username, "Admin", true, legacyAdmin)
+        };
+        Save(usersFile, users);
+        return users;
+    }
+    return new();
+}
+
+bool AuthConfigured() => LoadUsers().Count > 0 || File.Exists(adminFile);
+
+bool IsAdmin(HttpContext ctx) =>
+    ctx.User.Identity?.IsAuthenticated == true &&
+    ctx.User.IsInRole("Admin");
+
+bool HasEnabledAdmin(IEnumerable<AppUser> users) =>
+    users.Any(x => x.Enabled && x.Role.Equals("Admin", StringComparison.OrdinalIgnoreCase));
+
 Dictionary<string, ChannelPreferences> LoadChannelPreferences() => Load<Dictionary<string, ChannelPreferences>>(channelPreferencesFile) ?? new(StringComparer.OrdinalIgnoreCase);
 ChannelPreferences PreferencesFor(string providerId)
 {
@@ -329,7 +359,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "0.5.6",
+    version = "0.5.7",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -364,51 +394,56 @@ app.MapGet("/ready", () =>
     }
 
     checks["ffmpeg"] = FindExecutable("ffmpeg") is not null ? "ok" : "missing";
-    checks["authConfigured"] = File.Exists(adminFile);
+    checks["authConfigured"] = AuthConfigured();
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "0.5.6", checks })
-        : Results.Json(new { status = "not-ready", version = "0.5.6", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "0.5.7", checks })
+        : Results.Json(new { status = "not-ready", version = "0.5.7", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "0.5.6",
+    version = "0.5.7",
     dataDir,
     platform = Environment.OSVersion.ToString(),
-    authConfigured = File.Exists(adminFile),
+    authConfigured = AuthConfigured(),
     now = DateTimeOffset.UtcNow
 })).AllowAnonymous();
 
 app.MapGet("/api/auth/status", (HttpContext ctx) => Results.Ok(new
 {
-    configured = File.Exists(adminFile),
+    configured = AuthConfigured(),
     authenticated = ctx.User.Identity?.IsAuthenticated == true,
-    user = ctx.User.Identity?.Name
+    user = ctx.User.Identity?.Name,
+    role = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? ""
 })).AllowAnonymous();
 
 app.MapPost("/api/auth/setup", async (SetupRequest req, HttpContext ctx) =>
 {
-    if (File.Exists(adminFile)) return Results.Conflict("Administrator account is already configured.");
+    if (AuthConfigured()) return Results.Conflict("Administrator account is already configured.");
     if (!ValidPassword(req.Password)) return Results.BadRequest("Password must be at least 10 characters.");
-    var user = string.IsNullOrWhiteSpace(req.Username) ? "admin" : req.Username.Trim();
-    var credential = PasswordCredential.Create(user, req.Password);
-    Save(adminFile, credential);
-    await SignIn(ctx, user);
-    return Results.Ok(new { user });
+    var username = string.IsNullOrWhiteSpace(req.Username) ? "admin" : req.Username.Trim();
+    var user = new AppUser(Guid.NewGuid().ToString("N"), username, "Admin", true,
+        PasswordCredential.Create(username, req.Password));
+    Save(usersFile, new List<AppUser> { user });
+    await SignIn(ctx, user.Username, user.Role);
+    return Results.Ok(new { user = user.Username, role = user.Role });
 }).AllowAnonymous();
 
 app.MapPost("/api/auth/login", async (LoginRequest req, HttpContext ctx) =>
 {
-    var credential = Load<PasswordCredential>(adminFile);
-    if (credential is null || !credential.Verify(req.Username, req.Password))
+    var user = LoadUsers().FirstOrDefault(x =>
+        x.Enabled && x.Username.Equals(req.Username?.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    if (user is null || !user.Credential.Verify(user.Username, req.Password))
     {
         await Task.Delay(350);
         return Results.Unauthorized();
     }
-    await SignIn(ctx, credential.Username);
-    return Results.Ok(new { user = credential.Username });
+
+    await SignIn(ctx, user.Username, user.Role);
+    return Results.Ok(new { user = user.Username, role = user.Role });
 }).AllowAnonymous();
 
 app.MapPost("/api/auth/logout", async (HttpContext ctx) =>
@@ -416,6 +451,77 @@ app.MapPost("/api/auth/logout", async (HttpContext ctx) =>
     await ctx.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     return Results.Ok();
 }).RequireAuthorization();
+
+app.MapGet("/api/admin/users", () =>
+{
+    return Results.Ok(LoadUsers()
+        .OrderBy(x => x.Username)
+        .Select(x => new { x.Id, x.Username, x.Role, x.Enabled }));
+}).RequireAuthorization(p => p.RequireRole("Admin"));
+
+app.MapPost("/api/admin/users", (UserInput input) =>
+{
+    var users = LoadUsers();
+    var id = string.IsNullOrWhiteSpace(input.Id) ? Guid.NewGuid().ToString("N") : input.Id.Trim();
+    var existing = users.FirstOrDefault(x => x.Id == id);
+    var username = input.Username?.Trim() ?? "";
+    var role = input.Role?.Equals("Admin", StringComparison.OrdinalIgnoreCase) == true ? "Admin" : "User";
+
+    if (string.IsNullOrWhiteSpace(username))
+        return Results.BadRequest("Username is required.");
+    if (users.Any(x => x.Id != id && x.Username.Equals(username, StringComparison.OrdinalIgnoreCase)))
+        return Results.Conflict("A user with that username already exists.");
+
+    PasswordCredential credential;
+    if (existing is null)
+    {
+        if (!ValidPassword(input.Password))
+            return Results.BadRequest("Password must be at least 10 characters.");
+        credential = PasswordCredential.Create(username, input.Password!);
+    }
+    else if (!string.IsNullOrWhiteSpace(input.Password))
+    {
+        if (!ValidPassword(input.Password))
+            return Results.BadRequest("Password must be at least 10 characters.");
+        credential = PasswordCredential.Create(username, input.Password!);
+    }
+    else if (!existing.Username.Equals(username, StringComparison.OrdinalIgnoreCase))
+    {
+        // Username is part of the credential verification. Re-hashing requires a new password.
+        return Results.BadRequest("Enter a new password when changing the username.");
+    }
+    else
+    {
+        credential = existing.Credential;
+    }
+
+    var updated = new AppUser(id, username, role, input.Enabled, credential);
+    var candidate = users.Where(x => x.Id != id).Append(updated).ToList();
+    if (!HasEnabledAdmin(candidate))
+        return Results.BadRequest("At least one enabled administrator account is required.");
+
+    var idx = users.FindIndex(x => x.Id == id);
+    if (idx >= 0) users[idx] = updated; else users.Add(updated);
+    Save(usersFile, users);
+    return Results.Ok(new { updated.Id, updated.Username, updated.Role, updated.Enabled });
+}).RequireAuthorization(p => p.RequireRole("Admin"));
+
+app.MapDelete("/api/admin/users/{id}", (string id, HttpContext ctx) =>
+{
+    var users = LoadUsers();
+    var target = users.FirstOrDefault(x => x.Id == id);
+    if (target is null) return Results.NotFound();
+
+    if (ctx.User.Identity?.Name?.Equals(target.Username, StringComparison.OrdinalIgnoreCase) == true)
+        return Results.BadRequest("You cannot delete the account you are currently signed in with.");
+
+    var candidate = users.Where(x => x.Id != id).ToList();
+    if (!HasEnabledAdmin(candidate))
+        return Results.BadRequest("The last enabled administrator cannot be deleted.");
+
+    Save(usersFile, candidate);
+    return Results.NoContent();
+}).RequireAuthorization(p => p.RequireRole("Admin"));
 
 app.MapGet("/api/providers", () =>
 {
@@ -436,6 +542,24 @@ app.MapGet("/api/providers", () =>
     return Results.Ok(result);
 }).RequireAuthorization();
 
+app.MapGet("/api/providers/{id}/edit", (string id) =>
+{
+    var p = LoadProviders().FirstOrDefault(x => x.Id == id);
+    if (p is null) return Results.NotFound();
+    var c = Connection(p);
+    return Results.Ok(new
+    {
+        p.Id,
+        p.Name,
+        p.Type,
+        playlistUrl = c.PlaylistUrl ?? "",
+        epgUrl = c.EpgUrl ?? "",
+        baseUrl = c.BaseUrl ?? "",
+        username = c.Username ?? "",
+        passwordStored = !string.IsNullOrWhiteSpace(c.Password)
+    });
+}).RequireAuthorization(p => p.RequireRole("Admin"));
+
 app.MapPost("/api/providers", (ProviderInput input) =>
 {
     if (string.IsNullOrWhiteSpace(input.Name)) return Results.BadRequest("Name is required.");
@@ -452,12 +576,16 @@ app.MapPost("/api/providers", (ProviderInput input) =>
     }
     else
     {
+        var existingConnection = existing is null ? null : Connection(existing);
+        var password = existing is not null && input.KeepExistingPassword && string.IsNullOrWhiteSpace(input.Password)
+            ? existingConnection?.Password ?? ""
+            : input.Password ?? "";
         c = new ProviderConnection(
             Clean(input.PlaylistUrl),
             Clean(input.EpgUrl),
             Clean(input.BaseUrl)?.TrimEnd('/'),
             Clean(input.Username),
-            input.Password ?? "");
+            password);
     }
 
     if (input.Type == "m3u" && string.IsNullOrWhiteSpace(c.PlaylistUrl))
@@ -481,7 +609,7 @@ app.MapPost("/api/providers", (ProviderInput input) =>
     ClearDiskCatalogueCache(id);
 
     return Results.Ok(new { stored.Id, stored.Name, stored.Type });
-}).RequireAuthorization();
+}).RequireAuthorization(p => p.RequireRole("Admin"));
 
 app.MapDelete("/api/providers/{id}", (string id) =>
 {
@@ -493,7 +621,7 @@ app.MapDelete("/api/providers/{id}", (string id) =>
         channelCache.TryRemove(id, out _);
     }
     return changed ? Results.NoContent() : Results.NotFound();
-}).RequireAuthorization();
+}).RequireAuthorization(p => p.RequireRole("Admin"));
 
 app.MapGet("/api/channels/{providerId}", async (string providerId) =>
 {
@@ -1293,7 +1421,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "0.5.6",
+        version = "0.5.7",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -1320,7 +1448,7 @@ app.MapGet("/api/system", () =>
             usedBytes = drive.TotalSize - drive.AvailableFreeSpace
         }
     });
-}).RequireAuthorization();
+}).RequireAuthorization(p => p.RequireRole("Admin"));
 
 app.MapGet("/api/providers/health", async () =>
 {
@@ -1363,7 +1491,7 @@ app.MapGet("/api/providers/health", async () =>
         });
     }
     return Results.Ok(rows);
-}).RequireAuthorization();
+}).RequireAuthorization(p => p.RequireRole("Admin"));
 
 app.MapPost("/api/system/backup", () =>
 {
@@ -1391,7 +1519,7 @@ app.MapPost("/api/system/backup", () =>
         sizeBytes = new FileInfo(file).Length,
         created = DateTimeOffset.Now
     });
-}).RequireAuthorization();
+}).RequireAuthorization(p => p.RequireRole("Admin"));
 
 app.MapGet("/api/system/backups", () =>
 {
@@ -1417,7 +1545,7 @@ app.MapPost("/api/system/restore/{fileName}", (string fileName) =>
     using var archive = ZipFile.OpenRead(file);
     var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "providers.json", "favourites.json", "continue-watching.json", "channel-preferences.json", "profiles.json"
+        "providers.json", "favourites.json", "continue-watching.json", "channel-preferences.json", "profiles.json", "users.json", "admin.json"
     };
     foreach (var entry in archive.Entries.Where(e => allowed.Contains(e.FullName)))
     {
@@ -1426,7 +1554,7 @@ app.MapPost("/api/system/restore/{fileName}", (string fileName) =>
     }
     channelCache.Clear();
     return Results.Ok(new { restored = safe, restartRecommended = true });
-}).RequireAuthorization();
+}).RequireAuthorization(p => p.RequireRole("Admin"));
 
 app.MapPost("/api/system/recover", async () =>
 {
@@ -1463,7 +1591,7 @@ app.MapPost("/api/system/recover", async () =>
     catch (Exception ex) { RecordError("hls-recovery", ex); }
 
     return Results.Ok(new { recovered = true, cleaned = removed, activeLiveStreams = liveSessions.Count });
-}).RequireAuthorization();
+}).RequireAuthorization(p => p.RequireRole("Admin"));
 
 app.MapFallbackToFile("index.html");
 app.Run();
@@ -1569,7 +1697,7 @@ async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, TimeSpa
     var url = BuildXtreamPlayerApiUrl(c, action, extra);
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.6");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.7");
     using var cts = new CancellationTokenSource(timeout);
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -1735,7 +1863,7 @@ async Task<List<LiveChannel>> LoadM3uChannels(string url)
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/x-mpegURL,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.6");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.7");
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
     if (!response.IsSuccessStatusCode)
@@ -1754,7 +1882,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.6");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/0.5.7");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }
@@ -1794,9 +1922,13 @@ static string SafeProviderError(Exception ex)
 string ProxyArtwork(string? url) =>
     string.IsNullOrWhiteSpace(url) ? "" : ProxyUrl(url, "artwork");
 
-static async Task SignIn(HttpContext ctx, string username)
+static async Task SignIn(HttpContext ctx, string username, string role)
 {
-    var claims = new[] { new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, username) };
+    var claims = new[]
+    {
+        new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, username),
+        new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role, role)
+    };
     var identity = new System.Security.Claims.ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
     await ctx.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
         new System.Security.Claims.ClaimsPrincipal(identity));
@@ -1976,7 +2108,7 @@ static string? FindExecutable(string name)
 
 record ProviderStored(string Id, string Name, string Type, string EncryptedConnection);
 record ProviderConnection(string? PlaylistUrl, string? EpgUrl, string? BaseUrl, string? Username, string? Password);
-record ProviderInput(string? Id, string Name, string Type, string? PlaylistUrl, string? EpgUrl, string? BaseUrl, string? Username, string? Password, bool KeepExistingConnection = false);
+record ProviderInput(string? Id, string Name, string Type, string? PlaylistUrl, string? EpgUrl, string? BaseUrl, string? Username, string? Password, bool KeepExistingConnection = false, bool KeepExistingPassword = false);
 record LegacyProvider(string? Id, string? Name, string? Type, string? PlaylistUrl, string? EpgUrl, string? BaseUrl, string? Username, string? Password);
 record Channel(string Id, string Name, string Group, string Logo, string Url, string Number);
 record ProviderProbe(bool Ok, int? StatusCode, string Message, string ContentType, long LatencyMs, string Host);
@@ -1990,6 +2122,8 @@ record GroupVisibilityRequest(string Group, bool Hidden);
 record ChannelPreferenceRequest(string ChannelKey, bool Hidden, string? Alias);
 record SetupRequest(string? Username, string Password);
 record LoginRequest(string Username, string Password);
+record AppUser(string Id, string Username, string Role, bool Enabled, PasswordCredential Credential);
+record UserInput(string? Id, string? Username, string? Password, string? Role, bool Enabled);
 record MediaDownloadRequest(string Token, string? Title);
 record ProxyTarget(string Url, string Kind, DateTimeOffset Created);
 record LiveSession(string Id, string Directory, Process Process, StringBuilder ErrorLog, string SourceUrl, DateTimeOffset Started);
