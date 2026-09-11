@@ -103,7 +103,12 @@ if [[ -n "$ARTIFACT" ]]; then
 
   echo "  - Cleaning uploaded release artifact..."
   CURRENT_STEP="3/8 Cleanup uploaded release artifact"
-  pct exec "$CTID" -- rm -f /tmp/myonline-tv-release.tar.gz
+  # Cleanup is best-effort. A successfully extracted and verified release must
+  # never be rejected only because Proxmox `pct exec` returns a transient
+  # non-zero status while deleting an already-consumed /tmp artifact.
+  if ! pct exec "$CTID" -- bash -lc 'rm -f /tmp/myonline-tv-release.tar.gz'; then
+    echo "  - Warning: could not clean /tmp/myonline-tv-release.tar.gz; continuing because staging is already verified." >&2
+  fi
 
   CURRENT_STEP="3/8 Preparing new application"
 else

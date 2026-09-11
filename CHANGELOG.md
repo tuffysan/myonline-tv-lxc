@@ -1013,3 +1013,6 @@
 
 ## v7.0.0 — MyOnline TV Platform
 - Added API Contract v1 and client capability model.
+
+## v8.0.1 — Updater cleanup hotfix
+- Prevent temporary release-archive cleanup from aborting an otherwise verified upgrade.

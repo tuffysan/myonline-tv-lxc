@@ -2585,8 +2585,8 @@ window.MyOnlineOperations={
 };
 
 
-// v8.0.0 Native Client Generation
-window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'8.0.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
+// v8.0.1 Native Client Generation
+window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'8.0.1',generation:6,experience:'Server + Web/PWA + Native Client API'};
 window.MyOnlineClientBridge={
  version:1,
  capabilities(){return {sourceEngine:true,player:true,live:true,guide:true,library:true,dvr:true,profiles:true,rooms:true,remote:true}},
