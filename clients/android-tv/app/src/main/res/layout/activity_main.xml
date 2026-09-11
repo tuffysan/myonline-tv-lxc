@@ -1,0 +1,13 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="28dp" android:background="#101010">
+<TextView android:id="@+id/title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="MyOnline TV" android:textColor="#FFFFFF" android:textSize="30sp" android:textStyle="bold"/>
+<EditText android:id="@+id/serverUrl" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="https://tv.example.com" android:textColor="#FFFFFF" android:textColorHint="#AAAAAA" android:singleLine="true"/>
+<EditText android:id="@+id/username" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Username" android:textColor="#FFFFFF" android:textColorHint="#AAAAAA" android:singleLine="true"/>
+<EditText android:id="@+id/password" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Password" android:inputType="textPassword" android:textColor="#FFFFFF" android:textColorHint="#AAAAAA" android:singleLine="true"/>
+<Button android:id="@+id/connectButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Connect"/>
+<TextView android:id="@+id/status" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="16dp" android:textColor="#FFFFFF" android:text="Not connected"/>
+<LinearLayout android:id="@+id/homeActions" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:paddingTop="24dp" android:visibility="gone">
+<Button android:id="@+id/liveButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Live TV"/>
+<Button android:id="@+id/guideButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Guide"/>
+<Button android:id="@+id/moviesButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Movies"/>
+<Button android:id="@+id/seriesButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Series"/>
+</LinearLayout></LinearLayout>

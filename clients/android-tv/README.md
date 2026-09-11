@@ -1,16 +1,20 @@
-# MyOnline TV Android TV client
+# MyOnline TV Android TV client — v6.2.0
 
-This directory is the v6 native-client starting point.
+v6.2.0 turns the v6.1 foundation into the first usable native-TV flow.
 
-The native client should authenticate against the existing MyOnline TV server and consume the same source, Live, Guide, Library, DVR, profile and room APIs as the Web/PWA client.
+## Implemented
+- Server URL + JSON login against MyOnline TV.
+- Native provider discovery.
+- Native Live channel list.
+- Native EPG programme list.
+- Native Movies catalogue.
+- Native Series catalogue and episode list.
+- Live HLS startup/status polling.
+- Movie and episode proxy-token playback.
+- Media3/ExoPlayer player.
+- D-pad friendly RecyclerView screens.
+- Password is not persisted.
+- IPTV/Plex/Jellyfin credentials remain server-side.
 
-## First implementation targets
-1. Sign-in and server URL.
-2. TV remote/D-pad navigation.
-3. Home, Live TV and Guide.
-4. Movies, Series and Library.
-5. Player with native codec capability reporting and server HLS fallback.
-6. DVR and Continue Watching.
-7. Room handoff / remote control.
-
-Do not embed IPTV/Plex/Jellyfin credentials in the client. Credentials remain on the MyOnline TV server.
+## Next
+v6.3 should add poster/logo loading, categories, proper EPG grid, search, Continue Watching, profiles and better player overlays.
