@@ -1,3 +1,15 @@
+# v20.1.0 — Feature Completion
+
+- Build fix: FeatureCompletionCatalog moved to the global namespace so top-level Program.cs can resolve it.
+
+- Added audited feature catalogue with FULLY IMPLEMENTED / PARTIAL / FOUNDATION / MISSING states.
+- Added Admin → Feature Completion dashboard.
+- Added `/api/admin/feature-completion`.
+- Added `/api/platform/cost-policy`.
+- Made zero mandatory runtime cost an explicit audited release property.
+- Added roadmap for turning foundations into end-to-end features.
+- No paid AI/cloud dependency introduced.
+
 # Changelog
 
 ## v6.2.0 — Navigation hotfix

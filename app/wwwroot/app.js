@@ -80,13 +80,14 @@ function toggleMobileMore(){
     ['downloads','↓','Downloads'],
     ['recordings','●','DVR'],
     ['system','◉','System'],
+    ['completion','✓','Completion'],
     ['admin','🛡','Admin']
   ];
   sheet.innerHTML=`<div class=mobileMoreHandle></div><div class=mobileMoreGrid>${
     items.map(([view,icon,label])=>{
       const desktop=document.querySelector(`nav button[data-view="${view}"]`);
       if(desktop?.classList.contains('hidden'))return '';
-      if((view==='system'||view==='admin')&&authState.role!=='Admin')return '';
+      if((view==='system'||view==='completion'||view==='admin')&&authState.role!=='Admin')return '';
       return `<button data-more-view="${view}"><span>${icon}</span><b>${label}</b></button>`;
     }).join('')
   }</div>`;
@@ -123,7 +124,7 @@ async function boot(){
 
 let sourceAccess={adminIptv:true,adminPlex:true,adminJellyfin:true};
 let navigationConfig={items:[]};
-const navigationLabels={home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'DVR',notifications:'Alerts',rooms:'Rooms',library:'Library',search:'Search',sources:'My Sources',system:'System',platform:'System overview',diagnostics:'Diagnostics',appliance:'Appliance',admin:'Admin'};
+const navigationLabels={home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'DVR',notifications:'Alerts',rooms:'Rooms',library:'Library',search:'Search',sources:'My Sources',system:'System',platform:'System overview',diagnostics:'Diagnostics',appliance:'Appliance',completion:'Feature Completion',admin:'Admin'};
 async function loadNavigationConfig(){try{navigationConfig=await api('/api/navigation')}catch{navigationConfig={items:[]}}applyNavigationConfig()}
 function applyNavigationConfig(){
  const items=navigationConfig?.items||[],map=new Map(items.map(x=>[x.id,x]));
@@ -199,7 +200,7 @@ async function show(v){
   currentView=v;destroyPlayer();
   renderMobileNavigation();
   const moreSheet=$('#mobileMoreSheet');if(moreSheet){moreSheet.classList.add('hidden');moreSheet.setAttribute('aria-hidden','true');document.body.classList.remove('mobileSheetOpen')}
-  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'Recordings',platform:'Platform','profile-sync':'Profile Sync',diagnostics:'Diagnostics',appliance:'Appliance',notifications:'Notifications',rooms:'Rooms',library:'Library',search:'Search',sources:'My Sources',system:'System',admin:'Admin'})[v]||v;
+  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'Recordings',platform:'Platform','profile-sync':'Profile Sync',diagnostics:'Diagnostics',appliance:'Appliance',notifications:'Notifications',rooms:'Rooms',library:'Library',search:'Search',sources:'My Sources',system:'System',completion:'Feature Completion',admin:'Admin'})[v]||v;
   if(v==='home')await home();
   if(v==='live')await live();
   if(v==='guide')await guide();
@@ -219,6 +220,7 @@ async function show(v){
   if(v==='search')await searchView();
   if(v==='sources')await sourcesView();
   if(v==='system')await systemView();
+  if(v==='completion')await featureCompletionView();
   if(v==='admin')await adminView();
 }
 
@@ -1162,6 +1164,64 @@ let editingProviderId=null, editingUserId=null;
 let adminSourceAccess={};
 function editUserSources(u){const x=adminSourceAccess[u]||{adminIptv:true,adminPlex:true,adminJellyfin:true};const b=$('#userSourceAccessEditor');b.style.display='block';b.innerHTML=`<h3>Source access · ${esc(u)}</h3><p class=muted>Checked = use Admin configuration. Unchecked = user manages own source.</p><label class=checkline><input id=usaIptv type=checkbox ${x.adminIptv?'checked':''}> IPTV — Admin configuration</label><label class=checkline><input id=usaPlex type=checkbox ${x.adminPlex?'checked':''}> Plex — Admin configuration</label><label class=checkline><input id=usaJelly type=checkbox ${x.adminJellyfin?'checked':''}> Jellyfin — Admin configuration</label><div class=row><button class=btn onclick="saveUserSources('${escAttr(u)}')">Save source access</button></div>`;b.scrollIntoView({behavior:'smooth',block:'center'})}
 async function saveUserSources(u){const x={adminIptv:$('#usaIptv').checked,adminPlex:$('#usaPlex').checked,adminJellyfin:$('#usaJelly').checked};await api('/api/admin/source-access/'+encodeURIComponent(u),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(x)});adminSourceAccess[u]=x;await adminView()}
+
+async function featureCompletionView(){
+  if(authState.role!=='Admin'){content.innerHTML='<div class=card>Administrator access is required.</div>';return}
+  try{
+    const data=await api('/api/admin/feature-completion');
+    const sum=data.summary||{};
+    const features=data.features||[];
+    const statusLabel={
+      fullyImplemented:'FULLY IMPLEMENTED',
+      partial:'PARTIAL',
+      foundation:'FOUNDATION',
+      missing:'MISSING',
+      FullyImplemented:'FULLY IMPLEMENTED',
+      Partial:'PARTIAL',
+      Foundation:'FOUNDATION',
+      Missing:'MISSING',
+      0:'FULLY IMPLEMENTED',1:'PARTIAL',2:'FOUNDATION',3:'MISSING'
+    };
+    const statusClass=x=>{
+      const v=String(x);
+      if(v==='0'||/FullyImplemented|fullyImplemented/.test(v))return 'ok';
+      if(v==='1'||/Partial|partial/.test(v))return 'warn';
+      if(v==='2'||/Foundation|foundation/.test(v))return 'info';
+      return 'danger';
+    };
+    const groups=[...new Set(features.map(x=>x.area))];
+    content.innerHTML=`
+      <div class=hero>
+        <span class=kicker>v20.1.0 FEATURE COMPLETION</span>
+        <h2>Feature Completion audit</h2>
+        <p class=muted>This page distinguishes working features from partial implementations, foundations and missing functionality. It intentionally does not count a contract/model as a finished feature.</p>
+      </div>
+      <div class=statsGrid>
+        <div class=statCard><b>${sum.fullyImplemented??0}</b><small>Fully implemented</small></div>
+        <div class=statCard><b>${sum.partial??0}</b><small>Partial</small></div>
+        <div class=statCard><b>${sum.foundation??0}</b><small>Foundation</small></div>
+        <div class=statCard><b>${sum.missing??0}</b><small>Missing</small></div>
+      </div>
+      <div class="card ${sum.zeroMandatoryCost?'':'danger'}">
+        <h3>Cost policy</h3>
+        <p><b>Mandatory MyOnline TV runtime cost: 0 SEK</b></p>
+        <p class=muted>Paid AI, metadata, monitoring and automation services are not required by the application.</p>
+      </div>
+      ${groups.map(area=>`<h2>${esc(area)}</h2><div class=manageList>${
+        features.filter(x=>x.area===area).map(x=>{
+          const raw=x.status;
+          const key=typeof raw==='number'?String(raw):String(raw);
+          return `<div class="card featureAuditCard">
+            <div class=row><h3>${esc(x.name)}</h3><span class="statusBadge ${statusClass(raw)}">${esc(statusLabel[key]||key)}</span></div>
+            <p>${esc(x.evidence||'')}</p>
+            <p class=muted><b>Next:</b> ${esc(x.nextAction||'')}</p>
+          </div>`;
+        }).join('')
+      }</div>`).join('')}
+    `;
+  }catch(e){content.innerHTML=errorCard(e)}
+}
+
 async function adminView(){
   if(authState.role!=='Admin'){content.innerHTML='<div class=card>Administrator access is required.</div>';return}
   providers=await api('/api/providers');profiles=await api('/api/profiles');
@@ -1180,6 +1240,7 @@ async function adminView(){
     <div class=card><h3>System overview</h3><p class=muted>Platform status, configured services and capabilities.</p><button class=btn onclick="show('platform')">Open system overview</button></div>
     <div class=card><h3>Diagnostics</h3><p class=muted>Check FFmpeg, FFprobe, rclone, storage, providers and disk space.</p><button class=btn onclick="show('diagnostics')">Open diagnostics</button></div>
     <div class=card><h3>Appliance</h3><p class=muted>Health, backup and appliance maintenance.</p><button class=btn onclick="show('appliance')">Open appliance tools</button></div>
+    <div class=card><h3>Feature Completion</h3><p class=muted>Audited status of planned features: complete, partial, foundation or missing.</p><button class=btn onclick="show('completion')">Open feature audit</button></div>
   </div>
 
 
@@ -2585,8 +2646,8 @@ window.MyOnlineOperations={
 };
 
 
-// v10.0.0 Native Client Generation
-window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'10.0.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
+// v20.1.0 Native Client Generation
+window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'20.1.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
 window.MyOnlineClientBridge={
  version:1,
  capabilities(){return {sourceEngine:true,player:true,live:true,guide:true,library:true,dvr:true,profiles:true,rooms:true,remote:true}},
