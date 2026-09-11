@@ -1,6 +1,6 @@
-# MyOnline TV Android TV client — v9.0.1
+# MyOnline TV Android TV client — v10.0.0
 
-v9.0.1 turns the v6.1 foundation into the first usable native-TV flow.
+v10.0.0 turns the v6.1 foundation into the first usable native-TV flow.
 
 ## Implemented
 - Server URL + JSON login against MyOnline TV.
