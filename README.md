@@ -1,4 +1,4 @@
-# MyOnline TV Web v9.0.0 — Proxmox LXC
+# MyOnline TV Web v9.0.1 — Proxmox LXC
 
 MyOnline TV Web is a self-hosted entertainment appliance for Proxmox VE.
 
@@ -94,7 +94,7 @@ MyOnline TV is designed to sit behind an external HTTPS reverse proxy such as Ng
 Browser (HTTPS)
   -> Nginx Proxy Manager
   -> MyOnline TV Nginx :80
-  -> ASP.NET Core 129.0.0.1:5080
+  -> ASP.NET Core 129.0.1.1:5080
 ```
 
 Recommended Nginx Proxy Manager target:
@@ -157,7 +157,7 @@ https://tv.example.com
 https://tv.example.com:443
 ```
 
-The application also binds only to `129.0.0.1:5080`; Nginx remains the public entry point on port 80.
+The application also binds only to `129.0.1.1:5080`; Nginx remains the public entry point on port 80.
 
 ## Update
 
@@ -490,8 +490,8 @@ Existing IPTV, Plex/Jellyfin, DVR, duration, Continue Watching, Recently Watched
 - Uses the same responsive mobile/tablet/TV behavior introduced in v0.9.0.
 
 
-## v9.0.0 — First stable milestone
-v9.0.0 is the cumulative first major milestone of MyOnline TV Web.
+## v9.0.1 — First stable milestone
+v9.0.1 is the cumulative first major milestone of MyOnline TV Web.
 
 It contains:
 - IPTV Live TV, EPG Guide, Movies and Series.
@@ -508,7 +508,7 @@ It contains:
 `RELEASE-CHECKLIST.md` is included and should be completed on the target system before declaring the installation the production baseline.
 
 
-## v9.0.0 — DVR & Storage
+## v9.0.1 — DVR & Storage
 
 ### Live TV DVR
 - Live TV channel cards now have a red **Record** button.
@@ -536,7 +536,7 @@ Movie/episode Download now asks for a destination:
 Protected/DRM content is not decrypted or bypassed.
 
 
-## v9.0.0 — Smart DVR
+## v9.0.1 — Smart DVR
 
 - Series recording rules from Guide
 - New-episodes-only flag
@@ -546,7 +546,7 @@ Protected/DRM content is not decrypted or bypassed.
 - DVR rules management in Recordings
 
 
-## v9.0.0 — Unified Library
+## v9.0.1 — Unified Library
 
 - Single Library view across configured media libraries
 - Title-normalized duplicate grouping
@@ -555,7 +555,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Poster and source metadata retained
 
 
-## v9.0.0 — Smart Home
+## v9.0.1 — Smart Home
 
 - Profile-aware Smart Home state
 - Time-aware greeting/status strip
@@ -565,7 +565,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Existing Continue Watching and Recently Watched retained
 
 
-## v9.0.0 — DVR Library
+## v9.0.1 — DVR Library
 
 - Completed recordings grouped into a DVR Library
 - Automatic title-based series grouping
@@ -575,7 +575,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Scheduled/active recording list remains available
 
 
-## v9.0.0 — Search 2.0
+## v9.0.1 — Search 2.0
 
 - One search UI across unified Movies and Series
 - Live TV channel search
@@ -584,7 +584,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Parallel source queries with graceful source failure
 
 
-## v9.0.0 — Multi-room
+## v9.0.1 — Multi-room
 
 - Rooms/devices registry
 - TV/browser device classification
@@ -594,7 +594,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Foundation for Continue on another screen
 
 
-## v9.0.0 — Installable PWA
+## v9.0.1 — Installable PWA
 
 - Installable web app manifest
 - Standalone display mode
@@ -604,7 +604,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Theme metadata for mobile/desktop installation
 
 
-## v9.0.0 — Notifications
+## v9.0.1 — Notifications
 
 - In-app notification center
 - Read/unread state
@@ -613,7 +613,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Persistent notification history
 
 
-## v9.0.0 — Appliance milestone
+## v9.0.1 — Appliance milestone
 
 - Appliance health dashboard
 - Disk usage/free-space status
@@ -623,7 +623,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Cumulative IPTV, Plex/Jellyfin, DVR, PWA, Search and Multi-room features
 
 
-## v9.0.0 — Stability & Diagnostics
+## v9.0.1 — Stability & Diagnostics
 
 - Admin diagnostics center
 - FFmpeg/FFprobe/rclone checks
@@ -633,7 +633,7 @@ Protected/DRM content is not decrypted or bypassed.
 - v2.0.1 navigation hotfix retained
 
 
-## v9.0.0 — DVR 2.0
+## v9.0.1 — DVR 2.0
 
 - DVR status summary
 - Recording conflict detection
@@ -643,7 +643,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Conflict warning in DVR UI
 
 
-## v9.0.0 — Profiles & Sync
+## v9.0.1 — Profiles & Sync
 
 - Server-side per-profile media-state API
 - Resume position and duration fields
@@ -653,7 +653,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Local state remains compatible during migration
 
 
-## v9.0.0 — EPG 2.0
+## v9.0.1 — EPG 2.0
 
 - Guide promoted to EPG 2.0 UX
 - Now/Next calculation helpers
@@ -663,7 +663,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Smart DVR integration retained
 
 
-## v9.0.0 — Player 2.0
+## v9.0.1 — Player 2.0
 
 - Unified Player 2 helper layer
 - Resume-on-metadata support
@@ -673,7 +673,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Existing HLS/FFmpeg playback retained
 
 
-## v9.0.0 — Library 2.0
+## v9.0.1 — Library 2.0
 
 - Library 2.0 presentation
 - Title/year/recently-added sorting
@@ -683,7 +683,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Poster metadata retained
 
 
-## v9.0.0 — Downloads 2.0
+## v9.0.1 — Downloads 2.0
 
 - Cancel action
 - Retry failed/cancelled jobs
@@ -693,7 +693,7 @@ Protected/DRM content is not decrypted or bypassed.
 - No permanent LXC storage requirement retained
 
 
-## v9.0.0 — TV Experience 2.0
+## v9.0.1 — TV Experience 2.0
 
 - Stronger 10-foot typography
 - Larger remote focus targets
@@ -703,7 +703,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Existing spatial rail navigation retained
 
 
-## v9.0.0 — Mobile / PWA 2.0
+## v9.0.1 — Mobile / PWA 2.0
 
 - PWA shortcuts for Live/Guide/DVR
 - Install-app action
@@ -713,7 +713,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Updated service-worker cache version
 
 
-## v9.0.0 — MyOnline TV Platform
+## v9.0.1 — MyOnline TV Platform
 
 - Platform status endpoint and dashboard
 - Cumulative IPTV/EPG/DVR/Storage/Plex/Jellyfin stack

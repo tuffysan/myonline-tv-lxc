@@ -1016,3 +1016,7 @@
 
 ## v8.0.1 — Updater cleanup hotfix
 - Prevent temporary release-archive cleanup from aborting an otherwise verified upgrade.
+
+## v9.0.1 — Kestrel loopback hotfix
+- Fixed Kestrel bind address 129.0.0.1 -> 127.0.0.1 on port 5080.
+- Added regression check for the expected local loopback binding.
