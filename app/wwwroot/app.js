@@ -265,6 +265,29 @@ function smartHomeStatus(){
   return `<div class=smartHomeStrip><span>${smartHomeGreeting()}</span><small>${watched} watched · ${hist} recent</small><button class=linkButton onclick="show('library')">Open Library</button></div>`;
 }
 
+function unifiedMediaKey(item){const title=String(item?.title||item?.name||'').toLowerCase().replace(/[^a-z0-9åäö]+/g,' ').trim();return `${String(item?.mediaType||item?.type||'').toLowerCase()}|${title}|${String(item?.year||item?.releaseYear||'')}`;}
+function dedupeUnifiedMedia(items){const m=new Map();for(const x of(items||[])){const k=unifiedMediaKey(x);if(!m.has(k))m.set(k,{...x,alternateSources:[]});else m.get(k).alternateSources.push({providerId:x.providerId,providerType:x.providerType,id:x.id});}return [...m.values()];}
+function localGlobalSearch(query){
+  const q=String(query||'').trim().toLowerCase();
+  if(!q)return [];
+  const out=[];
+  for(const c of (typeof channels!=='undefined'?channels:[])){
+    if(channelName(c).toLowerCase().includes(q))out.push({kind:'Channel',title:channelName(c),subtitle:c.group||'',action:()=>show('live')});
+  }
+  try{
+    for(const x of getContinueWatching()){
+      const title=String(x.title||x.name||'');
+      if(title.toLowerCase().includes(q))out.push({kind:'Continue watching',title,subtitle:x.type||'',item:x});
+    }
+  }catch{}
+  try{
+    for(const x of getMediaFavs()){
+      const title=String(x.title||x.name||'');
+      if(title.toLowerCase().includes(q))out.push({kind:'Favourite',title,subtitle:x.type||'',item:x});
+    }
+  }catch{}
+  return out.slice(0,50);
+}
 async function home(){
   let unifiedMovies=[],unifiedSeries=[];
   try{
@@ -494,6 +517,19 @@ function liveProgress(pr){
   if(!Number.isFinite(a)||!Number.isFinite(b)||b<=a)return 0;
   return Math.max(0,Math.min(100,(n-a)/(b-a)*100));
 }
+function selectLiveChannelByOffset(delta){
+  if(!liveVisibleRows.length)return;
+  liveSelectedIndex=(liveSelectedIndex+delta+liveVisibleRows.length)%liveVisibleRows.length;
+  const c=liveVisibleRows[liveSelectedIndex];
+  document.querySelectorAll('[data-live-index]').forEach((x,i)=>x.classList.toggle('selectedChannel',i===liveSelectedIndex));
+  const el=document.querySelector(`[data-live-index="${liveSelectedIndex}"]`);
+  if(el)el.scrollIntoView({block:'nearest',behavior:'smooth'});
+  if(c)updateLiveDetails(c);
+}
+function openMiniGuide(){
+  const panel=document.querySelector('.liveChannelPane');
+  if(panel){panel.classList.toggle('miniGuideOpen');panel.scrollIntoView({block:'nearest'});}
+}
 function updateLiveDetails(c){
   const host=$('#liveDetails');
   if(!host||!c)return;
@@ -513,6 +549,7 @@ function updateLiveDetails(c){
       ${current?.description?`<p>${esc(current.description)}</p>`:''}
       <div class=livePrimaryActions>
         <button class="btn primaryLiveBtn" onclick='playLive(${JSON.stringify(c.key)},${JSON.stringify(c.name)})'>▶ Play</button>
+        <button class=btn onclick="openMiniGuide()">☰ Mini guide</button>
         <button class="btn recordBtn" onclick='recordLiveNow(${JSON.stringify(c.key)},${JSON.stringify(channelName(c))})'>● Record</button>
         ${current?`<button class=btn onclick='createSeriesDvrRule(${JSON.stringify(c.key)},${JSON.stringify(channelName(c))},${JSON.stringify(JSON.stringify(current))})'>● Record series</button>`:''}
       </div>
@@ -1290,7 +1327,7 @@ async function featureCompletionView(){
     const groups=[...new Set(features.map(x=>x.area))];
     content.innerHTML=`
       <div class=hero>
-        <span class=kicker>v20.2.1 FEATURE COMPLETION</span>
+        <span class=kicker>v20.6.0 FEATURE COMPLETION</span>
         <h2>Feature Completion audit</h2>
         <p class=muted>This page distinguishes working features from partial implementations, foundations and missing functionality. It intentionally does not count a contract/model as a finished feature.</p>
       </div>
@@ -2744,8 +2781,8 @@ window.MyOnlineOperations={
 };
 
 
-// v20.2.1 Native Client Generation
-window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'20.2.1',generation:6,experience:'Server + Web/PWA + Native Client API'};
+// v20.6.0 Native Client Generation
+window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'20.6.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
 window.MyOnlineClientBridge={
  version:1,
  capabilities(){return {sourceEngine:true,player:true,live:true,guide:true,library:true,dvr:true,profiles:true,rooms:true,remote:true}},

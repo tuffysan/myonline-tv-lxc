@@ -1,4 +1,4 @@
-# Feature Completion Roadmap after v20.2.1
+# Feature Completion Roadmap after v20.6.0
 
 Priority order for converting PARTIAL/FOUNDATION/MISSING into FULLY IMPLEMENTED:
 
