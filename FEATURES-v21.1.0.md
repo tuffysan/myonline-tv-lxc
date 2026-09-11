@@ -1,4 +1,4 @@
-# v22.0.0 — Search 2.0
+# v23.0.0 — Search 2.0
 
 Deterministic multi-domain search ranking across media, EPG and recordings.
 

@@ -162,7 +162,7 @@ public static class FeatureCompletionCatalog
         var total = All.Count;
         return new
         {
-            version = "22.0.0",
+            version = "23.0.0",
             total,
             fullyImplemented = All.Count(x => x.Status == FeatureCompletionStatus.FullyImplemented),
             partial = All.Count(x => x.Status == FeatureCompletionStatus.Partial),

@@ -222,7 +222,7 @@ async function show(v){
   if(v==='plex')await mediaLibraryView('plex');
   if(v==='jellyfin')await mediaLibraryView('jellyfin');
   if(v==='downloads')await downloadView();
-  if(v==='recordings')await recordingsView();
+  if(v==='recordings'){await recordingsView();await showDvrOperations();}
   if(v==='platform')await platformView();
   if(v==='profile-sync')await profileSyncView();
   if(v==='diagnostics')await diagnosticsView();
@@ -375,7 +375,7 @@ function renderHomeContent({unifiedMovies=[],unifiedSeries=[],continueItems=[],h
 
   content.innerHTML=`${smartHomeStatus()}<div class="hero homeHero"><div><span class=kicker>MYONLINE TV</span><h2>What do you want to watch?</h2>
   <p class=muted>Live TV, IPTV, Plex and Jellyfin — one home screen.</p>
-  <div class=row><input id=homeSearch placeholder="Search everything"><button class=btn id=homeSearchButton>Search</button></div></div></div>
+  <div class=row><input id=homeSearch placeholder="Search everything"><button class=btn id=homeSearchButton>Search</button><button class=btn onclick="home3Customize()">Customize</button></div></div></div>
 
   <div class=homeSourceGrid>
     <button class=homeSourceCard onclick="show('live')"><span>▣</span><b>Live TV</b><small>Channels</small></button>
@@ -568,7 +568,7 @@ async function live(){
   if(!await ensureProvider()){content.innerHTML=noProvider();return}
   await loadChannelPrefs();
   content.innerHTML='<div class=card>Loading channels…</div>';
-  try{channels=await api('/api/channels/'+currentProvider);await loadLiveEpgQuiet();renderChannels()}
+  try{channels=await perfCachedApi('channels:'+currentProvider,'/api/channels/'+currentProvider,30000,{timeoutMs:12000,attempts:1});await loadLiveEpgQuiet();renderChannels()}
   catch(e){content.innerHTML=errorCard(e)}
 }
 function renderChannels(){
@@ -628,7 +628,7 @@ function selectLiveChannelByOffset(delta){
   document.querySelectorAll('[data-live-index]').forEach((x,i)=>x.classList.toggle('selectedChannel',i===liveSelectedIndex));
   const el=document.querySelector(`[data-live-index="${liveSelectedIndex}"]`);
   if(el)el.scrollIntoView({block:'nearest',behavior:'smooth'});
-  if(c)updateLiveDetails(c);
+  if(c){updateLiveDetails(c);showLiveZapOverlay(c);}
 }
 function openMiniGuide(){
   const panel=document.querySelector('.liveChannelPane');
@@ -1112,7 +1112,7 @@ async function guide(){
   await loadChannelPrefs();content.innerHTML='<div class=card>Loading EPG…</div>';
   try{
     const start=guideStart(guideWindow),hours=guideWindow==='tomorrow'?24:guideWindow==='tonight'?10:7;
-    [channels,epg]=await Promise.all([api('/api/channels/'+currentProvider),api('/api/epg/'+currentProvider+'?hours='+hours+'&start='+encodeURIComponent(start.toISOString()))]);
+    [channels,epg]=await Promise.all([perfCachedApi('channels:'+currentProvider,'/api/channels/'+currentProvider,30000,{timeoutMs:12000,attempts:1}),perfCachedApi('epg:'+currentProvider+':'+guideWindow,'/api/epg/'+currentProvider+'?hours='+hours+'&start='+encodeURIComponent(start.toISOString()),60000,{timeoutMs:12000,attempts:1})]);
     renderGuide(start,hours);
   }catch(e){content.innerHTML=errorCard(e)}
 }
@@ -1121,8 +1121,8 @@ function renderGuide(start,hours){
   const by=new Map();epg.forEach(x=>{if(!by.has(x.channel))by.set(x.channel,[]);by.get(x.channel).push(x)});
   const rows=channels.filter(c=>!isChannelHidden(c)&&by.has(c.id)).slice(0,180);
   const ticks=[];for(let d=new Date(start);d<end;d=new Date(d.getTime()+3600000))ticks.push(d);
-  content.innerHTML=`<div class="guideHeader"><div><span class=kicker>TV GUIDE</span><h2>Programme guide</h2></div><div class=toolbar>${providerSelect()}<button class="btn ${guideWindow==='now'?'activeBtn':''}" onclick="guideWindow='now';guide()">Now</button><button class="btn ${guideWindow==='tonight'?'activeBtn':''}" onclick="guideWindow='tonight';guide()">Tonight</button><button class="btn ${guideWindow==='tomorrow'?'activeBtn':''}" onclick="guideWindow='tomorrow';guide()">Tomorrow</button><button class=btn id=refreshGuide>↻ Refresh</button></div></div><div id=playerWrap></div><div class="timelineWrap premiumGuide"><div class=timelineHead><div class=channelHead>Channel</div><div class=timeAxis style="grid-template-columns:repeat(${ticks.length},1fr)">${ticks.map(x=>`<span>${x.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>`).join('')}</div></div><div class=timeline>${rows.map(c=>timelineRowV319(c,by.get(c.id)||[],start,end,span)).join('')}</div></div>`;
-  $('#provider').onchange=async e=>{currentProvider=e.target.value;await guide()};$('#refreshGuide').onclick=guide;
+  content.innerHTML=`<div class="guideHeader"><div><span class=kicker>TV GUIDE</span><h2>Programme guide</h2></div><div class=toolbar>${providerSelect()}<button class="btn ${guideWindow==='now'?'activeBtn':''}" onclick="guideWindow='now';guide()">Now</button><button class="btn ${guideWindow==='tonight'?'activeBtn':''}" onclick="guideWindow='tonight';guide()">Tonight</button><button class="btn ${guideWindow==='tomorrow'?'activeBtn':''}" onclick="guideWindow='tomorrow';guide()">Tomorrow</button><button class=btn id=guideNow>◎ Now</button><button class=btn id=refreshGuide>↻ Refresh</button></div></div><div id=playerWrap></div><div class="timelineWrap premiumGuide"><div class=timelineHead><div class=channelHead>Channel</div><div class=timeAxis style="grid-template-columns:repeat(${ticks.length},1fr)">${ticks.map(x=>`<span>${x.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>`).join('')}</div></div><div class=timeline>${rows.map(c=>timelineRowV319(c,by.get(c.id)||[],start,end,span)).join('')}</div></div>`;
+  $('#provider').onchange=async e=>{currentProvider=e.target.value;await guide()};$('#refreshGuide').onclick=guide;$('#guideNow').onclick=scrollGuideToNow;setTimeout(()=>{if(guideWindow==='now')scrollGuideToNow()},80);
 }
 function timelineRowV319(c,progs,start,end,span){
   const nowPct=(Date.now()-start.getTime())/span*100;
@@ -1431,7 +1431,7 @@ async function featureCompletionView(){
     const groups=[...new Set(features.map(x=>x.area))];
     content.innerHTML=`
       <div class=hero>
-        <span class=kicker>v22.0.0 FEATURE COMPLETION</span>
+        <span class=kicker>v23.0.0 FEATURE COMPLETION</span>
         <h2>Feature Completion audit</h2>
         <p class=muted>This page distinguishes working features from partial implementations, foundations and missing functionality. It intentionally does not count a contract/model as a finished feature.</p>
       </div>
@@ -1800,7 +1800,7 @@ async function openRecentlyWatched(item){
 
 // v0.7.0 quick search
 function homeQuickSearch(){
-  const q=($('#homeSearch')?.value||'').trim();
+  const q=($('#homeSearch')?.value||'').trim();rememberSearch(q);
   if(!q)return;
   window.__pendingGlobalSearch=q;
   show('search');
@@ -2425,7 +2425,8 @@ async function unifiedLibraryView(){
   }catch(e){content.innerHTML=errorCard(e)}
 }
 function unifiedLibraryCard(x){
-  return `<article class=posterCard>${x.poster?`<img loading=lazy src="${escAttr(x.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(x.name)}</b><small>${esc(x.mediaKind)} · ${x.sources.length} source${x.sources.length===1?'':'s'}</small><div class=sourceChoices>${x.sources.map(s=>`<button class=btn onclick='playUnifiedItem(${JSON.stringify(s.mediaKind==="series"?{...s,kind:"series"}:s)})'>${esc(s.source||'Play')}</button>`).join('')}</div></div></article>`;
+  const best=bestUnifiedSource(x);
+  return `<article class=posterCard>${x.poster?`<img loading=lazy decoding=async src="${escAttr(x.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(x.name)}</b><small>${esc(x.mediaKind)} · ${x.sources.length} source${x.sources.length===1?'':'s'}</small><button class="btn primaryLibraryPlay" onclick='playBestUnified(${JSON.stringify(x)})'>▶ Play best${best?' · '+esc(best.source):''}</button><details class=sourceDetails><summary>Sources (${x.sources.length})</summary><div class=sourceChoices>${x.sources.map(s=>`<button class=btn onclick='playUnifiedItem(${JSON.stringify(x.mediaKind==="series"?{...s,kind:"series"}:s)})'>${esc(s.source||'Play')} ${esc(s.year||'')}</button>`).join('')}</div></details></div></article>`;
 }
 
 function recordingSeriesName(title){
@@ -2885,10 +2886,197 @@ window.MyOnlineOperations={
 };
 
 
-// v22.0.0 Native Client Generation
-window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'22.0.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
+// v23.0.0 Native Client Generation
+window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'23.0.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
 window.MyOnlineClientBridge={
  version:1,
  capabilities(){return {sourceEngine:true,player:true,live:true,guide:true,library:true,dvr:true,profiles:true,rooms:true,remote:true}},
  emit(name,detail={}){window.dispatchEvent(new CustomEvent('myonline:client',{detail:{name,...detail,at:Date.now()}}))}
+};
+
+
+// v23.0.0 — Performance Engine
+const perfCache=new Map();
+function perfCacheGet(key,maxAgeMs){
+  const x=perfCache.get(key);
+  return x && Date.now()-x.at<maxAgeMs ? x.value : null;
+}
+async function perfCachedApi(key,url,maxAgeMs=30000,options={}){
+  const cached=perfCacheGet(key,maxAgeMs);
+  if(cached!==null)return cached;
+  const value=await api(url,options);
+  perfCache.set(key,{at:Date.now(),value});
+  return value;
+}
+async function prefetchViewData(view){
+  try{
+    if(!currentProvider)return;
+    if(view==='live'){
+      await perfCachedApi('channels:'+currentProvider,'/api/channels/'+currentProvider,30000,{timeoutMs:12000,attempts:1});
+    }else if(view==='guide'){
+      await Promise.all([
+        perfCachedApi('channels:'+currentProvider,'/api/channels/'+currentProvider,30000,{timeoutMs:12000,attempts:1}),
+        perfCachedApi('epg:'+currentProvider,'/api/epg/'+currentProvider+'?hours=7',60000,{timeoutMs:12000,attempts:1})
+      ]);
+    }else if(view==='library'){
+      await Promise.all([
+        perfCachedApi('unified:movies','/api/unified/movies',120000,{timeoutMs:20000,attempts:1}),
+        perfCachedApi('unified:series','/api/unified/series',120000,{timeoutMs:20000,attempts:1})
+      ]);
+    }
+  }catch{}
+}
+document.addEventListener('pointerover',e=>{
+  const b=e.target.closest?.('[data-view]');
+  if(b?.dataset?.view)prefetchViewData(b.dataset.view);
+},{passive:true});
+
+
+// v23.0.0 — Live TV 3.0
+let liveNumberBuffer='',liveNumberTimer=null;
+function showLiveZapOverlay(c){
+  let box=$('#liveZapOverlay');
+  if(!box){box=document.createElement('div');box.id='liveZapOverlay';box.className='liveZapOverlay';document.body.appendChild(box)}
+  const pg=liveProgramFor(c);
+  box.innerHTML=`<div class=zapLogo>${c.logo?`<img src="${escAttr(c.logo)}">`:''}</div><div><b>${esc(c.number?c.number+' · ':'')}${esc(channelName(c))}</b><span>${esc(pg.now?.title||'Live TV')}</span>${pg.next?`<small>Next: ${esc(pg.next.title)}</small>`:''}</div>`;
+  box.classList.add('visible');
+  clearTimeout(box._hide);box._hide=setTimeout(()=>box.classList.remove('visible'),2600);
+}
+function tuneLiveNumber(){
+  if(!liveNumberBuffer)return;
+  const n=Number(liveNumberBuffer);liveNumberBuffer='';
+  const c=channels.find(x=>Number(x.number)===n);
+  if(c){showLiveZapOverlay(c);playLive(c.key,c.name)}
+}
+document.addEventListener('keydown',e=>{
+  if(currentView!=='live'||['INPUT','SELECT','TEXTAREA'].includes(document.activeElement?.tagName))return;
+  if(/^[0-9]$/.test(e.key)){
+    e.preventDefault();liveNumberBuffer=(liveNumberBuffer+e.key).slice(-4);
+    let box=$('#liveNumberOverlay');
+    if(!box){box=document.createElement('div');box.id='liveNumberOverlay';box.className='liveNumberOverlay';document.body.appendChild(box)}
+    box.textContent=liveNumberBuffer;box.classList.add('visible');
+    clearTimeout(liveNumberTimer);
+    liveNumberTimer=setTimeout(()=>{box.classList.remove('visible');tuneLiveNumber()},900);
+  }
+});
+
+
+// v23.0.0 — Guide 3.0
+function scrollGuideToNow(){
+  const wrap=document.querySelector('.timelineWrap');
+  const line=document.querySelector('.programLane .nowLine');
+  if(!wrap||!line)return;
+  const lane=line.parentElement;
+  const x=line.offsetLeft - wrap.clientWidth*.35 + lane.offsetLeft;
+  wrap.scrollTo({left:Math.max(0,x),behavior:'smooth'});
+}
+function guideKeyboard(e){
+  if(currentView!=='guide'||['INPUT','SELECT','TEXTAREA'].includes(document.activeElement?.tagName))return;
+  if(e.key==='Home'||e.key.toLowerCase()==='n'){e.preventDefault();scrollGuideToNow()}
+}
+document.addEventListener('keydown',guideKeyboard);
+
+
+// v23.0.0 — Unified Library End-to-End
+function unifiedSourceScore(s){
+  let score=0;
+  if(s.poster)score+=2;
+  if(s.rating)score+=1;
+  if(String(s.source).toLowerCase()==='plex')score+=2;
+  if(String(s.source).toLowerCase()==='jellyfin')score+=1;
+  return score;
+}
+function bestUnifiedSource(group){
+  return [...(group?.sources||[])].sort((a,b)=>unifiedSourceScore(b)-unifiedSourceScore(a))[0]||null;
+}
+async function playBestUnified(group){
+  const best=bestUnifiedSource(group);
+  if(group.mediaKind==='series')return playUnifiedItem({...best,kind:'series'});return playUnifiedWithFallback(group);
+}
+
+
+// v23.0.0 — Unified Playback Engine
+async function tryUnifiedPlaybackSource(item){
+  const parts=String(item?.id||'').split(':');
+  if(parts.length<3)throw new Error('Invalid unified media source.');
+  const source=parts[0],providerId=parts[1],itemId=parts.slice(2).join(':');
+  const r=await api(`/api/unified/${encodeURIComponent(source)}/${encodeURIComponent(providerId)}/${encodeURIComponent(itemId)}/play`,{timeoutMs:20000,attempts:1});
+  await playServerMedia(r.playToken,item.name||'Media','unified:'+String(item.id||''),false,item.poster||'');
+  return true;
+}
+async function playUnifiedWithFallback(group){
+  const candidates=[...(group?.sources||[])].sort((a,b)=>unifiedSourceScore(b)-unifiedSourceScore(a));
+  let last=null;
+  for(const candidate of candidates){
+    try{
+      await tryUnifiedPlaybackSource(candidate);
+      liveStatus?.(`Playing from ${candidate.source||'media'}`,'ready');
+      return true;
+    }catch(e){last=e}
+  }
+  if(last)alert(friendlyError(last));
+  return false;
+}
+
+
+// v23.0.0 — Home 3.0
+const HOME3_DEFAULT=['continue','live','next','recordings','favourites','new'];
+function home3Key(){return `myonline-home3:${currentProfile||'default'}`}
+function getHome3Order(){try{return JSON.parse(localStorage.getItem(home3Key())||'null')||HOME3_DEFAULT}catch{return HOME3_DEFAULT}}
+function saveHome3Order(order){localStorage.setItem(home3Key(),JSON.stringify(order))}
+function home3Customize(){
+  const current=getHome3Order();
+  const value=prompt('Home sections, comma separated:\\ncontinue, live, next, recordings, favourites, new',current.join(', '));
+  if(value===null)return;
+  const allowed=new Set(HOME3_DEFAULT);
+  const order=value.split(',').map(x=>x.trim()).filter(x=>allowed.has(x));
+  if(order.length){saveHome3Order([...new Set(order)]);home()}
+}
+
+
+// v23.0.0 — Search 3.0
+function searchHistoryKey(){return `myonline-search-history:${currentProfile||'default'}`}
+function rememberSearch(q){
+  q=String(q||'').trim();if(q.length<2)return;
+  const rows=JSON.parse(localStorage.getItem(searchHistoryKey())||'[]').filter(x=>x.toLowerCase()!==q.toLowerCase());
+  rows.unshift(q);localStorage.setItem(searchHistoryKey(),JSON.stringify(rows.slice(0,8)));
+}
+function recentSearches(){try{return JSON.parse(localStorage.getItem(searchHistoryKey())||'[]')}catch{return []}}
+document.addEventListener('keydown',e=>{
+  if(e.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)){
+    e.preventDefault();show('search').then(()=>setTimeout(()=>document.querySelector('#globalSearch,#searchInput,input[placeholder*="Search"]')?.focus(),50));
+  }
+});
+
+
+// v23.0.0 — DVR End-to-End
+async function dvrHealthPanel(){
+  const [status,conflicts,upcoming]=await Promise.all([
+    api('/api/dvr/status').catch(()=>null),
+    api('/api/dvr/conflicts').catch(()=>[]),
+    api('/api/dvr/upcoming').catch(()=>[])
+  ]);
+  return {status,conflicts:Array.isArray(conflicts)?conflicts:[],upcoming:Array.isArray(upcoming)?upcoming:[]};
+}
+async function showDvrOperations(){
+  try{
+    const x=await dvrHealthPanel();
+    let box=$('#dvrOperations');
+    if(!box){box=document.createElement('div');box.id='dvrOperations';box.className='card dvrOperations';content.prepend(box)}
+    box.innerHTML=`<h3>DVR operations</h3><div class=statsGrid><div class=statCard><b>${x.upcoming.length}</b><small>Upcoming</small></div><div class=statCard><b>${x.conflicts.length}</b><small>Conflicts</small></div><div class=statCard><b>${x.status?.active??0}</b><small>Active</small></div></div>${x.conflicts.length?`<p class=warning>Resolve ${x.conflicts.length} recording conflict${x.conflicts.length===1?'':'s'} before airtime.</p>`:'<p class=ok>No known recording conflicts.</p>'}`;
+  }catch(e){console.warn('DVR operations',e)}
+}
+
+
+// v23.0.0 — Production Edition
+window.MyOnlineTvProduction={
+  version:'23.0.0',
+  clientMode:()=>document.body.dataset.clientMode||'unknown',
+  runtimeSummary:()=>({
+    online:navigator.onLine,
+    clientMode:document.body.dataset.clientMode||'unknown',
+    hls:!!window.Hls,
+    serviceWorker:'serviceWorker' in navigator,
+    reducedMotion:matchMedia('(prefers-reduced-motion: reduce)').matches
+  })
 };

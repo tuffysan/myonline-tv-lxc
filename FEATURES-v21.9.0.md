@@ -1,4 +1,4 @@
-# v22.0.0 — Appliance & Recovery
+# v23.0.0 — Appliance & Recovery
 
 Local health evaluation and bounded recovery-plan engine.
 

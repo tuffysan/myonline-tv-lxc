@@ -827,7 +827,7 @@ html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px 
 .sourceUnavailable{opacity:.48;filter:saturate(.45)}
 
 
-/* v22.0.0 TV Experience */
+/* v23.0.0 TV Experience */
 .liveToolbar{position:relative;top:auto;background:transparent;padding:0 0 14px}
 .tvLiveShell{display:grid;grid-template-columns:minmax(330px,390px) minmax(0,1fr);gap:14px;align-items:start}
 .liveChannelPane{position:sticky;top:86px;max-height:calc(100vh - 108px);overflow:hidden;background:#091722;border:1px solid #23465f;border-radius:18px;padding:12px;display:flex;flex-direction:column}
@@ -907,7 +907,7 @@ html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px 
 }
 
 
-/* v22.0.0 — Scrollbar polish */
+/* v23.0.0 — Scrollbar polish */
 :root{
   scrollbar-color:#315a73 #091722;
   scrollbar-width:thin;
@@ -988,14 +988,14 @@ html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px 
   scrollbar-gutter:stable;
 }
 
-/* v22.0.0 Live/EPG completion */
+/* v23.0.0 Live/EPG completion */
 .liveChannelPane.miniGuideOpen{box-shadow:0 0 0 2px #4faeff,0 24px 70px #0008}
 @media(min-width:1101px){.liveChannelPane.miniGuideOpen{max-height:calc(100vh - 92px)}}
 .premiumGuide .prog:focus,.tvChannelRow:focus-within{outline:2px solid #74c2ff;outline-offset:1px}
 
 
 /* =========================================================
-   v22.0.0 — Multi-device polish
+   v23.0.0 — Multi-device polish
    Mobile · Tablet · Desktop · TV / 10-foot
    ========================================================= */
 
@@ -1126,7 +1126,7 @@ html.isStandalone body{
 }
 
 
-/* v22.0.0 — Fast Home */
+/* v23.0.0 — Fast Home */
 .homeDeferredPlaceholder{
   min-height:72px;
   display:flex;
@@ -1148,3 +1148,37 @@ html.isStandalone body{
 @media(prefers-reduced-motion:reduce){
   .homeDeferredPlaceholder{animation:none}
 }
+
+
+/* v23.0.0 — Live TV 3.0 */
+.liveZapOverlay{position:fixed;left:50%;bottom:7vh;transform:translate(-50%,24px);z-index:1200;display:flex;gap:14px;align-items:center;min-width:min(620px,82vw);padding:16px 20px;border:1px solid #315a73;border-radius:18px;background:rgba(5,15,24,.94);backdrop-filter:blur(16px);opacity:0;pointer-events:none;transition:.18s ease}
+.liveZapOverlay.visible{opacity:1;transform:translate(-50%,0)}
+.liveZapOverlay .zapLogo{width:64px;height:48px;display:grid;place-items:center}
+.liveZapOverlay img{max-width:100%;max-height:100%;object-fit:contain}
+.liveZapOverlay b,.liveZapOverlay span,.liveZapOverlay small{display:block}
+.liveZapOverlay span{margin-top:4px}.liveZapOverlay small{margin-top:3px;color:var(--muted)}
+.liveNumberOverlay{position:fixed;right:5vw;top:8vh;z-index:1250;font-size:4rem;font-weight:800;background:rgba(5,15,24,.92);border:1px solid #315a73;border-radius:18px;padding:10px 22px;opacity:0;transition:.15s}
+.liveNumberOverlay.visible{opacity:1}
+
+
+/* v23.0.0 — Guide 3.0 */
+.premiumGuide .timelineHead{position:sticky;top:0;z-index:12}
+.premiumGuide .timelineChannel{position:sticky;left:0;z-index:8}
+.premiumGuide .nowLine{z-index:6;box-shadow:0 0 16px rgba(78,177,255,.28)}
+.premiumGuide .currentProgram{border-color:#4eb1ff;box-shadow:inset 0 0 0 1px rgba(78,177,255,.3)}
+
+
+/* v23.0.0 — Unified Library */
+.primaryLibraryPlay{width:100%;margin-top:8px}
+.sourceDetails{margin-top:8px}.sourceDetails summary{cursor:pointer;color:var(--muted)}
+.sourceChoices{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+
+
+/* v23.0.0 — Home 3.0 */
+.homeHero{min-height:220px;display:flex;align-items:center}
+.homeSourceGrid{margin-bottom:22px}
+@media(max-width:719px){.homeHero{min-height:auto}.homeHero .row{display:grid;grid-template-columns:1fr auto}.homeHero .row .btn:last-child{grid-column:1/-1}}
+
+
+/* v23.0.0 — Search 3.0 */
+.searchResultGroup{content-visibility:auto;contain-intrinsic-size:300px}

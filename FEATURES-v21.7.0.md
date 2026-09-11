@@ -1,4 +1,4 @@
-# v22.0.0 — PiP & Multi-view
+# v23.0.0 — PiP & Multi-view
 
 Capability/resource-gated PiP and bounded multi-view layout planner.
 

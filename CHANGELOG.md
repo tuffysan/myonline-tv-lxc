@@ -1,11 +1,11 @@
-## v22.0.0
+## v23.0.0
 - New TV-first Live TV layout with compact channel rail and player/program panel.
 - Hide-channel action moved to the right-side action group.
 - Added current/next programme details and progress to Live TV.
 - Added Home “On TV now” rail.
 - Refined EPG styling and responsive TV/tablet layout.
 
-# v22.0.0 — Feature Completion
+# v23.0.0 — Feature Completion
 
 - Build fix: FeatureCompletionCatalog moved to the global namespace so top-level Program.cs can resolve it.
 
