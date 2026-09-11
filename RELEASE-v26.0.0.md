@@ -1,4 +1,4 @@
-# v26.0.0 — Admin Production Edition
+# v28.0.0 — Admin Production Edition
 
 This is a cumulative Admin release based on v25.8.0.
 

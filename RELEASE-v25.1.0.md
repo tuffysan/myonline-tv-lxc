@@ -1,4 +1,4 @@
-# v26.0.0 — Admin UX Foundation
+# v28.0.0 — Admin UX Foundation
 
 This is a cumulative Admin release based on v25.0.0.
 

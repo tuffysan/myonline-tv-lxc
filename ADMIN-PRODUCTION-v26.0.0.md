@@ -1,4 +1,4 @@
-# v26.0.0 — Admin Production Edition
+# v28.0.0 — Admin Production Edition
 
 The Admin redesign is consolidated into a production-oriented release.
 

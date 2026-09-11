@@ -1,4 +1,4 @@
-# v26.0.0 — Admin Diagnostics
+# v28.0.0 — Admin Diagnostics
 
 This is a cumulative Admin release based on v25.5.0.
 

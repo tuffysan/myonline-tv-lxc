@@ -827,7 +827,7 @@ html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px 
 .sourceUnavailable{opacity:.48;filter:saturate(.45)}
 
 
-/* v26.0.0 TV Experience */
+/* v28.0.0 TV Experience */
 .liveToolbar{position:relative;top:auto;background:transparent;padding:0 0 14px}
 .tvLiveShell{display:grid;grid-template-columns:minmax(330px,390px) minmax(0,1fr);gap:14px;align-items:start}
 .liveChannelPane{position:sticky;top:86px;max-height:calc(100vh - 108px);overflow:hidden;background:#091722;border:1px solid #23465f;border-radius:18px;padding:12px;display:flex;flex-direction:column}
@@ -907,7 +907,7 @@ html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px 
 }
 
 
-/* v26.0.0 — Scrollbar polish */
+/* v28.0.0 — Scrollbar polish */
 :root{
   scrollbar-color:#315a73 #091722;
   scrollbar-width:thin;
@@ -988,14 +988,14 @@ html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px 
   scrollbar-gutter:stable;
 }
 
-/* v26.0.0 Live/EPG completion */
+/* v28.0.0 Live/EPG completion */
 .liveChannelPane.miniGuideOpen{box-shadow:0 0 0 2px #4faeff,0 24px 70px #0008}
 @media(min-width:1101px){.liveChannelPane.miniGuideOpen{max-height:calc(100vh - 92px)}}
 .premiumGuide .prog:focus,.tvChannelRow:focus-within{outline:2px solid #74c2ff;outline-offset:1px}
 
 
 /* =========================================================
-   v26.0.0 — Multi-device polish
+   v28.0.0 — Multi-device polish
    Mobile · Tablet · Desktop · TV / 10-foot
    ========================================================= */
 
@@ -1126,7 +1126,7 @@ html.isStandalone body{
 }
 
 
-/* v26.0.0 — Fast Home */
+/* v28.0.0 — Fast Home */
 .homeDeferredPlaceholder{
   min-height:72px;
   display:flex;
@@ -1150,7 +1150,7 @@ html.isStandalone body{
 }
 
 
-/* v26.0.0 — Live TV 3.0 */
+/* v28.0.0 — Live TV 3.0 */
 .liveZapOverlay{position:fixed;left:50%;bottom:7vh;transform:translate(-50%,24px);z-index:1200;display:flex;gap:14px;align-items:center;min-width:min(620px,82vw);padding:16px 20px;border:1px solid #315a73;border-radius:18px;background:rgba(5,15,24,.94);backdrop-filter:blur(16px);opacity:0;pointer-events:none;transition:.18s ease}
 .liveZapOverlay.visible{opacity:1;transform:translate(-50%,0)}
 .liveZapOverlay .zapLogo{width:64px;height:48px;display:grid;place-items:center}
@@ -1161,30 +1161,30 @@ html.isStandalone body{
 .liveNumberOverlay.visible{opacity:1}
 
 
-/* v26.0.0 — Guide 3.0 */
+/* v28.0.0 — Guide 3.0 */
 .premiumGuide .timelineHead{position:sticky;top:0;z-index:12}
 .premiumGuide .timelineChannel{position:sticky;left:0;z-index:8}
 .premiumGuide .nowLine{z-index:6;box-shadow:0 0 16px rgba(78,177,255,.28)}
 .premiumGuide .currentProgram{border-color:#4eb1ff;box-shadow:inset 0 0 0 1px rgba(78,177,255,.3)}
 
 
-/* v26.0.0 — Unified Library */
+/* v28.0.0 — Unified Library */
 .primaryLibraryPlay{width:100%;margin-top:8px}
 .sourceDetails{margin-top:8px}.sourceDetails summary{cursor:pointer;color:var(--muted)}
 .sourceChoices{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 
 
-/* v26.0.0 — Home 3.0 */
+/* v28.0.0 — Home 3.0 */
 .homeHero{min-height:220px;display:flex;align-items:center}
 .homeSourceGrid{margin-bottom:22px}
 @media(max-width:719px){.homeHero{min-height:auto}.homeHero .row{display:grid;grid-template-columns:1fr auto}.homeHero .row .btn:last-child{grid-column:1/-1}}
 
 
-/* v26.0.0 — Search 3.0 */
+/* v28.0.0 — Search 3.0 */
 .searchResultGroup{content-visibility:auto;contain-intrinsic-size:300px}
 
 
-/* v26.0.0 — Admin UX Foundation */
+/* v28.0.0 — Admin UX Foundation */
 .adminShell{max-width:1400px;margin:0 auto;padding:20px}
 .adminTopNav{display:flex;gap:8px;overflow:auto;padding:4px 0 16px;scrollbar-width:thin}
 .adminTopNavBtn{border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.035);color:inherit;border-radius:10px;padding:10px 14px;white-space:nowrap;cursor:pointer}
@@ -1199,14 +1199,14 @@ html.isStandalone body{
 .adminCard h3{margin:0 0 10px}
 
 
-/* v26.0.0 — Overview */
+/* v28.0.0 — Overview */
 .adminOverview{display:grid;gap:18px}
 .adminAttention{display:grid;gap:10px}
 .adminSkeleton,.adminError{padding:18px;border-radius:14px;background:rgba(255,255,255,.04)}
 .adminError{border:1px solid rgba(255,90,90,.35)}
 
 
-/* v26.0.0 — Sources */
+/* v28.0.0 — Sources */
 .adminCardHead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
 .adminSourceStats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0}
 .adminSourceStats>div{padding:10px;border-radius:10px;background:rgba(255,255,255,.035)}
@@ -1215,29 +1215,29 @@ html.isStandalone body{
 .adminActions{display:flex;gap:8px;flex-wrap:wrap}
 
 
-/* v26.0.0 — DVR & Storage */
+/* v28.0.0 — DVR & Storage */
 .adminMetric b{font-size:1.8rem}.adminMetric small{display:block;color:var(--muted);margin-top:4px}
 .storageBar{height:10px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden;margin:10px 0 5px}
 .storageBar span{display:block;height:100%;background:linear-gradient(90deg,#2e6a8a,#4eb1ff)}
 
 
-/* v26.0.0 — Users & Devices */
+/* v28.0.0 — Users & Devices */
 .adminListRow{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.07)}
 .adminListRow:last-child{border-bottom:0}.adminListRow small{display:block;color:var(--muted);margin-top:3px}
 .adminListRow>div:last-child{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 
 
-/* v26.0.0 — Diagnostics */
+/* v28.0.0 — Diagnostics */
 .diagRow{display:grid;grid-template-columns:minmax(140px,220px) 1fr;gap:14px;align-items:center;padding:9px 0}
 .diagRow small{display:block;color:var(--muted);margin-top:3px}.diagMeter{height:9px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden}
 .diagMeter span{display:block;height:100%;background:#4eb1ff}.diagMeter.warning span{background:#eab65c}.diagMeter.error span{background:#ff6a6a}
 
 
-/* v26.0.0 — Backup / Update / Recovery */
+/* v28.0.0 — Backup / Update / Recovery */
 .recoverySteps{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0}.recoverySteps span{padding:6px 9px;border-radius:999px;background:rgba(255,255,255,.05);font-size:.84rem}
 
 
-/* v26.0.0 — Mobile Admin */
+/* v28.0.0 — Mobile Admin */
 @media(max-width:720px){
   .adminShell{padding:12px}
   .adminTopNav{position:sticky;top:0;z-index:40;background:rgba(5,15,24,.96);backdrop-filter:blur(14px);margin:0 -12px;padding:10px 12px 12px}
@@ -1253,3 +1253,9 @@ html.isStandalone body{
 @media(max-width:420px){
   .adminActions{grid-template-columns:1fr}
 }
+
+
+.streamDoctor{display:grid;gap:6px}.streamDoctorRow{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.07)}.streamDoctorRow b.ok{color:#54d38a}.streamDoctorRow b.error{color:#ff6a6a}
+
+
+body.cinemaMode .sidebar,body.cinemaMode .topbar{opacity:0;pointer-events:none;transition:opacity .3s}body.cinemaMode{background:#000}.tvScreensaver{position:fixed;inset:0;z-index:5000;background:#03070a;display:grid;place-items:center;text-align:center}.tvScreensaver .clock{font-size:clamp(3rem,10vw,8rem);font-weight:300}

@@ -1,4 +1,4 @@
-# v26.0.0 — Performance Engine
+# v28.0.0 — Performance Engine
 
 This is a cumulative release based on v22.1.0.
 

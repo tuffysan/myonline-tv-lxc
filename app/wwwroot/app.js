@@ -1431,7 +1431,7 @@ async function featureCompletionView(){
     const groups=[...new Set(features.map(x=>x.area))];
     content.innerHTML=`
       <div class=hero>
-        <span class=kicker>v26.0.0 FEATURE COMPLETION</span>
+        <span class=kicker>v28.0.0 FEATURE COMPLETION</span>
         <h2>Feature Completion audit</h2>
         <p class=muted>This page distinguishes working features from partial implementations, foundations and missing functionality. It intentionally does not count a contract/model as a finished feature.</p>
       </div>
@@ -2886,8 +2886,8 @@ window.MyOnlineOperations={
 };
 
 
-// v26.0.0 Native Client Generation
-window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'26.0.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
+// v28.0.0 Native Client Generation
+window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'28.0.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
 window.MyOnlineClientBridge={
  version:1,
  capabilities(){return {sourceEngine:true,player:true,live:true,guide:true,library:true,dvr:true,profiles:true,rooms:true,remote:true}},
@@ -2895,7 +2895,7 @@ window.MyOnlineClientBridge={
 };
 
 
-// v26.0.0 — Performance Engine
+// v28.0.0 — Performance Engine
 const perfCache=new Map();
 function perfCacheGet(key,maxAgeMs){
   const x=perfCache.get(key);
@@ -2932,7 +2932,7 @@ document.addEventListener('pointerover',e=>{
 },{passive:true});
 
 
-// v26.0.0 — Live TV 3.0
+// v28.0.0 — Live TV 3.0
 let liveNumberBuffer='',liveNumberTimer=null;
 function showLiveZapOverlay(c){
   let box=$('#liveZapOverlay');
@@ -2961,7 +2961,7 @@ document.addEventListener('keydown',e=>{
 });
 
 
-// v26.0.0 — Guide 3.0
+// v28.0.0 — Guide 3.0
 function scrollGuideToNow(){
   const wrap=document.querySelector('.timelineWrap');
   const line=document.querySelector('.programLane .nowLine');
@@ -2977,7 +2977,7 @@ function guideKeyboard(e){
 document.addEventListener('keydown',guideKeyboard);
 
 
-// v26.0.0 — Unified Library End-to-End
+// v28.0.0 — Unified Library End-to-End
 function unifiedSourceScore(s){
   let score=0;
   if(s.poster)score+=2;
@@ -2995,7 +2995,7 @@ async function playBestUnified(group){
 }
 
 
-// v26.0.0 — Unified Playback Engine
+// v28.0.0 — Unified Playback Engine
 async function tryUnifiedPlaybackSource(item){
   const parts=String(item?.id||'').split(':');
   if(parts.length<3)throw new Error('Invalid unified media source.');
@@ -3019,7 +3019,7 @@ async function playUnifiedWithFallback(group){
 }
 
 
-// v26.0.0 — Home 3.0
+// v28.0.0 — Home 3.0
 const HOME3_DEFAULT=['continue','live','next','recordings','favourites','new'];
 function home3Key(){return `myonline-home3:${currentProfile||'default'}`}
 function getHome3Order(){try{return JSON.parse(localStorage.getItem(home3Key())||'null')||HOME3_DEFAULT}catch{return HOME3_DEFAULT}}
@@ -3034,7 +3034,7 @@ function home3Customize(){
 }
 
 
-// v26.0.0 — Search 3.0
+// v28.0.0 — Search 3.0
 function searchHistoryKey(){return `myonline-search-history:${currentProfile||'default'}`}
 function rememberSearch(q){
   q=String(q||'').trim();if(q.length<2)return;
@@ -3049,7 +3049,7 @@ document.addEventListener('keydown',e=>{
 });
 
 
-// v26.0.0 — DVR End-to-End
+// v28.0.0 — DVR End-to-End
 async function dvrHealthPanel(){
   const [status,conflicts,upcoming]=await Promise.all([
     api('/api/dvr/status').catch(()=>null),
@@ -3068,9 +3068,9 @@ async function showDvrOperations(){
 }
 
 
-// v26.0.0 — Production Edition
+// v28.0.0 — Production Edition
 window.MyOnlineTvProduction={
-  version:'26.0.0',
+  version:'28.0.0',
   clientMode:()=>document.body.dataset.clientMode||'unknown',
   runtimeSummary:()=>({
     online:navigator.onLine,
@@ -3082,25 +3082,25 @@ window.MyOnlineTvProduction={
 };
 
 
-// v26.0.0 performance diagnostics
+// v28.0.0 performance diagnostics
 window.MyOnlinePerf={samples:[],mark(name,start){this.samples.push({name,ms:Math.round(performance.now()-start),at:Date.now()});this.samples=this.samples.slice(-200)},snapshot(){return [...this.samples]}};
 
 
-// v26.0.0 Live TV 4.0 state
+// v28.0.0 Live TV 4.0 state
 let livePreviousChannelKey=null,liveCurrentChannelKey=null;
 function rememberLiveTune(key){if(key&&key!==liveCurrentChannelKey){livePreviousChannelKey=liveCurrentChannelKey;liveCurrentChannelKey=key}}
 function previousLiveChannel(){const c=channels.find(x=>x.key===livePreviousChannelKey);if(c)return playLive(c.key,c.name)}
 
 
-// v26.0.0 local phone remote client
+// v28.0.0 local phone remote client
 async function remoteCommand(deviceId,command,value=null){return api('/api/devices/'+encodeURIComponent(deviceId)+'/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command,value})})}
 
 
-// v26.0.0 provider/device capability gate
+// v28.0.0 provider/device capability gate
 async function advancedTvCapabilities(){try{return await api('/api/platform/v25/capabilities',{timeoutMs:5000,attempts:1})}catch{return {productionVerified:false}}}
 
 
-// v26.0.0 — Admin UX Foundation
+// v28.0.0 — Admin UX Foundation
 window.AdminUx = {
   sections: [
     {id:'overview',label:'Overview'},
@@ -3127,7 +3127,7 @@ document.addEventListener('click',e=>{
 });
 
 
-// v26.0.0 — Admin Overview & Health
+// v28.0.0 — Admin Overview & Health
 async function renderAdminOverviewV2(target){
   const host=typeof target==='string'?document.querySelector(target):target;
   if(!host)return;
@@ -3146,7 +3146,7 @@ async function renderAdminOverviewV2(target){
 }
 
 
-// v26.0.0 — Admin Sources
+// v28.0.0 — Admin Sources
 function adminSourceCard(s){
   return `<article class="adminCard adminSourceCard">
     <div class="adminCardHead"><div><h3>${esc(s.name||s.type||'Source')}</h3><small>${esc(s.detail||'')}</small></div>${AdminUx.statusBadge(s.status||'unknown',s.statusText||s.status||'Unknown')}</div>
@@ -3156,7 +3156,7 @@ function adminSourceCard(s){
 }
 
 
-// v26.0.0 — Admin DVR & Storage
+// v28.0.0 — Admin DVR & Storage
 function adminDvrSummary(x){
   return `<div class="adminCardGrid">
     ${[['Active',x.active],['Upcoming',x.upcoming],['Failed',x.failed],['Conflicts',x.conflicts]].map(([k,v])=>`<article class="adminCard adminMetric"><b>${Number(v||0)}</b><small>${k}</small></article>`).join('')}
@@ -3168,7 +3168,7 @@ function adminStorageBar(used,total){
 }
 
 
-// v26.0.0 — Admin Users & Devices
+// v28.0.0 — Admin Users & Devices
 function adminUserRow(u){
   return `<div class="adminListRow"><div><b>${esc(u.name||u.username||'User')}</b><small>${esc((u.roles||[]).join(', '))}</small></div><div>${AdminUx.statusBadge(u.enabled===false?'warning':'ok',u.enabled===false?'Disabled':'Enabled')}<button class="btn" data-user-edit="${escAttr(u.id||'')}">Edit</button></div></div>`;
 }
@@ -3177,7 +3177,7 @@ function adminDeviceRow(d){
 }
 
 
-// v26.0.0 — Admin Diagnostics
+// v28.0.0 — Admin Diagnostics
 function diagnosticGrade(ms){
   return ms<500?['excellent','Excellent']:ms<1000?['good','Good']:ms<2000?['warning','Slow']:['error','Very slow'];
 }
@@ -3188,7 +3188,7 @@ function diagnosticTimingRow(name,ms){
 }
 
 
-// v26.0.0 — Backup, Update & Recovery
+// v28.0.0 — Backup, Update & Recovery
 function adminRecoveryCard(x){
   return `<article class="adminCard">
     <div class="adminCardHead"><div><h3>Backup & Recovery</h3><small>Safe update workflow</small></div>${AdminUx.statusBadge(x?.healthy?'ok':'warning',x?.healthy?'Ready':'Check required')}</div>
@@ -3198,8 +3198,33 @@ function adminRecoveryCard(x){
 }
 
 
-// v26.0.0 — Mobile Admin
+// v28.0.0 — Mobile Admin
 function adminMobileClass(){
   document.documentElement.classList.toggle('adminCompact',matchMedia('(max-width:720px)').matches);
 }
 addEventListener('resize',adminMobileClass,{passive:true});adminMobileClass();
+
+
+// v28.0.0 Stream Doctor
+function streamDoctorMetric(label,value,state='ok'){return `<div class="streamDoctorRow"><span>${esc(label)}</span><b class="${state}">${esc(String(value))}</b></div>`}
+function renderStreamDoctor(x){return `<section class="card streamDoctor"><h3>Stream Doctor</h3>${streamDoctorMetric('Provider',x.provider||'Unknown',x.providerOk?'ok':'error')}${streamDoctorMetric('Codec',x.codec||'—')}${streamDoctorMetric('Resolution',x.resolution||'—')}${streamDoctorMetric('Bitrate',x.bitrate||'—')}${streamDoctorMetric('FPS',x.fps||'—')}${streamDoctorMetric('Buffer',x.buffer||'—')}${streamDoctorMetric('Playback mode',x.mode||'—')}</section>`}
+
+
+// v28.0.0 Notification Center
+const NotificationCenter={key:'myonline-notifications',all(){try{return JSON.parse(localStorage.getItem(this.key)||'[]')}catch{return[]}},push(n){const a=this.all();a.unshift({id:String(Date.now())+Math.random(),at:Date.now(),read:false,...n});localStorage.setItem(this.key,JSON.stringify(a.slice(0,100)));return a[0]},read(id){localStorage.setItem(this.key,JSON.stringify(this.all().map(x=>x.id===id?{...x,read:true}:x)))}};
+
+
+// v28.0.0 What's On Tonight
+function tonightFilter(rows,kind='all'){const now=new Date();return (rows||[]).filter(x=>{const d=new Date(x.start||x.startTime);return d.toDateString()===now.toDateString()&&d.getHours()>=17&&(kind==='all'||String(x.category||x.kind||'').toLowerCase().includes(kind))}).sort((a,b)=>new Date(a.start||a.startTime)-new Date(b.start||b.startTime))}
+
+
+// v28.0.0 Unified Watchlist
+const UnifiedWatchlist={key(){return `myonline-watchlist:${currentProfile||'default'}`},all(){try{return JSON.parse(localStorage.getItem(this.key())||'[]')}catch{return[]}},toggle(item){let a=this.all();const i=a.findIndex(x=>x.id===item.id);if(i>=0)a.splice(i,1);else a.unshift(item);localStorage.setItem(this.key(),JSON.stringify(a.slice(0,500)));return i<0}};
+
+
+// v28.0.0 Sports Hub
+function sportsMatches(rows,teams=[]){const n=teams.map(x=>String(x).toLowerCase()).filter(Boolean);return (rows||[]).filter(x=>{const t=String(x.title||'').toLowerCase();return n.some(q=>t.includes(q))||/(football|soccer|hockey|champions league|premier league|allsvenskan|match)/i.test(t)})}
+
+
+// v28.0.0 Guest Mode
+function enterGuestMode(){sessionStorage.setItem('myonline-guest','1');currentProfile='guest';show('home')} function isGuestMode(){return sessionStorage.getItem('myonline-guest')==='1'}

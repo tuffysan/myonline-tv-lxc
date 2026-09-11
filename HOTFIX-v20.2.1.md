@@ -1,4 +1,4 @@
-# v26.0.0 — Scrollbar Polish
+# v28.0.0 — Scrollbar Polish
 
 - Replaces the bright native browser scrollbar in the Live TV channel list.
 - Adds a thin dark scrollbar that matches the MyOnline TV theme.

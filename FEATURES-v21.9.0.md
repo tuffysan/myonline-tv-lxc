@@ -1,4 +1,4 @@
-# v26.0.0 — Appliance & Recovery
+# v28.0.0 — Appliance & Recovery
 
 Local health evaluation and bounded recovery-plan engine.
 

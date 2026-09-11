@@ -1,4 +1,4 @@
-# v26.0.0 — Advanced TV Platform
+# v28.0.0 — Advanced TV Platform
 
 Provider-gated Catch-up/Start Over plus PiP/Multi-view/Sports platform.
 

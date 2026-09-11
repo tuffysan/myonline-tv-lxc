@@ -1,4 +1,4 @@
-# v26.0.0 — Performance
+# v28.0.0 — Performance
 
 Local cache policy, bounded parallelism and fast-home performance diagnostics.
 

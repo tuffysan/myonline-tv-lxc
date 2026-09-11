@@ -1,4 +1,4 @@
-# v26.0.0 Stable Promotion Gate
+# v28.0.0 Stable Promotion Gate
 A build may be called stable only after all of these pass:
 1. .NET build and release workflow
 2. checksum-verified LXC upgrade + rollback test
