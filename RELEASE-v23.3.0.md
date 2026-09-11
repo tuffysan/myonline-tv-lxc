@@ -1,4 +1,4 @@
-# v30.0.0 — Live TV 4.0
+# v30.0.1 — Live TV 4.0
 
 TV-first zapping, Now/Next and previous-channel capabilities.
 

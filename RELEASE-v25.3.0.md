@@ -1,4 +1,4 @@
-# v30.0.0 — Admin Sources
+# v30.0.1 — Admin Sources
 
 This is a cumulative Admin release based on v25.2.0.
 

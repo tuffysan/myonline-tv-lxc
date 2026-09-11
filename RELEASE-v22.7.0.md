@@ -1,4 +1,4 @@
-# v30.0.0 — Home 3.0
+# v30.0.1 — Home 3.0
 
 This is a cumulative release based on v22.6.0.
 

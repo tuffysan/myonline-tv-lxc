@@ -1,4 +1,4 @@
-# v30.0.0 — Performance & Diagnostics
+# v30.0.1 — Performance & Diagnostics
 
 Local performance measurements and diagnostics.
 

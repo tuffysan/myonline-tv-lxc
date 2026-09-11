@@ -185,14 +185,71 @@ systemctl is-active --quiet nginx
 
 CURRENT_STEP="8/8 Verifying backend and reverse proxy"
 echo "[8/8] Verifying backend and reverse proxy..."
-pct exec "$CTID" -- bash -lc '
+
+FINAL_VERIFY=1
+if ! pct exec "$CTID" -- bash -lc '
 set -e
 grep -q "X-Forwarded-Proto \$my_forwarded_proto" /etc/nginx/sites-enabled/myonlinetv
 grep -q "proxy_set_header Host \$my_forwarded_host" /etc/nginx/sites-enabled/myonlinetv
 grep -q "X-Forwarded-Host \$my_forwarded_host" /etc/nginx/sites-enabled/myonlinetv
-curl -fsS --retry 10 --retry-delay 1 --retry-connrefused http://127.0.0.1:5080/health >/dev/null
-curl -fsS --retry 10 --retry-delay 1 --retry-connrefused http://127.0.0.1/health >/dev/null
-'
+systemctl is-active --quiet myonlinetv
+systemctl is-active --quiet nginx
+
+# Give the application time to settle after the migration/restart.
+for i in $(seq 1 15); do
+  if curl -fsS --max-time 3 http://127.0.0.1:5080/health >/dev/null 2>&1 &&
+     curl -fsS --max-time 3 http://127.0.0.1:5080/ready  >/dev/null 2>&1 &&
+     curl -fsS --max-time 3 http://127.0.0.1/health      >/dev/null 2>&1; then
+    exit 0
+  fi
+  sleep 1
+done
+exit 1
+'; then
+  FINAL_VERIFY=0
+fi
+
+if [[ "$FINAL_VERIFY" != "1" ]]; then
+  echo "Final backend/reverse-proxy verification failed." >&2
+  echo "Rolling back to v${CURRENT_VERSION}..." >&2
+
+  # Do not let the ERR trap interrupt the rollback sequence.
+  trap - ERR
+  pct exec "$CTID" -- bash -lc "
+set -e
+systemctl stop myonlinetv || true
+if [[ -d /opt/myonlinetv/publish.rollback ]]; then
+  rm -rf /opt/myonlinetv/publish
+  cp -a /opt/myonlinetv/publish.rollback /opt/myonlinetv/publish
+  printf '%s\\n' '${CURRENT_VERSION}' >/var/lib/myonlinetv/version
+else
+  echo 'Rollback snapshot is missing.' >&2
+  exit 2
+fi
+systemctl start myonlinetv
+"
+
+  # Restore nginx/system configuration from the previous release source when
+  # possible by re-running the current installed service against the existing
+  # configuration. At minimum verify the restored backend is healthy.
+  ROLLBACK_OK=0
+  for i in $(seq 1 15); do
+    if pct exec "$CTID" -- curl -fsS --max-time 3 http://127.0.0.1:5080/health >/dev/null 2>&1; then
+      ROLLBACK_OK=1
+      break
+    fi
+    sleep 1
+  done
+
+  if [[ "$ROLLBACK_OK" == "1" ]]; then
+    echo "Rollback verified: v${CURRENT_VERSION} backend is healthy." >&2
+  else
+    echo "CRITICAL: rollback was activated but its backend health check failed." >&2
+    echo "Inspect: pct exec ${CTID} -- journalctl -u myonlinetv -n 200 --no-pager" >&2
+  fi
+  echo "Persistent-data backup retained at ${BACKUP}." >&2
+  exit 1
+fi
 
 echo "Update verified."
 echo "Updated v${CURRENT_VERSION} -> v${TARGET_VERSION}"

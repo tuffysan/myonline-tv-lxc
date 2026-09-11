@@ -2,7 +2,7 @@ public static class UniversalSearchV2390
 {
     public static object Capabilities() => new
     {
-        version = "30.0.0",
+        version = "30.0.1",
         feature = "Universal Search",
         localFirst = true,
         mandatoryRuntimeCostSek = 0,

@@ -1,4 +1,4 @@
-# v30.0.0 — Installer, Updater & Rollback
+# v30.0.1 — Installer, Updater & Rollback
 
 Cumulative release based on v29.4.0.
 

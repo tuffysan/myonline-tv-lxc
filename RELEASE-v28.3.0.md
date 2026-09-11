@@ -1,4 +1,4 @@
-# v30.0.0 — Error, Loading & Empty States
+# v30.0.1 — Error, Loading & Empty States
 
 Cumulative release based on v28.2.0.
 

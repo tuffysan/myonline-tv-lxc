@@ -2,7 +2,7 @@ public static class RoomsHandoffV2430
 {
     public static object Capabilities() => new
     {
-        version = "30.0.0",
+        version = "30.0.1",
         feature = "Rooms & Handoff",
         localFirst = true,
         mandatoryRuntimeCostSek = 0,
