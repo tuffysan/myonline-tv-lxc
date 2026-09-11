@@ -1431,7 +1431,7 @@ async function featureCompletionView(){
     const groups=[...new Set(features.map(x=>x.area))];
     content.innerHTML=`
       <div class=hero>
-        <span class=kicker>v28.0.0 FEATURE COMPLETION</span>
+        <span class=kicker>v28.1.0 FEATURE COMPLETION</span>
         <h2>Feature Completion audit</h2>
         <p class=muted>This page distinguishes working features from partial implementations, foundations and missing functionality. It intentionally does not count a contract/model as a finished feature.</p>
       </div>
@@ -1463,123 +1463,291 @@ async function featureCompletionView(){
 
 async function adminView(){
   if(authState.role!=='Admin'){content.innerHTML='<div class=card>Administrator access is required.</div>';return}
-  providers=await api('/api/providers');profiles=await api('/api/profiles');
-  const users=await api('/api/admin/users');const accessCfg=await api('/api/admin/profile-access');const sourceCfg=await api('/api/admin/source-access');adminSourceAccess=sourceCfg||{};mediaLibraries=await api('/api/media-libraries');const adminStorage=await api('/api/admin/storage-targets');renderMediaLibraryNav();
+
+  providers=await api('/api/providers');
+  profiles=await api('/api/profiles');
+  const users=await api('/api/admin/users');
+  const accessCfg=await api('/api/admin/profile-access');
+  const sourceCfg=await api('/api/admin/source-access');
+  adminSourceAccess=sourceCfg||{};
+  mediaLibraries=await api('/api/media-libraries');
+  const adminStorage=await api('/api/admin/storage-targets');
+  renderMediaLibraryNav();
+
+  const enabledProviders=providers.filter(x=>x.enabled!==false);
+  const enabledLibraries=mediaLibraries.filter(x=>x.enabled!==false);
+  const enabledStorage=adminStorage.filter(x=>x.enabled!==false);
+  const dvrStorage=adminStorage.find(x=>x.defaultDvr&&x.enabled!==false);
+  const downloadStorage=adminStorage.find(x=>x.defaultDownload&&x.enabled!==false);
+  const adminUsers=users.filter(x=>x.role==='Admin'&&x.enabled!==false);
+  const attention=[];
+  if(!enabledProviders.length) attention.push({level:'warning',title:'No IPTV source is active',text:'Add or enable an IPTV provider to use Live TV and Guide.',section:'sources'});
+  if(!dvrStorage) attention.push({level:'warning',title:'No default DVR storage',text:'Choose a storage target for recordings.',section:'storage'});
+  if(!downloadStorage) attention.push({level:'info',title:'No default download storage',text:'Downloads will use the application default until a target is selected.',section:'storage'});
+  if(!adminUsers.length) attention.push({level:'error',title:'No enabled administrator',text:'At least one enabled Admin account is recommended.',section:'users'});
+
+  const status=(ok,label)=>`<span class="admin2Badge ${ok?'ok':'warning'}"><span></span>${esc(label)}</span>`;
+  const countCard=(icon,title,value,detail,ok=true,section='overview')=>`
+    <button class="admin2StatusCard" type="button" onclick="selectAdminSection('${section}')">
+      <div class="admin2StatusIcon">${icon}</div>
+      <div class="admin2StatusBody"><small>${esc(title)}</small><b>${esc(String(value))}</b><span>${esc(detail)}</span></div>
+      ${status(ok,ok?'OK':'Check')}
+    </button>`;
 
   content.innerHTML=`
-  <div class=hero><h2>Administration</h2><p class=muted>Manage users, IPTV providers, Plex/Jellyfin libraries and viewer profiles.</p></div>
-  <h2>Menu & navigation</h2>
-  <div class=card>
-    <p class=muted>Choose which pages are visible and their order. Home and Admin are always available.</p>
-    <div id=navigationManager class=manageList>${(navigationConfig?.items||[]).map(x=>`<div class=manageChannel data-nav-id="${escAttr(x.id)}"><span><b>${esc(navigationLabels[x.id]||x.id)}</b></span><label class=checkline><input type=checkbox ${x.enabled?'checked':''} ${x.id==='home'||x.id==='admin'?'disabled':''}> Visible</label><span class=row><button class=btn type=button onclick="moveNavigationItem('${escAttr(x.id)}',-1)">↑</button><button class=btn type=button onclick="moveNavigationItem('${escAttr(x.id)}',1)">↓</button></span></div>`).join('')}</div>
-    <div class=row><button class=btn id=saveNavigation>Save menu</button></div>
-  </div>
-  <h2>System tools</h2>
-  <div class="grid adminSystemTools">
-    <div class=card><h3>System overview</h3><p class=muted>Platform status, configured services and capabilities.</p><button class=btn onclick="show('platform')">Open system overview</button></div>
-    <div class=card><h3>Diagnostics</h3><p class=muted>Check FFmpeg, FFprobe, rclone, storage, providers and disk space.</p><button class=btn onclick="show('diagnostics')">Open diagnostics</button></div>
-    <div class=card><h3>Appliance</h3><p class=muted>Health, backup and appliance maintenance.</p><button class=btn onclick="show('appliance')">Open appliance tools</button></div>
-    <div class=card><h3>Feature Completion</h3><p class=muted>Audited status of planned features: complete, partial, foundation or missing.</p><button class=btn onclick="show('completion')">Open feature audit</button></div>
-  </div>
-
-
-  <h2>Users</h2>
-  <div class=card>
-    <div class=formGrid>
-      <div class=field><label>Username</label><input id=auser autocomplete=off></div>
-      <div class=field><label>Role</label><select id=arole><option value=User>User</option><option value=Admin>Admin</option></select></div>
-      <div class=field><label>Password</label><input id=apass type=password autocomplete=new-password placeholder="Required for new user"></div>
-      <div class=field><label>Status</label><label class=checkline><input id=aenabled type=checkbox checked> Enabled</label></div>
+  <div class="admin2Shell">
+    <div class="admin2Hero">
+      <div>
+        <span class="admin2Kicker">MYONLINE TV v28.1.0</span>
+        <h1>Administration</h1>
+        <p>Everything needed to configure, monitor and maintain your media center — without one endless settings page.</p>
+      </div>
+      <div class="admin2HeroActions">
+        <button class=btn onclick="show('diagnostics')">Run diagnostics</button>
+        <button class=btn onclick="show('appliance')">Backup & recovery</button>
+      </div>
     </div>
-    <div class=row><button class=btn id=saveUser>Add user</button><button class=btn id=cancelUser disabled>Cancel edit</button></div>
-  </div>
-  <div class=manageList>${users.map(u=>{const ua=accessCfg.userAccess[u.username]||{allowedProfileIds:profiles.map(p=>p.id),defaultProfileId:profiles[0]?.id||'default'};return `<div class=manageChannel><span><b>${esc(u.username)}</b> · ${esc(u.role)} ${u.enabled?'':'· Disabled'}</span><span><select multiple id="ua-${u.id}">${profiles.map(p=>`<option value="${p.id}" ${ua.allowedProfileIds.includes(p.id)?'selected':''}>${esc(p.name)}</option>`).join('')}</select></span><button class=btn onclick="saveUserAccess('${escAttr(u.id)}','${escAttr(u.username)}')">Profiles</button><button class=btn onclick="editUserSources('${escAttr(u.username)}')">Sources</button><button class=btn onclick="editUser('${escAttr(u.id)}')">Edit</button><button class=btn onclick="deleteUser('${escAttr(u.id)}','${escAttr(u.username)}')">Remove</button></div>`}).join('')}</div>
 
-  <div id=userSourceAccessEditor class=card style="display:none"></div>
-
-  <h2>Media libraries</h2>
-  <div class=card>
-    <div class=formGrid>
-      <div class=field><label>Name</label><input id=mlname></div>
-      <div class=field><label>Type</label><select id=mltype><option value=plex>Plex</option><option value=jellyfin>Jellyfin</option></select></div>
-      <div class=field><label>Server URL</label><input id=mlbase placeholder="https://plex.example or http://192.168.x.x:8096"></div>
-      <div class=field><label>Token / API key</label><input id=mltoken type=password placeholder="Token/API key"></div>
-      <div class=field><label>Status</label><label class=checkline><input id=mlenabled type=checkbox checked> Enabled</label></div>
+    <div class="admin2Nav" role="tablist" aria-label="Administration sections">
+      <button class="active" data-admin2-tab="overview" onclick="selectAdminSection('overview')">Overview</button>
+      <button data-admin2-tab="sources" onclick="selectAdminSection('sources')">Sources</button>
+      <button data-admin2-tab="users" onclick="selectAdminSection('users')">Users & profiles</button>
+      <button data-admin2-tab="storage" onclick="selectAdminSection('storage')">Storage</button>
+      <button data-admin2-tab="navigation" onclick="selectAdminSection('navigation')">Navigation</button>
+      <button data-admin2-tab="system" onclick="selectAdminSection('system')">System</button>
     </div>
-    <div class=row><button class=btn id=mlsave>Add media library</button><button class=btn id=mlcancel disabled>Cancel edit</button></div>
-  </div>
-  <div class=grid>${mediaLibraries.map(x=>`<div class=card><h3>${esc(x.name)}</h3><p>${esc(x.type)} · ${esc(x.host||'')}</p><div class=row><button class=btn onclick="editMediaLibrary('${x.id}')">Edit</button><button class=btn onclick="testMediaLibrary('${x.id}')">Test</button><button class=btn onclick="chooseMediaLibraries('${x.id}')">Libraries</button><button class=btn onclick="removeMediaLibrary('${x.id}')">Remove</button></div><div id="mlstat-${x.id}" class=muted></div></div>`).join('')}</div>
 
-  <h2>Storage</h2>
-  <div class=card>
-    <p class=muted>Use a mounted NAS/local path, or an rclone remote for cloud storage. DVR and server-side downloads never need to remain permanently inside the LXC.</p>
-    <input id=stid type=hidden>
-    <div class=formGrid>
-      <div class=field><label>Name</label><input id=stname placeholder="NAS, OneDrive, Google Drive..."></div>
-      <div class=field><label>Type</label><select id=sttype><option value=path>Mounted path / NAS</option><option value=rclone>Cloud via rclone</option></select></div>
-      <div class=field><label>Destination</label><input id=stdest placeholder="/mnt/media or myremote:MyOnlineTV"></div>
-      <div class=field><label>Status</label><label class=checkline><input id=stenabled type=checkbox checked> Enabled</label></div>
-      <div class=field><label><input id=stdefaultdvr type=checkbox> Default for DVR</label></div>
-      <div class=field><label><input id=stdefaultdownload type=checkbox> Default for Downloads</label></div>
-    </div>
-    <div class=row><button class=btn id=stsave>Add storage target</button><button class=btn id=stcancel disabled>Cancel edit</button></div>
-    <p class=muted>For SMB/NFS, mount the share on the LXC/host and use that path. For cloud, configure the rclone remote in the LXC and use e.g. <code>onedrive:MyOnlineTV</code>.</p>
-  </div>
-  <div class=grid>${adminStorage.map(s=>`<div class=card><h3>${esc(s.name)}</h3><p>${esc(s.type)} · ${esc(s.destination)}</p><p>${s.defaultDvr?'● DVR default ':''}${s.defaultDownload?'↓ Download default':''}</p><div class=row><button class=btn onclick='editStorageTarget(${JSON.stringify(s)})'>Edit</button><button class=btn onclick="testStorageTarget('${escAttr(s.id)}')">Test</button><button class=btn onclick="removeStorageTarget('${escAttr(s.id)}')">Remove</button></div><div id="ststat-${s.id}" class=muted></div></div>`).join('')}</div>
+    <section class="admin2Panel active" data-admin2-panel="overview">
+      <div class="admin2SectionHead"><div><h2>System overview</h2><p>See what is working and what needs your attention.</p></div></div>
 
-  <h2>IPTV providers</h2>
-  <div class=card>
-    <p class=muted>Connection details are encrypted at rest. Existing passwords are never returned to the browser.</p>
-    <input id=pid type=hidden>
-    <div class=formGrid>
-      <div class=field><label>Name</label><input id=pname></div>
-      <div class=field><label>Type</label><select id=ptype><option value=m3u>M3U + XMLTV</option><option value=xtream>Xtream-compatible</option></select></div>
-      <div class=field><label>M3U playlist URL</label><input id=purl placeholder="https://.../playlist.m3u"></div>
-      <div class=field><label>XMLTV EPG URL</label><input id=pepg placeholder="https://.../epg.xml"></div>
-      <div class=field><label>Xtream base URL</label><input id=pbase placeholder="https://provider.example:443"></div>
-      <div class=field><label>Username</label><input id=puser autocomplete=off></div>
-      <div class=field><label>Password</label><input id=ppass type=password autocomplete=new-password placeholder="Leave blank to keep existing password"></div>
-    </div>
-    <div class=row><button class=btn id=savep>Add provider</button><button class=btn id=cancelProvider disabled>Cancel edit</button></div>
-  </div>
+      <div class="admin2StatusGrid">
+        ${countCard('◉','IPTV',enabledProviders.length,enabledProviders.length===1?'1 active provider':`${enabledProviders.length} active providers`,enabledProviders.length>0,'sources')}
+        ${countCard('◆','Media libraries',enabledLibraries.length,enabledLibraries.length?enabledLibraries.map(x=>x.type).join(' · '):'No Plex/Jellyfin configured',true,'sources')}
+        ${countCard('●','Users',users.length,`${profiles.length} viewer profile${profiles.length===1?'':'s'}`,users.length>0,'users')}
+        ${countCard('▰','Storage',enabledStorage.length,dvrStorage?`DVR → ${dvrStorage.name}`:'DVR target missing',!!dvrStorage,'storage')}
+      </div>
 
-  <div class=grid>${providers.map(p=>`<div class=card><h3>${esc(p.name)}</h3><div class=muted>${esc(p.type)} · ${esc(p.host||'')}</div><p>${p.hasEpg?'EPG configured':'No explicit EPG'} · ${p.hasCredentials?'Credentials stored':'No credentials'}</p><div class=row><button class=btn onclick="editProvider('${p.id}')">Edit</button><button class=btn onclick="testProvider('${p.id}',this)">Test</button><button class=btn onclick="removeProvider('${p.id}')">Remove</button></div><div id="ptest-${p.id}" class=muted></div></div>`).join('')}</div>
+      <div class="admin2DashboardGrid">
+        <div class="admin2Card">
+          <div class="admin2CardHead"><div><h3>Needs attention</h3><p>Configuration items worth checking.</p></div>${status(attention.length===0,attention.length===0?'All good':`${attention.length} item${attention.length===1?'':'s'}`)}</div>
+          <div class="admin2AttentionList">
+            ${attention.length?attention.map(a=>`<button type="button" class="admin2Attention ${a.level}" onclick="selectAdminSection('${a.section}')"><span class="admin2AttentionMark">${a.level==='error'?'!':a.level==='warning'?'!':'i'}</span><span><b>${esc(a.title)}</b><small>${esc(a.text)}</small></span><span>→</span></button>`).join(''):'<div class="admin2Empty"><b>Everything looks configured.</b><span>No obvious configuration problems were found.</span></div>'}
+          </div>
+        </div>
 
-  <div class=card style="margin-top:18px"><h3>Channels & groups</h3><p class=muted>Hide groups/channels or give a channel a local display name.</p><div class=row><select id=manageProvider>${providers.map(p=>`<option value="${p.id}" ${p.id===currentProvider?'selected':''}>${esc(p.name)}</option>`).join('')}</select><button class=btn id=manageChannels>Manage channels</button></div><div id=channelManager></div></div>
+        <div class="admin2Card">
+          <div class="admin2CardHead"><div><h3>Quick actions</h3><p>Common administration tasks.</p></div></div>
+          <div class="admin2QuickGrid">
+            <button type=button onclick="selectAdminSection('sources');document.querySelector('#pname')?.focus()">＋ Add IPTV</button>
+            <button type=button onclick="selectAdminSection('sources');document.querySelector('#mlname')?.focus()">＋ Add library</button>
+            <button type=button onclick="selectAdminSection('users');document.querySelector('#auser')?.focus()">＋ Add user</button>
+            <button type=button onclick="show('diagnostics')">⌁ Diagnostics</button>
+            <button type=button onclick="show('appliance')">▣ Backup</button>
+            <button type=button onclick="selectAdminSection('navigation')">☰ Menu layout</button>
+          </div>
+        </div>
+      </div>
 
-  <div class=card style="margin-top:18px"><h3>Viewer profiles</h3><div class=formGrid><div class=field><label>Name</label><input id=profileName placeholder="Profile name"></div><div class=field><label>Icon</label><select id=profileIcon><option>👤</option><option>🧑</option><option>👩</option><option>👨</option><option>🧒</option><option>🎬</option></select></div></div><label><input id=profileKids type=checkbox> Kids profile</label><button class=btn id=addProfile>Add profile</button><div class=manageList>${profiles.map(p=>`<div class=manageChannel><span>${esc(p.icon)} ${esc(p.name)} ${p.isKids?'· Kids':''}</span><span></span><button class=btn onclick="deleteProfile('${escAttr(p.id)}')" ${profiles.length<=1?'disabled':''}>Remove</button></div>`).join('')}</div></div>
+      <div class="admin2Card">
+        <div class="admin2CardHead"><div><h3>Configured services</h3><p>At-a-glance view of your current setup.</p></div></div>
+        <div class="admin2ServiceRows">
+          <button onclick="selectAdminSection('sources')"><span class="admin2ServiceIcon">◉</span><span><b>IPTV providers</b><small>${enabledProviders.length} enabled · ${providers.length} configured</small></span>${status(enabledProviders.length>0,enabledProviders.length?'Connected':'Not configured')}<span>›</span></button>
+          <button onclick="selectAdminSection('sources')"><span class="admin2ServiceIcon">◆</span><span><b>Plex / Jellyfin</b><small>${enabledLibraries.length} enabled media libraries</small></span>${status(true,enabledLibraries.length?'Ready':'Optional')}<span>›</span></button>
+          <button onclick="selectAdminSection('storage')"><span class="admin2ServiceIcon">▰</span><span><b>Storage</b><small>${dvrStorage?`DVR: ${esc(dvrStorage.name)}`:'No DVR default'}${downloadStorage?` · Downloads: ${esc(downloadStorage.name)}`:''}</small></span>${status(!!dvrStorage,dvrStorage?'Ready':'Needs setup')}<span>›</span></button>
+          <button onclick="selectAdminSection('users')"><span class="admin2ServiceIcon">●</span><span><b>Accounts & profiles</b><small>${users.length} users · ${profiles.length} profiles</small></span>${status(users.length>0,'Ready')}<span>›</span></button>
+        </div>
+      </div>
+    </section>
 
-  <div class=card style="margin-top:18px"><h3>Profiles & permissions</h3>
-    <p class=muted>Choose profile permissions, providers and optional Kids PIN.</p>
-    <div id=permissionMatrix></div>
-  </div>
+    <section class="admin2Panel" data-admin2-panel="sources">
+      <div class="admin2SectionHead"><div><h2>Sources</h2><p>IPTV, EPG, Plex and Jellyfin connections live here.</p></div></div>
 
-  <div class=card style="margin-top:18px"><h3>Security</h3><p>User passwords use PBKDF2-SHA256 with unique salts. Provider credentials are AES-GCM encrypted at rest.</p><p class=muted>Only administrators can manage users/providers or access System administration.</p></div>`;
+      <div class="admin2Card">
+        <div class="admin2CardHead"><div><h3>IPTV providers</h3><p>Credentials stay encrypted on the server and existing passwords are never returned to the browser.</p></div>${status(enabledProviders.length>0,enabledProviders.length?`${enabledProviders.length} active`:'None active')}</div>
+        <div class="admin2SourceCards">${providers.map(p=>`
+          <div class="admin2SourceCard">
+            <div class="admin2SourceTitle"><span class="admin2SourceIcon">◉</span><div><b>${esc(p.name)}</b><small>${esc(p.type)} · ${esc(p.host||'')}</small></div>${status(p.enabled!==false,p.enabled===false?'Disabled':'Configured')}</div>
+            <div class="admin2SourceMeta"><span>${p.hasEpg?'✓ EPG configured':'○ No explicit EPG'}</span><span>${p.hasCredentials?'✓ Credentials stored':'○ No credentials'}</span></div>
+            <div class="admin2Actions"><button class=btn onclick="editProvider('${p.id}')">Edit</button><button class=btn onclick="testProvider('${p.id}',this)">Test connection</button><button class="btn danger" onclick="removeProvider('${p.id}')">Remove</button></div>
+            <div id="ptest-${p.id}" class=muted></div>
+          </div>`).join('')||'<div class="admin2Empty"><b>No IPTV providers yet.</b><span>Add one below to enable Live TV and Guide.</span></div>'}
+        </div>
+      </div>
 
+      <details class="admin2Editor" open>
+        <summary><span>Add or edit IPTV provider</span><small>M3U/XMLTV or Xtream-compatible</small></summary>
+        <div class="admin2EditorBody">
+          <input id=pid type=hidden>
+          <div class=formGrid>
+            <div class=field><label>Name</label><input id=pname placeholder="My IPTV"></div>
+            <div class=field><label>Type</label><select id=ptype><option value=m3u>M3U + XMLTV</option><option value=xtream>Xtream-compatible</option></select></div>
+            <div class=field><label>M3U playlist URL</label><input id=purl placeholder="https://.../playlist.m3u"></div>
+            <div class=field><label>XMLTV EPG URL</label><input id=pepg placeholder="https://.../epg.xml"></div>
+            <div class=field><label>Xtream base URL</label><input id=pbase placeholder="https://provider.example:443"></div>
+            <div class=field><label>Username</label><input id=puser autocomplete=off></div>
+            <div class=field><label>Password</label><input id=ppass type=password autocomplete=new-password placeholder="Leave blank to keep existing password"></div>
+          </div>
+          <div class=row><button class=btn id=savep>Add provider</button><button class=btn id=cancelProvider disabled>Cancel edit</button></div>
+        </div>
+      </details>
+
+      <div class="admin2Card">
+        <div class="admin2CardHead"><div><h3>Media libraries</h3><p>Add Plex or Jellyfin without mixing them into IPTV settings.</p></div>${status(true,enabledLibraries.length?`${enabledLibraries.length} enabled`:'Optional')}</div>
+        <div class="admin2SourceCards">${mediaLibraries.map(x=>`
+          <div class="admin2SourceCard">
+            <div class="admin2SourceTitle"><span class="admin2SourceIcon">${String(x.type).toLowerCase()==='plex'?'◆':'△'}</span><div><b>${esc(x.name)}</b><small>${esc(x.type)} · ${esc(x.host||'')}</small></div>${status(x.enabled!==false,x.enabled===false?'Disabled':'Enabled')}</div>
+            <div class="admin2Actions"><button class=btn onclick="editMediaLibrary('${x.id}')">Edit</button><button class=btn onclick="testMediaLibrary('${x.id}')">Test connection</button><button class=btn onclick="chooseMediaLibraries('${x.id}')">Libraries</button><button class="btn danger" onclick="removeMediaLibrary('${x.id}')">Remove</button></div>
+            <div id="mlstat-${x.id}" class=muted></div>
+          </div>`).join('')||'<div class="admin2Empty"><b>No Plex/Jellyfin libraries configured.</b><span>This is optional if you only use IPTV.</span></div>'}
+        </div>
+      </div>
+
+      <details class="admin2Editor">
+        <summary><span>Add or edit media library</span><small>Plex or Jellyfin</small></summary>
+        <div class="admin2EditorBody">
+          <div class=formGrid>
+            <div class=field><label>Name</label><input id=mlname placeholder="Living room Plex"></div>
+            <div class=field><label>Type</label><select id=mltype><option value=plex>Plex</option><option value=jellyfin>Jellyfin</option></select></div>
+            <div class=field><label>Server URL</label><input id=mlbase placeholder="https://plex.example or http://192.168.x.x:8096"></div>
+            <div class=field><label>Token / API key</label><input id=mltoken type=password placeholder="Token/API key"></div>
+            <div class=field><label>Status</label><label class=checkline><input id=mlenabled type=checkbox checked> Enabled</label></div>
+          </div>
+          <div class=row><button class=btn id=mlsave>Add media library</button><button class=btn id=mlcancel disabled>Cancel edit</button></div>
+        </div>
+      </details>
+
+      <div class="admin2Card">
+        <div class="admin2CardHead"><div><h3>Channels & groups</h3><p>Hide groups/channels or assign local display names.</p></div></div>
+        <div class=row><select id=manageProvider>${providers.map(p=>`<option value="${p.id}" ${p.id===currentProvider?'selected':''}>${esc(p.name)}</option>`).join('')}</select><button class=btn id=manageChannels ${providers.length?'':'disabled'}>Manage channels</button></div><div id=channelManager></div>
+      </div>
+    </section>
+
+    <section class="admin2Panel" data-admin2-panel="users">
+      <div class="admin2SectionHead"><div><h2>Users & profiles</h2><p>Accounts control sign-in; viewer profiles control the viewing experience.</p></div></div>
+
+      <div class="admin2Card">
+        <div class="admin2CardHead"><div><h3>User accounts</h3><p>Manage sign-in accounts, roles and allowed profiles.</p></div><button class=btn onclick="document.querySelector('#auser')?.focus()">Add user</button></div>
+        <div class="admin2UserList">${users.map(u=>{const ua=accessCfg.userAccess[u.username]||{allowedProfileIds:profiles.map(p=>p.id),defaultProfileId:profiles[0]?.id||'default'};return `
+          <div class="admin2UserRow">
+            <div class="admin2Avatar">${esc((u.username||'?').slice(0,1).toUpperCase())}</div>
+            <div><b>${esc(u.username)}</b><small>${esc(u.role)} · ${u.enabled?'Enabled':'Disabled'}</small></div>
+            ${status(u.enabled,u.enabled?'Active':'Disabled')}
+            <select multiple id="ua-${u.id}" title="Allowed profiles">${profiles.map(p=>`<option value="${p.id}" ${ua.allowedProfileIds.includes(p.id)?'selected':''}>${esc(p.name)}</option>`).join('')}</select>
+            <div class=admin2Actions><button class=btn onclick="saveUserAccess('${escAttr(u.id)}','${escAttr(u.username)}')">Profiles</button><button class=btn onclick="editUserSources('${escAttr(u.username)}')">Sources</button><button class=btn onclick="editUser('${escAttr(u.id)}')">Edit</button><button class="btn danger" onclick="deleteUser('${escAttr(u.id)}','${escAttr(u.username)}')">Remove</button></div>
+          </div>`}).join('')}</div>
+      </div>
+
+      <details class="admin2Editor">
+        <summary><span>Add or edit user</span><small>Account, role and password</small></summary>
+        <div class="admin2EditorBody">
+          <div class=formGrid>
+            <div class=field><label>Username</label><input id=auser autocomplete=off></div>
+            <div class=field><label>Role</label><select id=arole><option value=User>User</option><option value=Admin>Admin</option></select></div>
+            <div class=field><label>Password</label><input id=apass type=password autocomplete=new-password placeholder="Required for new user"></div>
+            <div class=field><label>Status</label><label class=checkline><input id=aenabled type=checkbox checked> Enabled</label></div>
+          </div>
+          <div class=row><button class=btn id=saveUser>Add user</button><button class=btn id=cancelUser disabled>Cancel edit</button></div>
+        </div>
+      </details>
+
+      <div id=userSourceAccessEditor class="admin2Card" style="display:none"></div>
+
+      <div class="admin2Card">
+        <div class="admin2CardHead"><div><h3>Viewer profiles</h3><p>Profiles keep recommendations, permissions and Kids settings separate.</p></div></div>
+        <div class="admin2ProfileGrid">${profiles.map(p=>`<div class="admin2ProfileCard"><span>${esc(p.icon)}</span><div><b>${esc(p.name)}</b><small>${p.isKids?'Kids profile':'Standard profile'}</small></div><button class="btn danger" onclick="deleteProfile('${escAttr(p.id)}')" ${profiles.length<=1?'disabled':''}>Remove</button></div>`).join('')}</div>
+        <div class="admin2InlineForm"><div class=field><label>Name</label><input id=profileName placeholder="Profile name"></div><div class=field><label>Icon</label><select id=profileIcon><option>👤</option><option>🧑</option><option>👩</option><option>👨</option><option>🧒</option><option>🎬</option></select></div><label class=checkline><input id=profileKids type=checkbox> Kids profile</label><button class=btn id=addProfile>Add profile</button></div>
+      </div>
+
+      <div class="admin2Card"><div class="admin2CardHead"><div><h3>Profile permissions</h3><p>Choose media areas, providers and an optional Kids PIN.</p></div></div><div id=permissionMatrix></div></div>
+
+      <div class="admin2Card admin2Security"><div class="admin2CardHead"><div><h3>Security</h3><p>Passwords use PBKDF2-SHA256 with unique salts. Provider credentials are AES-GCM encrypted at rest.</p></div>${status(true,'Protected')}</div><small>Only administrators can manage users/providers or access system administration.</small></div>
+    </section>
+
+    <section class="admin2Panel" data-admin2-panel="storage">
+      <div class="admin2SectionHead"><div><h2>Storage</h2><p>Configure where DVR recordings and server-side downloads are stored.</p></div></div>
+
+      <div class="admin2StorageGrid">${adminStorage.map(s=>`
+        <div class="admin2StorageCard">
+          <div class="admin2SourceTitle"><span class="admin2SourceIcon">▰</span><div><b>${esc(s.name)}</b><small>${esc(s.type)} · ${esc(s.destination)}</small></div>${status(s.enabled!==false,s.enabled===false?'Disabled':'Enabled')}</div>
+          <div class="admin2StorageTags">${s.defaultDvr?'<span>DVR default</span>':''}${s.defaultDownload?'<span>Downloads default</span>':''}</div>
+          <div class=admin2Actions><button class=btn onclick='editStorageTarget(${JSON.stringify(s)})'>Edit</button><button class=btn onclick="testStorageTarget('${escAttr(s.id)}')">Test</button><button class="btn danger" onclick="removeStorageTarget('${escAttr(s.id)}')">Remove</button></div><div id="ststat-${s.id}" class=muted></div>
+        </div>`).join('')||'<div class="admin2Empty"><b>No storage targets configured.</b><span>Add a mounted path/NAS or rclone destination.</span></div>'}</div>
+
+      <details class="admin2Editor" open>
+        <summary><span>Add or edit storage target</span><small>Mounted path, NAS or rclone</small></summary>
+        <div class="admin2EditorBody">
+          <p class=muted>For SMB/NFS, mount the share on the LXC/host and use that path. For cloud, configure the rclone remote in the LXC.</p>
+          <input id=stid type=hidden>
+          <div class=formGrid>
+            <div class=field><label>Name</label><input id=stname placeholder="NAS, OneDrive, Google Drive..."></div>
+            <div class=field><label>Type</label><select id=sttype><option value=path>Mounted path / NAS</option><option value=rclone>Cloud via rclone</option></select></div>
+            <div class=field><label>Destination</label><input id=stdest placeholder="/mnt/media or myremote:MyOnlineTV"></div>
+            <div class=field><label>Status</label><label class=checkline><input id=stenabled type=checkbox checked> Enabled</label></div>
+            <div class=field><label class=checkline><input id=stdefaultdvr type=checkbox> Default for DVR</label></div>
+            <div class=field><label class=checkline><input id=stdefaultdownload type=checkbox> Default for Downloads</label></div>
+          </div>
+          <div class=row><button class=btn id=stsave>Add storage target</button><button class=btn id=stcancel disabled>Cancel edit</button></div>
+        </div>
+      </details>
+
+      <div class="admin2Card"><div class="admin2CardHead"><div><h3>DVR & downloads</h3><p>Current default destinations.</p></div></div>
+        <div class="admin2SummaryRows"><div><span>DVR recordings</span><b>${dvrStorage?esc(dvrStorage.name):'Not configured'}</b></div><div><span>Downloads</span><b>${downloadStorage?esc(downloadStorage.name):'Application default'}</b></div></div>
+      </div>
+    </section>
+
+    <section class="admin2Panel" data-admin2-panel="navigation">
+      <div class="admin2SectionHead"><div><h2>Menu & navigation</h2><p>Control which main pages are visible and their order.</p></div></div>
+      <div class="admin2Card">
+        <div class="admin2NavManager" id=navigationManager>${(navigationConfig?.items||[]).map((x,i)=>`<div class="admin2NavRow" data-nav-id="${escAttr(x.id)}"><span class="admin2Drag">${String(i+1).padStart(2,'0')}</span><b>${esc(navigationLabels[x.id]||x.id)}</b><label class=checkline><input type=checkbox ${x.enabled?'checked':''} ${x.id==='home'||x.id==='admin'?'disabled':''}> Visible</label><div class=row><button class=btn type=button onclick="moveNavigationItem('${escAttr(x.id)}',-1)" aria-label="Move up">↑</button><button class=btn type=button onclick="moveNavigationItem('${escAttr(x.id)}',1)" aria-label="Move down">↓</button></div></div>`).join('')}</div>
+        <div class="admin2StickyActions"><span class=muted>Home and Admin are always visible.</span><button class=btn id=saveNavigation>Save menu</button></div>
+      </div>
+    </section>
+
+    <section class="admin2Panel" data-admin2-panel="system">
+      <div class="admin2SectionHead"><div><h2>System</h2><p>Health, diagnostics, backup, recovery and advanced platform information.</p></div></div>
+      <div class="admin2ToolGrid">
+        <button onclick="show('platform')"><span>▣</span><div><b>System overview</b><small>Platform status, configured services and capabilities.</small></div><i>→</i></button>
+        <button onclick="show('diagnostics')"><span>⌁</span><div><b>Diagnostics</b><small>FFmpeg, FFprobe, rclone, storage, providers and disk space.</small></div><i>→</i></button>
+        <button onclick="show('appliance')"><span>◫</span><div><b>Backup & recovery</b><small>Health, backup, restore and appliance maintenance.</small></div><i>→</i></button>
+        <button onclick="show('completion')"><span>✓</span><div><b>Feature completion</b><small>Audited status of implemented, partial and planned features.</small></div><i>→</i></button>
+      </div>
+      <div class="admin2Card admin2Security"><div class="admin2CardHead"><div><h3>Security baseline</h3><p>Credentials stay server-side. Passwords are salted and provider secrets are encrypted at rest.</p></div>${status(true,'Secure')}</div></div>
+    </section>
+  </div>`;
 
   const pm=$('#permissionMatrix');
   pm.innerHTML=profiles.map(p=>{
     const pol=accessCfg.policies[p.id]||{live:true,movies:true,series:true,downloads:true,allowedProviderIds:[]};
-    return `<div class=manageChannel><span><b>${esc(p.icon)} ${esc(p.name)}</b><br><small>
-      <label><input type=checkbox id="pl-${p.id}" ${pol.live!==false?'checked':''}> Live/Guide</label>
-      <label><input type=checkbox id="pm-${p.id}" ${pol.movies!==false?'checked':''}> Movies</label>
-      <label><input type=checkbox id="ps-${p.id}" ${pol.series!==false?'checked':''}> Series</label>
-      <label><input type=checkbox id="pd-${p.id}" ${pol.downloads!==false?'checked':''}> Downloads</label></small></span>
-      <span><select multiple id="pp-${p.id}">${providers.map(x=>`<option value="${x.id}" ${(pol.allowedProviderIds||[]).includes(x.id)?'selected':''}>${esc(x.name)}</option>`).join('')}</select></span>
+    return `<div class="admin2PermissionRow">
+      <div><b>${esc(p.icon)} ${esc(p.name)}</b><small>${p.isKids?'Kids profile':'Viewer profile'}</small></div>
+      <div class="admin2PermissionChecks">
+        <label><input type=checkbox id="pl-${p.id}" ${pol.live!==false?'checked':''}> Live/Guide</label>
+        <label><input type=checkbox id="pm-${p.id}" ${pol.movies!==false?'checked':''}> Movies</label>
+        <label><input type=checkbox id="ps-${p.id}" ${pol.series!==false?'checked':''}> Series</label>
+        <label><input type=checkbox id="pd-${p.id}" ${pol.downloads!==false?'checked':''}> Downloads</label>
+      </div>
+      <select multiple id="pp-${p.id}" title="Allowed IPTV providers">${providers.map(x=>`<option value="${x.id}" ${(pol.allowedProviderIds||[]).includes(x.id)?'selected':''}>${esc(x.name)}</option>`).join('')}</select>
       <input id="pin-${p.id}" type=password placeholder="New Kids PIN">
-      <button class=btn onclick="saveProfilePolicy('${p.id}')">Save permissions</button></div>`;
+      <button class=btn onclick="saveProfilePolicy('${p.id}')">Save</button>
+    </div>`;
   }).join('');
 
   $('#saveNavigation').onclick=saveNavigationManager;
   $('#manageChannels').onclick=manageChannels;
   $('#addProfile').onclick=async()=>{try{await jpost('/api/profiles',{id:null,name:$('#profileName').value,isKids:$('#profileKids').checked,icon:$('#profileIcon').value});profiles=await api('/api/profiles');adminView()}catch(e){alert(friendlyError(e))}};
-
   $('#stsave').onclick=saveStorageTarget;$('#stcancel').onclick=()=>adminView();
   $('#mlsave').onclick=saveMediaLibrary;$('#mlcancel').onclick=()=>{editingMediaLibraryId=null;adminView()};
   $('#saveUser').onclick=saveAdminUser;
   $('#cancelUser').onclick=()=>{editingUserId=null;adminView()};
   $('#savep').onclick=saveProvider;
   $('#cancelProvider').onclick=()=>{editingProviderId=null;adminView()};
+}
+
+function selectAdminSection(id){
+  document.querySelectorAll('[data-admin2-tab]').forEach(x=>x.classList.toggle('active',x.dataset.admin2Tab===id));
+  document.querySelectorAll('[data-admin2-panel]').forEach(x=>x.classList.toggle('active',x.dataset.admin2Panel===id));
+  try{sessionStorage.setItem('myonline-admin-section',id)}catch{}
+  document.querySelector('.admin2Shell')?.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
 function editStorageTarget(s){
@@ -2886,8 +3054,8 @@ window.MyOnlineOperations={
 };
 
 
-// v28.0.0 Native Client Generation
-window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'28.0.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
+// v28.1.0 Native Client Generation
+window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'28.1.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
 window.MyOnlineClientBridge={
  version:1,
  capabilities(){return {sourceEngine:true,player:true,live:true,guide:true,library:true,dvr:true,profiles:true,rooms:true,remote:true}},
@@ -2895,7 +3063,7 @@ window.MyOnlineClientBridge={
 };
 
 
-// v28.0.0 — Performance Engine
+// v28.1.0 — Performance Engine
 const perfCache=new Map();
 function perfCacheGet(key,maxAgeMs){
   const x=perfCache.get(key);
@@ -2932,7 +3100,7 @@ document.addEventListener('pointerover',e=>{
 },{passive:true});
 
 
-// v28.0.0 — Live TV 3.0
+// v28.1.0 — Live TV 3.0
 let liveNumberBuffer='',liveNumberTimer=null;
 function showLiveZapOverlay(c){
   let box=$('#liveZapOverlay');
@@ -2961,7 +3129,7 @@ document.addEventListener('keydown',e=>{
 });
 
 
-// v28.0.0 — Guide 3.0
+// v28.1.0 — Guide 3.0
 function scrollGuideToNow(){
   const wrap=document.querySelector('.timelineWrap');
   const line=document.querySelector('.programLane .nowLine');
@@ -2977,7 +3145,7 @@ function guideKeyboard(e){
 document.addEventListener('keydown',guideKeyboard);
 
 
-// v28.0.0 — Unified Library End-to-End
+// v28.1.0 — Unified Library End-to-End
 function unifiedSourceScore(s){
   let score=0;
   if(s.poster)score+=2;
@@ -2995,7 +3163,7 @@ async function playBestUnified(group){
 }
 
 
-// v28.0.0 — Unified Playback Engine
+// v28.1.0 — Unified Playback Engine
 async function tryUnifiedPlaybackSource(item){
   const parts=String(item?.id||'').split(':');
   if(parts.length<3)throw new Error('Invalid unified media source.');
@@ -3019,7 +3187,7 @@ async function playUnifiedWithFallback(group){
 }
 
 
-// v28.0.0 — Home 3.0
+// v28.1.0 — Home 3.0
 const HOME3_DEFAULT=['continue','live','next','recordings','favourites','new'];
 function home3Key(){return `myonline-home3:${currentProfile||'default'}`}
 function getHome3Order(){try{return JSON.parse(localStorage.getItem(home3Key())||'null')||HOME3_DEFAULT}catch{return HOME3_DEFAULT}}
@@ -3034,7 +3202,7 @@ function home3Customize(){
 }
 
 
-// v28.0.0 — Search 3.0
+// v28.1.0 — Search 3.0
 function searchHistoryKey(){return `myonline-search-history:${currentProfile||'default'}`}
 function rememberSearch(q){
   q=String(q||'').trim();if(q.length<2)return;
@@ -3049,7 +3217,7 @@ document.addEventListener('keydown',e=>{
 });
 
 
-// v28.0.0 — DVR End-to-End
+// v28.1.0 — DVR End-to-End
 async function dvrHealthPanel(){
   const [status,conflicts,upcoming]=await Promise.all([
     api('/api/dvr/status').catch(()=>null),
@@ -3068,9 +3236,9 @@ async function showDvrOperations(){
 }
 
 
-// v28.0.0 — Production Edition
+// v28.1.0 — Production Edition
 window.MyOnlineTvProduction={
-  version:'28.0.0',
+  version:'28.1.0',
   clientMode:()=>document.body.dataset.clientMode||'unknown',
   runtimeSummary:()=>({
     online:navigator.onLine,
@@ -3082,25 +3250,25 @@ window.MyOnlineTvProduction={
 };
 
 
-// v28.0.0 performance diagnostics
+// v28.1.0 performance diagnostics
 window.MyOnlinePerf={samples:[],mark(name,start){this.samples.push({name,ms:Math.round(performance.now()-start),at:Date.now()});this.samples=this.samples.slice(-200)},snapshot(){return [...this.samples]}};
 
 
-// v28.0.0 Live TV 4.0 state
+// v28.1.0 Live TV 4.0 state
 let livePreviousChannelKey=null,liveCurrentChannelKey=null;
 function rememberLiveTune(key){if(key&&key!==liveCurrentChannelKey){livePreviousChannelKey=liveCurrentChannelKey;liveCurrentChannelKey=key}}
 function previousLiveChannel(){const c=channels.find(x=>x.key===livePreviousChannelKey);if(c)return playLive(c.key,c.name)}
 
 
-// v28.0.0 local phone remote client
+// v28.1.0 local phone remote client
 async function remoteCommand(deviceId,command,value=null){return api('/api/devices/'+encodeURIComponent(deviceId)+'/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command,value})})}
 
 
-// v28.0.0 provider/device capability gate
+// v28.1.0 provider/device capability gate
 async function advancedTvCapabilities(){try{return await api('/api/platform/v25/capabilities',{timeoutMs:5000,attempts:1})}catch{return {productionVerified:false}}}
 
 
-// v28.0.0 — Admin UX Foundation
+// v28.1.0 — Admin UX Foundation
 window.AdminUx = {
   sections: [
     {id:'overview',label:'Overview'},
@@ -3127,7 +3295,7 @@ document.addEventListener('click',e=>{
 });
 
 
-// v28.0.0 — Admin Overview & Health
+// v28.1.0 — Admin Overview & Health
 async function renderAdminOverviewV2(target){
   const host=typeof target==='string'?document.querySelector(target):target;
   if(!host)return;
@@ -3146,7 +3314,7 @@ async function renderAdminOverviewV2(target){
 }
 
 
-// v28.0.0 — Admin Sources
+// v28.1.0 — Admin Sources
 function adminSourceCard(s){
   return `<article class="adminCard adminSourceCard">
     <div class="adminCardHead"><div><h3>${esc(s.name||s.type||'Source')}</h3><small>${esc(s.detail||'')}</small></div>${AdminUx.statusBadge(s.status||'unknown',s.statusText||s.status||'Unknown')}</div>
@@ -3156,7 +3324,7 @@ function adminSourceCard(s){
 }
 
 
-// v28.0.0 — Admin DVR & Storage
+// v28.1.0 — Admin DVR & Storage
 function adminDvrSummary(x){
   return `<div class="adminCardGrid">
     ${[['Active',x.active],['Upcoming',x.upcoming],['Failed',x.failed],['Conflicts',x.conflicts]].map(([k,v])=>`<article class="adminCard adminMetric"><b>${Number(v||0)}</b><small>${k}</small></article>`).join('')}
@@ -3168,7 +3336,7 @@ function adminStorageBar(used,total){
 }
 
 
-// v28.0.0 — Admin Users & Devices
+// v28.1.0 — Admin Users & Devices
 function adminUserRow(u){
   return `<div class="adminListRow"><div><b>${esc(u.name||u.username||'User')}</b><small>${esc((u.roles||[]).join(', '))}</small></div><div>${AdminUx.statusBadge(u.enabled===false?'warning':'ok',u.enabled===false?'Disabled':'Enabled')}<button class="btn" data-user-edit="${escAttr(u.id||'')}">Edit</button></div></div>`;
 }
@@ -3177,7 +3345,7 @@ function adminDeviceRow(d){
 }
 
 
-// v28.0.0 — Admin Diagnostics
+// v28.1.0 — Admin Diagnostics
 function diagnosticGrade(ms){
   return ms<500?['excellent','Excellent']:ms<1000?['good','Good']:ms<2000?['warning','Slow']:['error','Very slow'];
 }
@@ -3188,7 +3356,7 @@ function diagnosticTimingRow(name,ms){
 }
 
 
-// v28.0.0 — Backup, Update & Recovery
+// v28.1.0 — Backup, Update & Recovery
 function adminRecoveryCard(x){
   return `<article class="adminCard">
     <div class="adminCardHead"><div><h3>Backup & Recovery</h3><small>Safe update workflow</small></div>${AdminUx.statusBadge(x?.healthy?'ok':'warning',x?.healthy?'Ready':'Check required')}</div>
@@ -3198,33 +3366,33 @@ function adminRecoveryCard(x){
 }
 
 
-// v28.0.0 — Mobile Admin
+// v28.1.0 — Mobile Admin
 function adminMobileClass(){
   document.documentElement.classList.toggle('adminCompact',matchMedia('(max-width:720px)').matches);
 }
 addEventListener('resize',adminMobileClass,{passive:true});adminMobileClass();
 
 
-// v28.0.0 Stream Doctor
+// v28.1.0 Stream Doctor
 function streamDoctorMetric(label,value,state='ok'){return `<div class="streamDoctorRow"><span>${esc(label)}</span><b class="${state}">${esc(String(value))}</b></div>`}
 function renderStreamDoctor(x){return `<section class="card streamDoctor"><h3>Stream Doctor</h3>${streamDoctorMetric('Provider',x.provider||'Unknown',x.providerOk?'ok':'error')}${streamDoctorMetric('Codec',x.codec||'—')}${streamDoctorMetric('Resolution',x.resolution||'—')}${streamDoctorMetric('Bitrate',x.bitrate||'—')}${streamDoctorMetric('FPS',x.fps||'—')}${streamDoctorMetric('Buffer',x.buffer||'—')}${streamDoctorMetric('Playback mode',x.mode||'—')}</section>`}
 
 
-// v28.0.0 Notification Center
+// v28.1.0 Notification Center
 const NotificationCenter={key:'myonline-notifications',all(){try{return JSON.parse(localStorage.getItem(this.key)||'[]')}catch{return[]}},push(n){const a=this.all();a.unshift({id:String(Date.now())+Math.random(),at:Date.now(),read:false,...n});localStorage.setItem(this.key,JSON.stringify(a.slice(0,100)));return a[0]},read(id){localStorage.setItem(this.key,JSON.stringify(this.all().map(x=>x.id===id?{...x,read:true}:x)))}};
 
 
-// v28.0.0 What's On Tonight
+// v28.1.0 What's On Tonight
 function tonightFilter(rows,kind='all'){const now=new Date();return (rows||[]).filter(x=>{const d=new Date(x.start||x.startTime);return d.toDateString()===now.toDateString()&&d.getHours()>=17&&(kind==='all'||String(x.category||x.kind||'').toLowerCase().includes(kind))}).sort((a,b)=>new Date(a.start||a.startTime)-new Date(b.start||b.startTime))}
 
 
-// v28.0.0 Unified Watchlist
+// v28.1.0 Unified Watchlist
 const UnifiedWatchlist={key(){return `myonline-watchlist:${currentProfile||'default'}`},all(){try{return JSON.parse(localStorage.getItem(this.key())||'[]')}catch{return[]}},toggle(item){let a=this.all();const i=a.findIndex(x=>x.id===item.id);if(i>=0)a.splice(i,1);else a.unshift(item);localStorage.setItem(this.key(),JSON.stringify(a.slice(0,500)));return i<0}};
 
 
-// v28.0.0 Sports Hub
+// v28.1.0 Sports Hub
 function sportsMatches(rows,teams=[]){const n=teams.map(x=>String(x).toLowerCase()).filter(Boolean);return (rows||[]).filter(x=>{const t=String(x.title||'').toLowerCase();return n.some(q=>t.includes(q))||/(football|soccer|hockey|champions league|premier league|allsvenskan|match)/i.test(t)})}
 
 
-// v28.0.0 Guest Mode
+// v28.1.0 Guest Mode
 function enterGuestMode(){sessionStorage.setItem('myonline-guest','1');currentProfile='guest';show('home')} function isGuestMode(){return sessionStorage.getItem('myonline-guest')==='1'}

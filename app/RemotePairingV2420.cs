@@ -2,7 +2,7 @@ public static class RemotePairingV2420
 {
     public static object Capabilities() => new
     {
-        version = "28.0.0",
+        version = "28.1.0",
         feature = "Phone Remote & Pairing",
         localFirst = true,
         mandatoryRuntimeCostSek = 0,

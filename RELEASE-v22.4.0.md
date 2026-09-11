@@ -1,4 +1,4 @@
-# v28.0.0 — Guide 3.0
+# v28.1.0 — Guide 3.0
 
 This is a cumulative release based on v22.3.0.
 

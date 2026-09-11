@@ -827,7 +827,7 @@ html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px 
 .sourceUnavailable{opacity:.48;filter:saturate(.45)}
 
 
-/* v28.0.0 TV Experience */
+/* v28.1.0 TV Experience */
 .liveToolbar{position:relative;top:auto;background:transparent;padding:0 0 14px}
 .tvLiveShell{display:grid;grid-template-columns:minmax(330px,390px) minmax(0,1fr);gap:14px;align-items:start}
 .liveChannelPane{position:sticky;top:86px;max-height:calc(100vh - 108px);overflow:hidden;background:#091722;border:1px solid #23465f;border-radius:18px;padding:12px;display:flex;flex-direction:column}
@@ -907,7 +907,7 @@ html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px 
 }
 
 
-/* v28.0.0 — Scrollbar polish */
+/* v28.1.0 — Scrollbar polish */
 :root{
   scrollbar-color:#315a73 #091722;
   scrollbar-width:thin;
@@ -988,14 +988,14 @@ html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px 
   scrollbar-gutter:stable;
 }
 
-/* v28.0.0 Live/EPG completion */
+/* v28.1.0 Live/EPG completion */
 .liveChannelPane.miniGuideOpen{box-shadow:0 0 0 2px #4faeff,0 24px 70px #0008}
 @media(min-width:1101px){.liveChannelPane.miniGuideOpen{max-height:calc(100vh - 92px)}}
 .premiumGuide .prog:focus,.tvChannelRow:focus-within{outline:2px solid #74c2ff;outline-offset:1px}
 
 
 /* =========================================================
-   v28.0.0 — Multi-device polish
+   v28.1.0 — Multi-device polish
    Mobile · Tablet · Desktop · TV / 10-foot
    ========================================================= */
 
@@ -1126,7 +1126,7 @@ html.isStandalone body{
 }
 
 
-/* v28.0.0 — Fast Home */
+/* v28.1.0 — Fast Home */
 .homeDeferredPlaceholder{
   min-height:72px;
   display:flex;
@@ -1150,7 +1150,7 @@ html.isStandalone body{
 }
 
 
-/* v28.0.0 — Live TV 3.0 */
+/* v28.1.0 — Live TV 3.0 */
 .liveZapOverlay{position:fixed;left:50%;bottom:7vh;transform:translate(-50%,24px);z-index:1200;display:flex;gap:14px;align-items:center;min-width:min(620px,82vw);padding:16px 20px;border:1px solid #315a73;border-radius:18px;background:rgba(5,15,24,.94);backdrop-filter:blur(16px);opacity:0;pointer-events:none;transition:.18s ease}
 .liveZapOverlay.visible{opacity:1;transform:translate(-50%,0)}
 .liveZapOverlay .zapLogo{width:64px;height:48px;display:grid;place-items:center}
@@ -1161,30 +1161,30 @@ html.isStandalone body{
 .liveNumberOverlay.visible{opacity:1}
 
 
-/* v28.0.0 — Guide 3.0 */
+/* v28.1.0 — Guide 3.0 */
 .premiumGuide .timelineHead{position:sticky;top:0;z-index:12}
 .premiumGuide .timelineChannel{position:sticky;left:0;z-index:8}
 .premiumGuide .nowLine{z-index:6;box-shadow:0 0 16px rgba(78,177,255,.28)}
 .premiumGuide .currentProgram{border-color:#4eb1ff;box-shadow:inset 0 0 0 1px rgba(78,177,255,.3)}
 
 
-/* v28.0.0 — Unified Library */
+/* v28.1.0 — Unified Library */
 .primaryLibraryPlay{width:100%;margin-top:8px}
 .sourceDetails{margin-top:8px}.sourceDetails summary{cursor:pointer;color:var(--muted)}
 .sourceChoices{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 
 
-/* v28.0.0 — Home 3.0 */
+/* v28.1.0 — Home 3.0 */
 .homeHero{min-height:220px;display:flex;align-items:center}
 .homeSourceGrid{margin-bottom:22px}
 @media(max-width:719px){.homeHero{min-height:auto}.homeHero .row{display:grid;grid-template-columns:1fr auto}.homeHero .row .btn:last-child{grid-column:1/-1}}
 
 
-/* v28.0.0 — Search 3.0 */
+/* v28.1.0 — Search 3.0 */
 .searchResultGroup{content-visibility:auto;contain-intrinsic-size:300px}
 
 
-/* v28.0.0 — Admin UX Foundation */
+/* v28.1.0 — Admin UX Foundation */
 .adminShell{max-width:1400px;margin:0 auto;padding:20px}
 .adminTopNav{display:flex;gap:8px;overflow:auto;padding:4px 0 16px;scrollbar-width:thin}
 .adminTopNavBtn{border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.035);color:inherit;border-radius:10px;padding:10px 14px;white-space:nowrap;cursor:pointer}
@@ -1199,14 +1199,14 @@ html.isStandalone body{
 .adminCard h3{margin:0 0 10px}
 
 
-/* v28.0.0 — Overview */
+/* v28.1.0 — Overview */
 .adminOverview{display:grid;gap:18px}
 .adminAttention{display:grid;gap:10px}
 .adminSkeleton,.adminError{padding:18px;border-radius:14px;background:rgba(255,255,255,.04)}
 .adminError{border:1px solid rgba(255,90,90,.35)}
 
 
-/* v28.0.0 — Sources */
+/* v28.1.0 — Sources */
 .adminCardHead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
 .adminSourceStats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0}
 .adminSourceStats>div{padding:10px;border-radius:10px;background:rgba(255,255,255,.035)}
@@ -1215,29 +1215,29 @@ html.isStandalone body{
 .adminActions{display:flex;gap:8px;flex-wrap:wrap}
 
 
-/* v28.0.0 — DVR & Storage */
+/* v28.1.0 — DVR & Storage */
 .adminMetric b{font-size:1.8rem}.adminMetric small{display:block;color:var(--muted);margin-top:4px}
 .storageBar{height:10px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden;margin:10px 0 5px}
 .storageBar span{display:block;height:100%;background:linear-gradient(90deg,#2e6a8a,#4eb1ff)}
 
 
-/* v28.0.0 — Users & Devices */
+/* v28.1.0 — Users & Devices */
 .adminListRow{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.07)}
 .adminListRow:last-child{border-bottom:0}.adminListRow small{display:block;color:var(--muted);margin-top:3px}
 .adminListRow>div:last-child{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 
 
-/* v28.0.0 — Diagnostics */
+/* v28.1.0 — Diagnostics */
 .diagRow{display:grid;grid-template-columns:minmax(140px,220px) 1fr;gap:14px;align-items:center;padding:9px 0}
 .diagRow small{display:block;color:var(--muted);margin-top:3px}.diagMeter{height:9px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden}
 .diagMeter span{display:block;height:100%;background:#4eb1ff}.diagMeter.warning span{background:#eab65c}.diagMeter.error span{background:#ff6a6a}
 
 
-/* v28.0.0 — Backup / Update / Recovery */
+/* v28.1.0 — Backup / Update / Recovery */
 .recoverySteps{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0}.recoverySteps span{padding:6px 9px;border-radius:999px;background:rgba(255,255,255,.05);font-size:.84rem}
 
 
-/* v28.0.0 — Mobile Admin */
+/* v28.1.0 — Mobile Admin */
 @media(max-width:720px){
   .adminShell{padding:12px}
   .adminTopNav{position:sticky;top:0;z-index:40;background:rgba(5,15,24,.96);backdrop-filter:blur(14px);margin:0 -12px;padding:10px 12px 12px}
@@ -1259,3 +1259,96 @@ html.isStandalone body{
 
 
 body.cinemaMode .sidebar,body.cinemaMode .topbar{opacity:0;pointer-events:none;transition:opacity .3s}body.cinemaMode{background:#000}.tvScreensaver{position:fixed;inset:0;z-index:5000;background:#03070a;display:grid;place-items:center;text-align:center}.tvScreensaver .clock{font-size:clamp(3rem,10vw,8rem);font-weight:300}
+
+
+/* =========================================================
+   v28.1.0 — Admin 2.0
+   Task-oriented administration with overview + focused sections.
+   ========================================================= */
+.admin2Shell{max-width:1500px;margin:0 auto;padding-bottom:40px}
+.admin2Hero{display:flex;justify-content:space-between;gap:24px;align-items:center;padding:28px 30px;border:1px solid #24445b;border-radius:22px;background:radial-gradient(circle at 78% 15%,#19517a 0,transparent 34%),linear-gradient(135deg,#102b40,#0b1824);box-shadow:0 20px 60px #0005;margin-bottom:16px}
+.admin2Hero h1{font-size:clamp(2rem,4vw,3rem);margin:.15em 0;letter-spacing:-.035em}
+.admin2Hero p{margin:.25em 0 0;color:var(--muted);max-width:760px;font-size:1.02rem;line-height:1.55}
+.admin2Kicker{font-size:.72rem;font-weight:800;letter-spacing:.16em;color:#73c7ff}
+.admin2HeroActions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+
+.admin2Nav{position:sticky;top:0;z-index:30;display:flex;gap:7px;overflow:auto;padding:10px 0 14px;background:linear-gradient(#06111a 75%,transparent)}
+.admin2Nav button{border:1px solid #24445b;background:#0c1d2a;color:#bdd2e1;border-radius:11px;padding:10px 14px;white-space:nowrap;cursor:pointer;font-weight:700}
+.admin2Nav button:hover{background:#102a3d;color:#fff}
+.admin2Nav button.active{background:linear-gradient(180deg,#185785,#124467);border-color:#2d7eaf;color:#fff;box-shadow:inset 0 0 0 1px #ffffff0d}
+
+.admin2Panel{display:none;animation:admin2In .16s ease-out}
+.admin2Panel.active{display:block}
+@keyframes admin2In{from{opacity:.2;transform:translateY(4px)}to{opacity:1;transform:none}}
+.admin2SectionHead{display:flex;justify-content:space-between;gap:16px;align-items:end;margin:8px 0 14px}
+.admin2SectionHead h2{margin:0;font-size:1.55rem}
+.admin2SectionHead p{margin:4px 0 0;color:var(--muted)}
+
+.admin2StatusGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.admin2StatusCard{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;text-align:left;width:100%;min-height:105px;border:1px solid #24445b;background:linear-gradient(145deg,#0d2130,#0a1823);color:inherit;border-radius:16px;padding:14px;cursor:pointer}
+.admin2StatusCard:hover{border-color:#35769f;background:#10283a;transform:translateY(-1px)}
+.admin2StatusIcon,.admin2SourceIcon{display:grid;place-items:center;width:44px;height:44px;border-radius:12px;background:#143a53;color:#55bfff;font-size:1.35rem}
+.admin2StatusBody{display:grid;min-width:0}
+.admin2StatusBody small{color:#9fb7c8}.admin2StatusBody b{font-size:1.5rem;margin:2px 0}.admin2StatusBody span{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.admin2Badge{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:5px 8px;background:#173041;font-size:.74rem;font-weight:800;white-space:nowrap}
+.admin2Badge span{width:7px;height:7px;border-radius:50%;background:#f0b85b}
+.admin2Badge.ok{color:#8ff4b7;background:#113a2a}.admin2Badge.ok span{background:#4ddd8b}
+.admin2Badge.warning{color:#ffd898;background:#3d2d13}
+
+.admin2DashboardGrid{display:grid;grid-template-columns:1.1fr .9fr;gap:14px;margin-bottom:14px}
+.admin2Card,.admin2Editor{border:1px solid #24445b;background:#0b1d29;border-radius:17px;padding:16px;margin-bottom:14px}
+.admin2CardHead{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:12px}
+.admin2CardHead h3{margin:0;font-size:1.08rem}.admin2CardHead p{margin:4px 0 0;color:var(--muted);line-height:1.4}
+.admin2AttentionList{display:grid;gap:8px}
+.admin2Attention{width:100%;display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;text-align:left;background:#0a1721;border:1px solid #203c50;color:inherit;border-radius:12px;padding:11px;cursor:pointer}
+.admin2Attention:hover{border-color:#4c7d9a}.admin2Attention b,.admin2Attention small{display:block}.admin2Attention small{margin-top:3px;color:var(--muted)}
+.admin2AttentionMark{display:grid;place-items:center;width:29px;height:29px;border-radius:9px;background:#4b3417;color:#ffc86b;font-weight:900}.admin2Attention.error .admin2AttentionMark{background:#4b1b20;color:#ff8a8f}.admin2Attention.info .admin2AttentionMark{background:#153a52;color:#80cfff}
+.admin2Empty{display:grid;gap:4px;padding:18px;border:1px dashed #2b4c61;border-radius:13px;color:#cfe4f2}.admin2Empty span{color:var(--muted)}
+.admin2QuickGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.admin2QuickGrid button{min-height:53px;border:1px solid #24445b;background:#0d2636;color:#eaf7ff;border-radius:12px;cursor:pointer;text-align:left;padding:12px;font-weight:700}.admin2QuickGrid button:hover{border-color:#3c7ea8;background:#12344a}
+
+.admin2ServiceRows{display:grid}
+.admin2ServiceRows>button{display:grid;grid-template-columns:auto 1fr auto auto;gap:12px;align-items:center;padding:12px 4px;border:0;border-bottom:1px solid #1d384a;background:transparent;color:inherit;text-align:left;cursor:pointer}.admin2ServiceRows>button:last-child{border-bottom:0}.admin2ServiceRows>button:hover{background:#ffffff04}.admin2ServiceRows b,.admin2ServiceRows small{display:block}.admin2ServiceRows small{margin-top:3px;color:var(--muted)}.admin2ServiceIcon{font-size:1.25rem;color:#5fc6ff}
+
+.admin2SourceCards,.admin2StorageGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}
+.admin2SourceCard,.admin2StorageCard{border:1px solid #203e52;background:#091923;border-radius:14px;padding:14px}
+.admin2SourceTitle{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}.admin2SourceTitle b,.admin2SourceTitle small{display:block}.admin2SourceTitle small{margin-top:3px;color:var(--muted)}
+.admin2SourceMeta{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;color:#a9c1d2;font-size:.82rem}.admin2SourceMeta span{padding:5px 7px;background:#0e2737;border-radius:8px}
+.admin2Actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}.admin2Actions .danger{border-color:#61303a;color:#ffb6bb}.admin2Actions .danger:hover{background:#38191e}
+.admin2StorageTags{display:flex;gap:7px;flex-wrap:wrap;margin:12px 0}.admin2StorageTags span{padding:5px 8px;border-radius:999px;background:#15364a;color:#a8dcff;font-size:.78rem;font-weight:700}
+
+.admin2Editor{padding:0;overflow:hidden;background:#091923}
+.admin2Editor summary{display:flex;justify-content:space-between;gap:12px;cursor:pointer;padding:15px 16px;list-style:none;font-weight:800}.admin2Editor summary::-webkit-details-marker{display:none}.admin2Editor summary:after{content:'＋';color:#69c7ff}.admin2Editor[open] summary:after{content:'−'}.admin2Editor summary small{font-weight:400;color:var(--muted)}
+.admin2EditorBody{padding:0 16px 16px;border-top:1px solid #203c50;padding-top:14px}
+
+.admin2UserList{display:grid;gap:8px}
+.admin2UserRow{display:grid;grid-template-columns:auto minmax(130px,1fr) auto minmax(140px,220px) auto;gap:10px;align-items:center;padding:10px;border:1px solid #1d3c50;background:#091923;border-radius:12px}.admin2UserRow b,.admin2UserRow small{display:block}.admin2UserRow small{color:var(--muted);margin-top:3px}.admin2Avatar{display:grid;place-items:center;width:39px;height:39px;border-radius:12px;background:#173852;color:#80d0ff;font-weight:900}
+.admin2UserRow select[multiple]{min-height:52px;max-height:70px}
+.admin2ProfileGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-bottom:14px}.admin2ProfileCard{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:11px;border:1px solid #1d3c50;border-radius:12px;background:#091923}.admin2ProfileCard>span{font-size:1.5rem}.admin2ProfileCard b,.admin2ProfileCard small{display:block}.admin2ProfileCard small{color:var(--muted);margin-top:3px}
+.admin2InlineForm{display:grid;grid-template-columns:1fr 180px auto auto;gap:10px;align-items:end;padding-top:12px;border-top:1px solid #1d3c50}
+.admin2PermissionRow{display:grid;grid-template-columns:minmax(130px,.8fr) minmax(250px,1.4fr) minmax(130px,.7fr) minmax(120px,.7fr) auto;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid #1d384a}.admin2PermissionRow:last-child{border-bottom:0}.admin2PermissionRow small{display:block;color:var(--muted);margin-top:3px}.admin2PermissionChecks{display:flex;gap:10px;flex-wrap:wrap}.admin2PermissionChecks label{white-space:nowrap}
+
+.admin2SummaryRows{display:grid}.admin2SummaryRows>div{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid #1d384a}.admin2SummaryRows>div:last-child{border-bottom:0}.admin2SummaryRows span{color:var(--muted)}
+.admin2NavManager{display:grid}.admin2NavRow{display:grid;grid-template-columns:46px 1fr auto auto;gap:12px;align-items:center;padding:10px;border-bottom:1px solid #1d384a}.admin2Drag{font-variant-numeric:tabular-nums;color:#668ba5;font-weight:800}.admin2StickyActions{display:flex;justify-content:space-between;gap:12px;align-items:center;padding-top:14px}
+
+.admin2ToolGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:14px}.admin2ToolGrid>button{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;text-align:left;border:1px solid #24445b;background:#0b1d29;color:inherit;border-radius:15px;padding:16px;cursor:pointer}.admin2ToolGrid>button:hover{border-color:#397ba4;background:#10283a}.admin2ToolGrid>button>span{display:grid;place-items:center;width:45px;height:45px;border-radius:12px;background:#153a52;color:#65caff;font-size:1.4rem}.admin2ToolGrid b,.admin2ToolGrid small{display:block}.admin2ToolGrid small{color:var(--muted);margin-top:4px}.admin2ToolGrid i{font-style:normal;color:#72c8ff;font-size:1.3rem}.admin2Security{background:linear-gradient(145deg,#0c202e,#0a1822)}
+
+@media(max-width:1100px){
+  .admin2StatusGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .admin2DashboardGrid{grid-template-columns:1fr}
+  .admin2UserRow{grid-template-columns:auto 1fr auto}.admin2UserRow select,.admin2UserRow .admin2Actions{grid-column:2/-1}
+  .admin2PermissionRow{grid-template-columns:1fr 1fr}.admin2PermissionRow .admin2PermissionChecks{grid-column:1/-1}
+  .admin2InlineForm{grid-template-columns:1fr 1fr}
+}
+@media(max-width:720px){
+  .admin2Hero{display:grid;padding:18px;border-radius:16px}.admin2HeroActions{justify-content:flex-start}
+  .admin2HeroActions .btn{flex:1}.admin2Nav{margin:0 -14px;padding:8px 14px 12px;top:0}
+  .admin2StatusGrid{grid-template-columns:1fr}.admin2StatusCard{min-height:88px}
+  .admin2QuickGrid,.admin2ToolGrid{grid-template-columns:1fr}
+  .admin2SourceCards,.admin2StorageGrid{grid-template-columns:1fr}
+  .admin2UserRow{grid-template-columns:auto 1fr}.admin2UserRow>.admin2Badge{grid-column:2}.admin2UserRow select,.admin2UserRow .admin2Actions{grid-column:1/-1}
+  .admin2InlineForm{grid-template-columns:1fr}.admin2PermissionRow{grid-template-columns:1fr}.admin2PermissionRow>*{grid-column:auto!important}
+  .admin2NavRow{grid-template-columns:36px 1fr auto}.admin2NavRow .row{grid-column:2/-1}
+  .admin2StickyActions{align-items:stretch;flex-direction:column}
+  .admin2ServiceRows>button{grid-template-columns:auto 1fr auto}.admin2ServiceRows>button>.admin2Badge{grid-column:2}
+}

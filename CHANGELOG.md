@@ -1,111 +1,117 @@
-## v28.0.0 — Architecture & Code Quality
+## v28.1.0 — Admin 2.0
+- Replaced the monolithic Admin page with a task-oriented six-section interface.
+- Added actionable Overview, Needs Attention and Quick Actions.
+- Redesigned Sources, Users & Profiles, Storage, Navigation and System administration.
+- Added responsive/mobile Admin UX while preserving existing backend routes.
+
+## v28.1.0 — Architecture & Code Quality
 - Added Architecture & Code Quality implementation increment.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0 — Self-Healing Appliance
+## v28.1.0 — Self-Healing Appliance
 - Added Self-Healing Appliance implementation increment.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0 — Cinema & Screensaver
+## v28.1.0 — Cinema & Screensaver
 - Added Cinema & Screensaver implementation increment.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0 — Family & Guest
+## v28.1.0 — Family & Guest
 - Added Family & Guest implementation increment.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0 — Sports Hub
+## v28.1.0 — Sports Hub
 - Added Sports Hub implementation increment.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0 — Smart Collections
+## v28.1.0 — Smart Collections
 - Added Smart Collections implementation increment.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0 — Unified Watchlist
+## v28.1.0 — Unified Watchlist
 - Added Unified Watchlist implementation increment.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0 — What's On Tonight
+## v28.1.0 — What's On Tonight
 - Added What's On Tonight implementation increment.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0 — Smart EPG
+## v28.1.0 — Smart EPG
 - Added Smart EPG implementation increment.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0 — Notification Center
+## v28.1.0 — Notification Center
 - Added Notification Center implementation increment.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0 — Stream Doctor
+## v28.1.0 — Stream Doctor
 - Added Stream Doctor implementation increment.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0 — Advanced TV Platform
+## v28.1.0 — Advanced TV Platform
 - Provider-gated Catch-up/Start Over plus PiP/Multi-view/Sports platform.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0 — Rooms & Handoff
+## v28.1.0 — Rooms & Handoff
 - Local room playback ownership and handoff contract.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0 — Phone Remote & Pairing
+## v28.1.0 — Phone Remote & Pairing
 - Local expiring pairing and validated remote commands.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0 — Android TV First-class
+## v28.1.0 — Android TV First-class
 - D-pad, Media3 and HLS-readiness Android-TV contract.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0 — Multi-device Platform
+## v28.1.0 — Multi-device Platform
 - Browser/mobile/tablet/TV/Android-TV device platform.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0 — Universal Search
+## v28.1.0 — Universal Search
 - One local search domain across TV, EPG, media and recordings.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0 — Personal Home
+## v28.1.0 — Personal Home
 - Personal local Home rail composition.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0 — Profiles 2.0
+## v28.1.0 — Profiles 2.0
 - Profile, kids-mode and per-profile preference contract.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0 — Playback Resilience
+## v28.1.0 — Playback Resilience
 - Bounded playback fallback plan and useful error stages.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0 — Playback Engine 2.0
+## v28.1.0 — Playback Engine 2.0
 - Central direct/HLS/remux/transcode decision policy.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0 — Unified Library 4.0
+## v28.1.0 — Unified Library 4.0
 - Deterministic dedupe and best-source policy.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0 — Live TV 4.0
+## v28.1.0 — Live TV 4.0
 - TV-first zapping, Now/Next and previous-channel capabilities.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0 — Server Media Index
+## v28.1.0 — Server Media Index
 - Local searchable media-index contract.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0 — Performance & Diagnostics
+## v28.1.0 — Performance & Diagnostics
 - Local performance measurements and diagnostics.
 - Zero mandatory runtime cost preserved.
 
-## v28.0.0
+## v28.1.0
 - New TV-first Live TV layout with compact channel rail and player/program panel.
 - Hide-channel action moved to the right-side action group.
 - Added current/next programme details and progress to Live TV.
 - Added Home “On TV now” rail.
 - Refined EPG styling and responsive TV/tablet layout.
 
-# v28.0.0 — Feature Completion
+# v28.1.0 — Feature Completion
 
 - Build fix: FeatureCompletionCatalog moved to the global namespace so top-level Program.cs can resolve it.
 

@@ -1,4 +1,4 @@
-# v28.0.0 — Search 2.0
+# v28.1.0 — Search 2.0
 
 Deterministic multi-domain search ranking across media, EPG and recordings.
 
