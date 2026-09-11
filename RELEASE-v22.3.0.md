@@ -1,4 +1,4 @@
-# v23.0.0 — Live TV 3.0
+# v25.0.0 — Live TV 3.0
 
 This is a cumulative release based on v22.2.0.
 

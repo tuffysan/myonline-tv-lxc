@@ -1,4 +1,4 @@
-# v23.0.0 — Production Edition
+# v25.0.0 — Production Edition
 
 This is a cumulative release based on v22.9.0.
 

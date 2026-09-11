@@ -1,4 +1,4 @@
-# v23.0.0 — Catch-up
+# v25.0.0 — Catch-up
 
 Provider-capability-gated Start Over/Catch-up decision engine.
 

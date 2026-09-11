@@ -1,6 +1,6 @@
-# v23.0.0 — Production Edition
+# v25.0.0 — Production Edition
 
-v23.0.0 is a stabilization release. It introduces no mandatory cloud or paid service.
+v25.0.0 is a stabilization release. It introduces no mandatory cloud or paid service.
 
 ## Promotion checklist
 - PUBLISH.cmd / .NET 10 build passes.

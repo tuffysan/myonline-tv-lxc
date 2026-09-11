@@ -1,4 +1,4 @@
-# v23.0.0 — Remote & Pairing
+# v25.0.0 — Remote & Pairing
 
 Persistent-device contract, expiring pairing codes and remote-command validation.
 

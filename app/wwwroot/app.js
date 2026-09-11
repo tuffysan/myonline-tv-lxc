@@ -1431,7 +1431,7 @@ async function featureCompletionView(){
     const groups=[...new Set(features.map(x=>x.area))];
     content.innerHTML=`
       <div class=hero>
-        <span class=kicker>v23.0.0 FEATURE COMPLETION</span>
+        <span class=kicker>v25.0.0 FEATURE COMPLETION</span>
         <h2>Feature Completion audit</h2>
         <p class=muted>This page distinguishes working features from partial implementations, foundations and missing functionality. It intentionally does not count a contract/model as a finished feature.</p>
       </div>
@@ -2886,8 +2886,8 @@ window.MyOnlineOperations={
 };
 
 
-// v23.0.0 Native Client Generation
-window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'23.0.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
+// v25.0.0 Native Client Generation
+window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'25.0.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
 window.MyOnlineClientBridge={
  version:1,
  capabilities(){return {sourceEngine:true,player:true,live:true,guide:true,library:true,dvr:true,profiles:true,rooms:true,remote:true}},
@@ -2895,7 +2895,7 @@ window.MyOnlineClientBridge={
 };
 
 
-// v23.0.0 — Performance Engine
+// v25.0.0 — Performance Engine
 const perfCache=new Map();
 function perfCacheGet(key,maxAgeMs){
   const x=perfCache.get(key);
@@ -2932,7 +2932,7 @@ document.addEventListener('pointerover',e=>{
 },{passive:true});
 
 
-// v23.0.0 — Live TV 3.0
+// v25.0.0 — Live TV 3.0
 let liveNumberBuffer='',liveNumberTimer=null;
 function showLiveZapOverlay(c){
   let box=$('#liveZapOverlay');
@@ -2961,7 +2961,7 @@ document.addEventListener('keydown',e=>{
 });
 
 
-// v23.0.0 — Guide 3.0
+// v25.0.0 — Guide 3.0
 function scrollGuideToNow(){
   const wrap=document.querySelector('.timelineWrap');
   const line=document.querySelector('.programLane .nowLine');
@@ -2977,7 +2977,7 @@ function guideKeyboard(e){
 document.addEventListener('keydown',guideKeyboard);
 
 
-// v23.0.0 — Unified Library End-to-End
+// v25.0.0 — Unified Library End-to-End
 function unifiedSourceScore(s){
   let score=0;
   if(s.poster)score+=2;
@@ -2995,7 +2995,7 @@ async function playBestUnified(group){
 }
 
 
-// v23.0.0 — Unified Playback Engine
+// v25.0.0 — Unified Playback Engine
 async function tryUnifiedPlaybackSource(item){
   const parts=String(item?.id||'').split(':');
   if(parts.length<3)throw new Error('Invalid unified media source.');
@@ -3019,7 +3019,7 @@ async function playUnifiedWithFallback(group){
 }
 
 
-// v23.0.0 — Home 3.0
+// v25.0.0 — Home 3.0
 const HOME3_DEFAULT=['continue','live','next','recordings','favourites','new'];
 function home3Key(){return `myonline-home3:${currentProfile||'default'}`}
 function getHome3Order(){try{return JSON.parse(localStorage.getItem(home3Key())||'null')||HOME3_DEFAULT}catch{return HOME3_DEFAULT}}
@@ -3034,7 +3034,7 @@ function home3Customize(){
 }
 
 
-// v23.0.0 — Search 3.0
+// v25.0.0 — Search 3.0
 function searchHistoryKey(){return `myonline-search-history:${currentProfile||'default'}`}
 function rememberSearch(q){
   q=String(q||'').trim();if(q.length<2)return;
@@ -3049,7 +3049,7 @@ document.addEventListener('keydown',e=>{
 });
 
 
-// v23.0.0 — DVR End-to-End
+// v25.0.0 — DVR End-to-End
 async function dvrHealthPanel(){
   const [status,conflicts,upcoming]=await Promise.all([
     api('/api/dvr/status').catch(()=>null),
@@ -3068,9 +3068,9 @@ async function showDvrOperations(){
 }
 
 
-// v23.0.0 — Production Edition
+// v25.0.0 — Production Edition
 window.MyOnlineTvProduction={
-  version:'23.0.0',
+  version:'25.0.0',
   clientMode:()=>document.body.dataset.clientMode||'unknown',
   runtimeSummary:()=>({
     online:navigator.onLine,
@@ -3080,3 +3080,21 @@ window.MyOnlineTvProduction={
     reducedMotion:matchMedia('(prefers-reduced-motion: reduce)').matches
   })
 };
+
+
+// v25.0.0 performance diagnostics
+window.MyOnlinePerf={samples:[],mark(name,start){this.samples.push({name,ms:Math.round(performance.now()-start),at:Date.now()});this.samples=this.samples.slice(-200)},snapshot(){return [...this.samples]}};
+
+
+// v25.0.0 Live TV 4.0 state
+let livePreviousChannelKey=null,liveCurrentChannelKey=null;
+function rememberLiveTune(key){if(key&&key!==liveCurrentChannelKey){livePreviousChannelKey=liveCurrentChannelKey;liveCurrentChannelKey=key}}
+function previousLiveChannel(){const c=channels.find(x=>x.key===livePreviousChannelKey);if(c)return playLive(c.key,c.name)}
+
+
+// v25.0.0 local phone remote client
+async function remoteCommand(deviceId,command,value=null){return api('/api/devices/'+encodeURIComponent(deviceId)+'/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command,value})})}
+
+
+// v25.0.0 provider/device capability gate
+async function advancedTvCapabilities(){try{return await api('/api/platform/v25/capabilities',{timeoutMs:5000,attempts:1})}catch{return {productionVerified:false}}}

@@ -1,4 +1,4 @@
-# v23.0.0 — Performance
+# v25.0.0 — Performance
 
 Local cache policy, bounded parallelism and fast-home performance diagnostics.
 

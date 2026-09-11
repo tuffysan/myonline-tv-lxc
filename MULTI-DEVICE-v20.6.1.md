@@ -1,4 +1,4 @@
-# v23.0.0 — Multi-device polish
+# v25.0.0 — Multi-device polish
 
 Target devices:
 - Phone (portrait + landscape)

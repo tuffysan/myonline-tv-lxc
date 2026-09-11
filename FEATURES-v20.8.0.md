@@ -1,4 +1,4 @@
-# v23.0.0 — TV Experience
+# v25.0.0 — TV Experience
 
 TV/D-pad policy, zapping state and ten-foot UI refinements.
 
