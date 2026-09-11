@@ -989,3 +989,27 @@
 ## v6.2.0 — Android TV Native UI
 - Fixed native login to match the server JSON API.
 - Added native Live, Guide, Movies, Series, episodes and server-backed playback flows.
+
+## v6.3.0 — TV Experience
+- Added TV UI state and recent-channel foundation.
+
+## v6.4.0 — Profiles & Personalization
+- Added native profile/favourites/Continue Watching state.
+
+## v6.5.0 — Search & Discovery
+- Added native discovery/ranking layer.
+
+## v6.6.0 — DVR on TV
+- Added native DVR/upcoming/conflict state contract.
+
+## v6.7.0 — Device & Pairing
+- Added persistent TV device identity foundation.
+
+## v6.8.0 — Mobile Remote
+- Added common remote-control command contract.
+
+## v6.9.0 — Multi-room
+- Added playback handoff model.
+
+## v7.0.0 — MyOnline TV Platform
+- Added API Contract v1 and client capability model.
