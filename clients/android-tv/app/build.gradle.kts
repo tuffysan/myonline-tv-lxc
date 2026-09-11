@@ -2,7 +2,7 @@ plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
 android {
  namespace = "ink.nilsson.myonlinetv"
  compileSdk = 35
- defaultConfig { applicationId = "ink.nilsson.myonlinetv"; minSdk = 23; targetSdk = 35; versionCode = 801; versionName = "8.0.1" }
+ defaultConfig { applicationId = "ink.nilsson.myonlinetv"; minSdk = 23; targetSdk = 35; versionCode = 900; versionName = "9.0.0" }
  buildFeatures { viewBinding = true; buildConfig = true }
  compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
  kotlinOptions { jvmTarget = "17" }
