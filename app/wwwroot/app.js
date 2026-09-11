@@ -1431,7 +1431,7 @@ async function featureCompletionView(){
     const groups=[...new Set(features.map(x=>x.area))];
     content.innerHTML=`
       <div class=hero>
-        <span class=kicker>v28.1.0 FEATURE COMPLETION</span>
+        <span class=kicker>v30.0.0 FEATURE COMPLETION</span>
         <h2>Feature Completion audit</h2>
         <p class=muted>This page distinguishes working features from partial implementations, foundations and missing functionality. It intentionally does not count a contract/model as a finished feature.</p>
       </div>
@@ -1498,7 +1498,7 @@ async function adminView(){
   <div class="admin2Shell">
     <div class="admin2Hero">
       <div>
-        <span class="admin2Kicker">MYONLINE TV v28.1.0</span>
+        <span class="admin2Kicker">MYONLINE TV v30.0.0</span>
         <h1>Administration</h1>
         <p>Everything needed to configure, monitor and maintain your media center — without one endless settings page.</p>
       </div>
@@ -3054,8 +3054,8 @@ window.MyOnlineOperations={
 };
 
 
-// v28.1.0 Native Client Generation
-window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'28.1.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
+// v30.0.0 Native Client Generation
+window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'30.0.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
 window.MyOnlineClientBridge={
  version:1,
  capabilities(){return {sourceEngine:true,player:true,live:true,guide:true,library:true,dvr:true,profiles:true,rooms:true,remote:true}},
@@ -3063,7 +3063,7 @@ window.MyOnlineClientBridge={
 };
 
 
-// v28.1.0 — Performance Engine
+// v30.0.0 — Performance Engine
 const perfCache=new Map();
 function perfCacheGet(key,maxAgeMs){
   const x=perfCache.get(key);
@@ -3100,7 +3100,7 @@ document.addEventListener('pointerover',e=>{
 },{passive:true});
 
 
-// v28.1.0 — Live TV 3.0
+// v30.0.0 — Live TV 3.0
 let liveNumberBuffer='',liveNumberTimer=null;
 function showLiveZapOverlay(c){
   let box=$('#liveZapOverlay');
@@ -3129,7 +3129,7 @@ document.addEventListener('keydown',e=>{
 });
 
 
-// v28.1.0 — Guide 3.0
+// v30.0.0 — Guide 3.0
 function scrollGuideToNow(){
   const wrap=document.querySelector('.timelineWrap');
   const line=document.querySelector('.programLane .nowLine');
@@ -3145,7 +3145,7 @@ function guideKeyboard(e){
 document.addEventListener('keydown',guideKeyboard);
 
 
-// v28.1.0 — Unified Library End-to-End
+// v30.0.0 — Unified Library End-to-End
 function unifiedSourceScore(s){
   let score=0;
   if(s.poster)score+=2;
@@ -3163,7 +3163,7 @@ async function playBestUnified(group){
 }
 
 
-// v28.1.0 — Unified Playback Engine
+// v30.0.0 — Unified Playback Engine
 async function tryUnifiedPlaybackSource(item){
   const parts=String(item?.id||'').split(':');
   if(parts.length<3)throw new Error('Invalid unified media source.');
@@ -3187,7 +3187,7 @@ async function playUnifiedWithFallback(group){
 }
 
 
-// v28.1.0 — Home 3.0
+// v30.0.0 — Home 3.0
 const HOME3_DEFAULT=['continue','live','next','recordings','favourites','new'];
 function home3Key(){return `myonline-home3:${currentProfile||'default'}`}
 function getHome3Order(){try{return JSON.parse(localStorage.getItem(home3Key())||'null')||HOME3_DEFAULT}catch{return HOME3_DEFAULT}}
@@ -3202,7 +3202,7 @@ function home3Customize(){
 }
 
 
-// v28.1.0 — Search 3.0
+// v30.0.0 — Search 3.0
 function searchHistoryKey(){return `myonline-search-history:${currentProfile||'default'}`}
 function rememberSearch(q){
   q=String(q||'').trim();if(q.length<2)return;
@@ -3217,7 +3217,7 @@ document.addEventListener('keydown',e=>{
 });
 
 
-// v28.1.0 — DVR End-to-End
+// v30.0.0 — DVR End-to-End
 async function dvrHealthPanel(){
   const [status,conflicts,upcoming]=await Promise.all([
     api('/api/dvr/status').catch(()=>null),
@@ -3236,9 +3236,9 @@ async function showDvrOperations(){
 }
 
 
-// v28.1.0 — Production Edition
+// v30.0.0 — Production Edition
 window.MyOnlineTvProduction={
-  version:'28.1.0',
+  version:'30.0.0',
   clientMode:()=>document.body.dataset.clientMode||'unknown',
   runtimeSummary:()=>({
     online:navigator.onLine,
@@ -3250,25 +3250,25 @@ window.MyOnlineTvProduction={
 };
 
 
-// v28.1.0 performance diagnostics
+// v30.0.0 performance diagnostics
 window.MyOnlinePerf={samples:[],mark(name,start){this.samples.push({name,ms:Math.round(performance.now()-start),at:Date.now()});this.samples=this.samples.slice(-200)},snapshot(){return [...this.samples]}};
 
 
-// v28.1.0 Live TV 4.0 state
+// v30.0.0 Live TV 4.0 state
 let livePreviousChannelKey=null,liveCurrentChannelKey=null;
 function rememberLiveTune(key){if(key&&key!==liveCurrentChannelKey){livePreviousChannelKey=liveCurrentChannelKey;liveCurrentChannelKey=key}}
 function previousLiveChannel(){const c=channels.find(x=>x.key===livePreviousChannelKey);if(c)return playLive(c.key,c.name)}
 
 
-// v28.1.0 local phone remote client
+// v30.0.0 local phone remote client
 async function remoteCommand(deviceId,command,value=null){return api('/api/devices/'+encodeURIComponent(deviceId)+'/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command,value})})}
 
 
-// v28.1.0 provider/device capability gate
+// v30.0.0 provider/device capability gate
 async function advancedTvCapabilities(){try{return await api('/api/platform/v25/capabilities',{timeoutMs:5000,attempts:1})}catch{return {productionVerified:false}}}
 
 
-// v28.1.0 — Admin UX Foundation
+// v30.0.0 — Admin UX Foundation
 window.AdminUx = {
   sections: [
     {id:'overview',label:'Overview'},
@@ -3295,7 +3295,7 @@ document.addEventListener('click',e=>{
 });
 
 
-// v28.1.0 — Admin Overview & Health
+// v30.0.0 — Admin Overview & Health
 async function renderAdminOverviewV2(target){
   const host=typeof target==='string'?document.querySelector(target):target;
   if(!host)return;
@@ -3314,7 +3314,7 @@ async function renderAdminOverviewV2(target){
 }
 
 
-// v28.1.0 — Admin Sources
+// v30.0.0 — Admin Sources
 function adminSourceCard(s){
   return `<article class="adminCard adminSourceCard">
     <div class="adminCardHead"><div><h3>${esc(s.name||s.type||'Source')}</h3><small>${esc(s.detail||'')}</small></div>${AdminUx.statusBadge(s.status||'unknown',s.statusText||s.status||'Unknown')}</div>
@@ -3324,7 +3324,7 @@ function adminSourceCard(s){
 }
 
 
-// v28.1.0 — Admin DVR & Storage
+// v30.0.0 — Admin DVR & Storage
 function adminDvrSummary(x){
   return `<div class="adminCardGrid">
     ${[['Active',x.active],['Upcoming',x.upcoming],['Failed',x.failed],['Conflicts',x.conflicts]].map(([k,v])=>`<article class="adminCard adminMetric"><b>${Number(v||0)}</b><small>${k}</small></article>`).join('')}
@@ -3336,7 +3336,7 @@ function adminStorageBar(used,total){
 }
 
 
-// v28.1.0 — Admin Users & Devices
+// v30.0.0 — Admin Users & Devices
 function adminUserRow(u){
   return `<div class="adminListRow"><div><b>${esc(u.name||u.username||'User')}</b><small>${esc((u.roles||[]).join(', '))}</small></div><div>${AdminUx.statusBadge(u.enabled===false?'warning':'ok',u.enabled===false?'Disabled':'Enabled')}<button class="btn" data-user-edit="${escAttr(u.id||'')}">Edit</button></div></div>`;
 }
@@ -3345,7 +3345,7 @@ function adminDeviceRow(d){
 }
 
 
-// v28.1.0 — Admin Diagnostics
+// v30.0.0 — Admin Diagnostics
 function diagnosticGrade(ms){
   return ms<500?['excellent','Excellent']:ms<1000?['good','Good']:ms<2000?['warning','Slow']:['error','Very slow'];
 }
@@ -3356,7 +3356,7 @@ function diagnosticTimingRow(name,ms){
 }
 
 
-// v28.1.0 — Backup, Update & Recovery
+// v30.0.0 — Backup, Update & Recovery
 function adminRecoveryCard(x){
   return `<article class="adminCard">
     <div class="adminCardHead"><div><h3>Backup & Recovery</h3><small>Safe update workflow</small></div>${AdminUx.statusBadge(x?.healthy?'ok':'warning',x?.healthy?'Ready':'Check required')}</div>
@@ -3366,33 +3366,91 @@ function adminRecoveryCard(x){
 }
 
 
-// v28.1.0 — Mobile Admin
+// v30.0.0 — Mobile Admin
 function adminMobileClass(){
   document.documentElement.classList.toggle('adminCompact',matchMedia('(max-width:720px)').matches);
 }
 addEventListener('resize',adminMobileClass,{passive:true});adminMobileClass();
 
 
-// v28.1.0 Stream Doctor
+// v30.0.0 Stream Doctor
 function streamDoctorMetric(label,value,state='ok'){return `<div class="streamDoctorRow"><span>${esc(label)}</span><b class="${state}">${esc(String(value))}</b></div>`}
 function renderStreamDoctor(x){return `<section class="card streamDoctor"><h3>Stream Doctor</h3>${streamDoctorMetric('Provider',x.provider||'Unknown',x.providerOk?'ok':'error')}${streamDoctorMetric('Codec',x.codec||'—')}${streamDoctorMetric('Resolution',x.resolution||'—')}${streamDoctorMetric('Bitrate',x.bitrate||'—')}${streamDoctorMetric('FPS',x.fps||'—')}${streamDoctorMetric('Buffer',x.buffer||'—')}${streamDoctorMetric('Playback mode',x.mode||'—')}</section>`}
 
 
-// v28.1.0 Notification Center
+// v30.0.0 Notification Center
 const NotificationCenter={key:'myonline-notifications',all(){try{return JSON.parse(localStorage.getItem(this.key)||'[]')}catch{return[]}},push(n){const a=this.all();a.unshift({id:String(Date.now())+Math.random(),at:Date.now(),read:false,...n});localStorage.setItem(this.key,JSON.stringify(a.slice(0,100)));return a[0]},read(id){localStorage.setItem(this.key,JSON.stringify(this.all().map(x=>x.id===id?{...x,read:true}:x)))}};
 
 
-// v28.1.0 What's On Tonight
+// v30.0.0 What's On Tonight
 function tonightFilter(rows,kind='all'){const now=new Date();return (rows||[]).filter(x=>{const d=new Date(x.start||x.startTime);return d.toDateString()===now.toDateString()&&d.getHours()>=17&&(kind==='all'||String(x.category||x.kind||'').toLowerCase().includes(kind))}).sort((a,b)=>new Date(a.start||a.startTime)-new Date(b.start||b.startTime))}
 
 
-// v28.1.0 Unified Watchlist
+// v30.0.0 Unified Watchlist
 const UnifiedWatchlist={key(){return `myonline-watchlist:${currentProfile||'default'}`},all(){try{return JSON.parse(localStorage.getItem(this.key())||'[]')}catch{return[]}},toggle(item){let a=this.all();const i=a.findIndex(x=>x.id===item.id);if(i>=0)a.splice(i,1);else a.unshift(item);localStorage.setItem(this.key(),JSON.stringify(a.slice(0,500)));return i<0}};
 
 
-// v28.1.0 Sports Hub
+// v30.0.0 Sports Hub
 function sportsMatches(rows,teams=[]){const n=teams.map(x=>String(x).toLowerCase()).filter(Boolean);return (rows||[]).filter(x=>{const t=String(x.title||'').toLowerCase();return n.some(q=>t.includes(q))||/(football|soccer|hockey|champions league|premier league|allsvenskan|match)/i.test(t)})}
 
 
-// v28.1.0 Guest Mode
+// v30.0.0 Guest Mode
 function enterGuestMode(){sessionStorage.setItem('myonline-guest','1');currentProfile='guest';show('home')} function isGuestMode(){return sessionStorage.getItem('myonline-guest')==='1'}
+
+
+// v28.2 — shared safe async action wrapper
+async function uiAction(action,{busyText='Working…',errorTitle='Action failed'}={}){
+  try{return await action()}catch(e){console.error(errorTitle,e);alert(`${errorTitle}: ${friendlyError(e)}`);throw e}
+}
+window.MyOnlineRelease={version:'30.0.0',qualityGate:'stabilization'};
+
+
+// v28.3 — reusable UI states
+function uiLoading(title='Loading…',detail='Please wait'){return `<div class="uiState loading"><span class="uiSpinner"></span><div><b>${esc(title)}</b><small>${esc(detail)}</small></div></div>`}
+function uiEmpty(title='Nothing here yet',detail='',action=''){return `<div class="uiState empty"><b>${esc(title)}</b>${detail?`<small>${esc(detail)}</small>`:''}${action||''}</div>`}
+function uiError(title='Could not load',detail=''){return `<div class="uiState error"><b>${esc(title)}</b><small>${esc(detail)}</small></div>`}
+
+
+// v28.4 — consistent keyboard focus helper
+function focusFirstInteractive(root=document){requestAnimationFrame(()=>root.querySelector('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),[tabindex="0"]')?.focus())}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelector('[data-close]:not([hidden])')?.click()}});
+
+
+// v28.5 — common playback decision entry point for UI callers
+async function playbackEngine(request){
+  if(!request) throw new Error('Playback request is required');
+  if(request.url){playMedia(request.url,request.name||'Playback',request.mediaId||null);return {mode:'direct-url'}}
+  if(request.unified){return playUnifiedWithFallback(request.unified)}
+  if(request.live){return playLive(request.live.channelKey,request.name||'',!!request.forceTranscode)}
+  throw new Error('Unsupported playback request');
+}
+
+
+// v28.6 — Live TV recovery wrapper
+async function recoverLivePlayback(channelKey,name){
+  try{return await playLive(channelKey,name,false)}
+  catch(first){console.warn('Live direct/remux failed; retrying transcoded',first);return await playLive(channelKey,name,true)}
+}
+
+
+// v28.8 — deterministic unified identity helper
+function unifiedMediaIdentity(x){return `${String(x.kind||x.type||'media').toLowerCase()}|${String(x.title||'').toLowerCase().replace(/[^a-z0-9]+/g,'')}|${x.year||0}`}
+
+
+// v28.9 — DVR health summary from real existing endpoints
+async function dvrProductionHealth(){
+  const [status,conflicts,upcoming]=await Promise.all([api('/api/dvr/status'),api('/api/dvr/conflicts'),api('/api/dvr/upcoming')]);
+  return {status,conflicts,upcoming,ok:!(conflicts||[]).length};
+}
+
+
+// v29.2 — local recommendation score; no cloud dependency
+function localRecommendationScore(x){return Number(x.metadataScore||0)+(x.favourite?30:0)+(x.inProgress?20:0)+(x.recentlyWatched?8:0)}
+
+
+// v29.3 — server notification read helper
+async function markNotificationRead(id){await api('/api/notifications/'+encodeURIComponent(id)+'/read',{method:'POST'});return true}
+
+
+// v29.7 — tiny local timing API for diagnostics
+const PerfMark={start:n=>performance.mark(n+':start'),end:n=>{performance.mark(n+':end');try{return performance.measure(n,n+':start',n+':end').duration}catch{return null}}};

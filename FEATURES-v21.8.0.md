@@ -1,4 +1,4 @@
-# v28.1.0 — Local Smart TV
+# v30.0.0 — Local Smart TV
 
 Zero-cost local recommendation and intent policy; external AI remains disabled.
 

@@ -1,4 +1,4 @@
-# v28.1.0 — Performance & Diagnostics
+# v30.0.0 — Performance & Diagnostics
 
 Local performance measurements and diagnostics.
 

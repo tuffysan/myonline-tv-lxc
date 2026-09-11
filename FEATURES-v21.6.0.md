@@ -1,4 +1,4 @@
-# v28.1.0 — Catch-up
+# v30.0.0 — Catch-up
 
 Provider-capability-gated Start Over/Catch-up decision engine.
 

@@ -1,4 +1,4 @@
-# v28.1.0 — Multi-device Platform
+# v30.0.0 — Multi-device Platform
 
 Browser/mobile/tablet/TV/Android-TV device platform.
 

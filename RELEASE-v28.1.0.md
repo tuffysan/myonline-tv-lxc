@@ -1,4 +1,4 @@
-# v28.1.0 — Admin 2.0
+# v30.0.0 — Admin 2.0
 
 A full usability redesign of the existing Administration page.
 

@@ -1,4 +1,4 @@
-# v28.1.0 — Playback Resilience
+# v30.0.0 — Playback Resilience
 
 Bounded playback fallback plan and useful error stages.
 

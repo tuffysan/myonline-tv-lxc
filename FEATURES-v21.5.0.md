@@ -1,4 +1,4 @@
-# v28.1.0 — Multi-room
+# v30.0.0 — Multi-room
 
 Room/session/handoff coordinator with explicit playback ownership.
 
