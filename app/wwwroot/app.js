@@ -289,6 +289,19 @@ async function home(){
   const hasPlex=(mediaLibraries||[]).some(x=>x.enabled!==false&&String(x.type).toLowerCase()==='plex');
   const hasJellyfin=(mediaLibraries||[]).some(x=>x.enabled!==false&&String(x.type).toLowerCase()==='jellyfin');
   const mediaFavs=getMediaFavs().slice(0,12);
+  let homeLiveNow=[];
+  try{
+    if(await ensureProvider()){
+      const liveChannels=await api('/api/channels/'+currentProvider);
+      const liveEpg=await api('/api/epg/'+currentProvider+'?hours=3');
+      const now=Date.now();
+      homeLiveNow=liveChannels.filter(c=>!isChannelHidden(c)).map(c=>{
+        const rows=liveEpg.filter(p=>p.channel===c.id||p.channel===c.epgId);
+        const current=rows.find(p=>new Date(p.start).getTime()<=now&&new Date(p.stop).getTime()>now);
+        return current?{channel:c,program:current}:null;
+      }).filter(Boolean).slice(0,12);
+    }
+  }catch{}
 
   content.innerHTML=`${smartHomeStatus()}<div class="hero homeHero"><div><span class=kicker>MYONLINE TV</span><h2>What do you want to watch?</h2>
   <p class=muted>Live TV, IPTV, Plex and Jellyfin — one home screen.</p>
@@ -302,6 +315,8 @@ async function home(){
     ${hasPlex?`<button class=homeSourceCard onclick="show('plex')"><span>◆</span><b>Plex</b><small>Media library</small></button>`:''}
     ${hasJellyfin?`<button class=homeSourceCard onclick="show('jellyfin')"><span>◇</span><b>Jellyfin</b><small>Media library</small></button>`:''}
   </div>
+
+  ${homeLiveNow.length?`<div class=sectionHead><h2>On TV now</h2><button class=linkButton onclick="show('guide')">Open Guide</button></div><div class=liveNowRail>${homeLiveNow.map(x=>`<button class=liveNowCard onclick='show("live").then(()=>playLive(${JSON.stringify(x.channel.key)},${JSON.stringify(x.channel.name)}))'>${x.channel.logo?`<img src="${escAttr(x.channel.logo)}">`:''}<div><b>${esc(channelName(x.channel))}</b><span>${esc(x.program.title)}</span><small>${esc(liveProgramTimes(x.program))}</small></div></button>`).join('')}</div>`:''}
 
   ${continueItems.length?`<div class=sectionHead><h2>Continue watching</h2><button class=linkButton onclick="clearContinueWatching()">Clear all</button></div><div class="continueRow mediaHistoryRail">${continueItems.slice(0,16).map(x=>`<div class="continueCard historyCard"><button class=historyMain onclick='resumeContinueItem(${JSON.stringify(x)})'>${mediaPosterMarkup(x.poster,x.title)}<div class=historyCardBody><b>${esc(x.title)}</b><small>${formatMediaTime(x.positionSeconds||0)}${x.durationSeconds?' / '+formatMediaTime(x.durationSeconds):''}</small>${x.durationSeconds?`<div class=continueProgress><span style="width:${continueProgress(x)}%"></span></div>`:''}</div></button><div class=historyActions><button class=historyWatched title="Mark as watched" onclick='markContinueWatched(${JSON.stringify(x.id)})'>✓</button><button class=historyRemove title="Remove" onclick='removeContinueWatching(${JSON.stringify(x.id)})'>×</button></div></div>`).join('')}</div><div id=mediaPlayer></div>`:''}
 
@@ -430,37 +445,120 @@ async function live(){
   catch(e){content.innerHTML=errorCard(e)}
 }
 function renderChannels(){
-  const recents=getLiveRecents().filter(x=>x.providerId===currentProvider).map(r=>channelByKey(r.key)).filter(Boolean);
-  content.innerHTML=`<div class=toolbar>${providerSelect()}<input id=q placeholder="Search channels"><select id=group><option value="">All groups</option><option value="__favorites">★ Favourites</option><option value="__recent">↻ Recently watched</option>${[...new Set(channels.map(x=>x.group).filter(Boolean).filter(g=>!channelPrefs.hiddenGroups.includes(g)))].sort().map(g=>`<option>${esc(g)}</option>`).join('')}</select><button class=btn id=liveFavQuick>★ Favourites</button><button class=btn id=hideGroupBtn>Hide group</button></div>
-  <div class="liveHelp">Remote/keyboard: ↑ ↓ select · Enter play · ← → previous/next channel · F fullscreen · Esc exit</div>
-  <div id=playerWrap></div><div id=chan class=channelGrid tabindex="0"></div>`;
+  content.innerHTML=`<div class="toolbar liveToolbar">
+    ${providerSelect()}
+    <input id=q placeholder="Search channels">
+    <select id=group>
+      <option value="">All channels</option>
+      <option value="__favorites">★ Favourites</option>
+      <option value="__recent">↻ Recently watched</option>
+      ${[...new Set(channels.map(x=>x.group).filter(Boolean).filter(g=>!channelPrefs.hiddenGroups.includes(g)))].sort().map(g=>`<option>${esc(g)}</option>`).join('')}
+    </select>
+    <button class=btn id=liveFavQuick>★ Favourites</button>
+    <button class=btn id=hideGroupBtn>Hide group</button>
+  </div>
+  <div class="tvLiveShell">
+    <aside class="liveChannelPane">
+      <div class="livePaneTitle"><div><span class=kicker>LIVE TV</span><h2>Channels</h2></div><span id=liveChannelCount class=countPill></span></div>
+      <div id=chan class="channelGrid compactChannelGrid" tabindex="0"></div>
+    </aside>
+    <section class="liveStage">
+      <div id=playerWrap class=livePlayerWrap>
+        <div class="liveEmptyState">
+          <div class=liveEmptyIcon>▶</div>
+          <h2>Select a channel</h2>
+          <p>Choose a channel to start live playback.</p>
+        </div>
+      </div>
+      <div id=liveDetails class=liveDetailsPanel></div>
+      <div class="liveHelp">Remote/keyboard: ↑ ↓ select · Enter play · ← → previous/next · F fullscreen · Esc exit</div>
+    </section>
+  </div>`;
   $('#provider').onchange=async e=>{currentProvider=e.target.value;await live()};
-  $('#q').oninput=renderFilter;$('#group').onchange=renderFilter;$('#liveFavQuick').onclick=()=>{$('#group').value='__favorites';renderFilter()};$('#hideGroupBtn').onclick=()=>hideGroup($('#group').value);
+  $('#q').oninput=renderFilter;
+  $('#group').onchange=renderFilter;
+  $('#liveFavQuick').onclick=()=>{$('#group').value='__favorites';renderFilter()};
+  $('#hideGroupBtn').onclick=()=>hideGroup($('#group').value);
   $('#chan').addEventListener('keydown',liveKeyHandler);
   renderFilter();
 }
+
+function liveProgramTimes(pr){
+  if(!pr)return '';
+  const a=new Date(pr.start),b=new Date(pr.stop);
+  return `${a.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}–${b.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`;
+}
+function liveProgress(pr){
+  if(!pr)return 0;
+  const a=new Date(pr.start).getTime(),b=new Date(pr.stop).getTime(),n=Date.now();
+  if(!Number.isFinite(a)||!Number.isFinite(b)||b<=a)return 0;
+  return Math.max(0,Math.min(100,(n-a)/(b-a)*100));
+}
+function updateLiveDetails(c){
+  const host=$('#liveDetails');
+  if(!host||!c)return;
+  const pg=liveProgramFor(c);
+  const current=pg.now;
+  const next=pg.next;
+  host.innerHTML=`<div class=liveDetailsHeader>
+      <div class=liveDetailsIdentity>
+        <div class=liveDetailsLogo>${c.logo?`<img src="${escAttr(c.logo)}" onerror="this.style.display='none'">`:''}</div>
+        <div><span class=kicker>NOW PLAYING</span><h2>${esc(channelName(c))}</h2><small>${esc(c.group||'Live TV')}</small></div>
+      </div>
+      <button class="round favouriteRound" title="Favourite" onclick="toggleFav('${escAttr(c.id)}')">${fav.has(c.id)?'★':'☆'}</button>
+    </div>
+    <div class=liveProgrammeCard>
+      <div class=liveProgrammeTop><div><h3>${esc(current?.title||'Live TV')}</h3><span>${esc(liveProgramTimes(current))}</span></div>${current?`<strong>${Math.max(0,Math.round((new Date(current.stop)-Date.now())/60000))} min left</strong>`:''}</div>
+      ${current?`<div class=liveProgrammeProgress><span style="width:${liveProgress(current)}%"></span></div>`:''}
+      ${current?.description?`<p>${esc(current.description)}</p>`:''}
+      <div class=livePrimaryActions>
+        <button class="btn primaryLiveBtn" onclick='playLive(${JSON.stringify(c.key)},${JSON.stringify(c.name)})'>▶ Play</button>
+        <button class="btn recordBtn" onclick='recordLiveNow(${JSON.stringify(c.key)},${JSON.stringify(channelName(c))})'>● Record</button>
+        ${current?`<button class=btn onclick='createSeriesDvrRule(${JSON.stringify(c.key)},${JSON.stringify(channelName(c))},${JSON.stringify(JSON.stringify(current))})'>● Record series</button>`:''}
+      </div>
+    </div>
+    ${next?`<div class=nextProgramme><span class=kicker>NEXT</span><b>${esc(next.title)}</b><small>${esc(liveProgramTimes(next))}</small></div>`:''}`;
+}
+
 function renderFilter(){
   const q=($('#q')?.value||'').toLowerCase(),g=$('#group')?.value||'';
   let rows=channels.filter(c=>!isChannelHidden(c)).filter(c=>(!q||channelName(c).toLowerCase().includes(q)));
   if(g==='__favorites')rows=rows.filter(c=>fav.has(c.id));
   else if(g==='__recent'){
     const order=getLiveRecents().filter(x=>x.providerId===currentProvider).map(x=>x.key);
-    rows=order.map(k=>channelByKey(k)).filter(Boolean).filter(c=>!q||c.name.toLowerCase().includes(q));
+    rows=order.map(k=>channelByKey(k)).filter(Boolean).filter(c=>!q||channelName(c).toLowerCase().includes(q));
   } else if(g) rows=rows.filter(c=>c.group===g);
+
   liveVisibleRows=rows.slice(0,800);
   liveSelectedIndex=Math.min(liveSelectedIndex,Math.max(0,liveVisibleRows.length-1));
+  const count=$('#liveChannelCount');if(count)count.textContent=`${liveVisibleRows.length}`;
+
   $('#chan').innerHTML=liveVisibleRows.map((c,i)=>{
     const pg=liveProgramFor(c);
-    return `<article class="channelCard ${i===liveSelectedIndex?'selectedChannel':''}" data-live-index="${i}">
+    return `<article class="channelCard tvChannelRow ${i===liveSelectedIndex?'selectedChannel':''}" data-live-index="${i}">
       <div class=logoBox>${c.logo?`<img loading=lazy decoding=async src="${escAttr(c.logo)}" onerror="this.style.display='none'">`:''}</div>
-      <div class=channelInfo><b>${esc(c.number?c.number+' · ':'')}${esc(channelName(c))}</b><small>${esc(c.group)}</small>${pg.now?`<small class=channelNow>${esc(pg.now.title)}</small>`:''}</div>
-      <button class=round title="Play" onclick='playLive(${JSON.stringify(c.key)},${JSON.stringify(c.name)})'>▶</button>
-      <button class="round recordRound" title="Record Live TV" onclick='recordLiveNow(${JSON.stringify(c.key)},${JSON.stringify(channelName(c))})'>●</button>
-      <button class=round title="Favourite" onclick="toggleFav('${escAttr(c.id)}')">${fav.has(c.id)?'★':'☆'}</button><button class=round title="Hide channel" onclick='hideChannel(${JSON.stringify(c.key)})'>×</button>
+      <div class=channelInfo>
+        <b>${esc(c.number?c.number+' · ':'')}${esc(channelName(c))}</b>
+        <small>${esc(c.group||'')}</small>
+        ${pg.now?`<small class=channelNow>${esc(pg.now.title)}</small>`:''}
+      </div>
+      <div class=channelActions>
+        <button class=round title="Play" onclick='playLive(${JSON.stringify(c.key)},${JSON.stringify(c.name)})'>▶</button>
+        <button class="round recordRound" title="Record Live TV" onclick='recordLiveNow(${JSON.stringify(c.key)},${JSON.stringify(channelName(c))})'>●</button>
+        <button class=round title="Favourite" onclick="toggleFav('${escAttr(c.id)}')">${fav.has(c.id)?'★':'☆'}</button>
+        <button class="round hideChannelRound" title="Hide channel" aria-label="Hide channel" onclick='hideChannel(${JSON.stringify(c.key)})'>◉̸</button>
+      </div>
     </article>`}).join('');
+
+  const selected=liveVisibleRows[liveSelectedIndex];
+  if(selected)updateLiveDetails(selected);
+
   document.querySelectorAll('[data-live-index]').forEach(el=>el.onclick=e=>{
     if(e.target.closest('button'))return;
-    liveSelectedIndex=Number(el.dataset.liveIndex)||0;renderFilter();
+    liveSelectedIndex=Number(el.dataset.liveIndex)||0;
+    const c=liveVisibleRows[liveSelectedIndex];
+    document.querySelectorAll('[data-live-index]').forEach(x=>x.classList.toggle('selectedChannel',x===el));
+    if(c)updateLiveDetails(c);
   });
 }
 function liveKeyHandler(e){
@@ -491,9 +589,9 @@ async function playLive(channelKey,name,forceTranscode=false){
   const wrap=$('#playerWrap')||$('#mediaPlayer');
   if(!wrap)return;
   const selected=channelByKey(channelKey)||{key:channelKey,name};liveCurrentChannel=selected;rememberLiveChannel(selected);
-  wrap.innerHTML=`<div class="playerCard livePlayer"><video id=video controls autoplay playsinline></video>${liveOverlay(selected)}
-    <div class="liveControls"><button class=btn onclick="stepLiveChannel(-1)">← Previous</button><button class=btn onclick="stepLiveChannel(1)">Next →</button><button class="btn recordBtn" onclick='recordLiveNow(${JSON.stringify(channelKey)},${JSON.stringify(name)})'>● Record</button><button class=btn onclick="togglePlayerFit()">▣ Fit</button><button class=btn onclick="toggleLiveFullscreen()">⛶ Fullscreen</button></div>
-    <div id=livePlaybackStatus class=livePlaybackStatus>Connecting to channel…</div><div class=nowPlaying>${esc(name)}</div></div>`;
+  wrap.innerHTML=`<div class="playerCard livePlayer premiumLivePlayer"><video id=video controls autoplay playsinline></video>${liveOverlay(selected)}
+    <div class="liveControls premiumLiveControls"><button class=btn onclick="stepLiveChannel(-1)">← Previous</button><button class=btn onclick="stepLiveChannel(1)">Next →</button><button class="btn recordBtn" onclick='recordLiveNow(${JSON.stringify(channelKey)},${JSON.stringify(name)})'>● Record</button><button class=btn onclick="togglePlayerFit()">▣ Fit</button><button class=btn onclick="toggleLiveFullscreen()">⛶ Fullscreen</button></div>
+    <div class=liveStatusRow><div id=livePlaybackStatus class=livePlaybackStatus>Connecting to channel…</div><div class=nowPlaying>${esc(name)}</div></div></div>`;
   wrap.scrollIntoView({behavior:'smooth',block:'start'});
   try{
     const info=await api('/api/live/start/'+encodeURIComponent(currentProvider)+'/'+encodeURIComponent(channelKey)+(forceTranscode?'?transcode=true':''),{method:'POST'});
@@ -882,7 +980,7 @@ function renderGuide(start,hours){
   const by=new Map();epg.forEach(x=>{if(!by.has(x.channel))by.set(x.channel,[]);by.get(x.channel).push(x)});
   const rows=channels.filter(c=>!isChannelHidden(c)&&by.has(c.id)).slice(0,180);
   const ticks=[];for(let d=new Date(start);d<end;d=new Date(d.getTime()+3600000))ticks.push(d);
-  content.innerHTML=`<div class=toolbar>${providerSelect()}<button class="btn ${guideWindow==='now'?'activeBtn':''}" onclick="guideWindow='now';guide()">Now</button><button class="btn ${guideWindow==='tonight'?'activeBtn':''}" onclick="guideWindow='tonight';guide()">Tonight</button><button class="btn ${guideWindow==='tomorrow'?'activeBtn':''}" onclick="guideWindow='tomorrow';guide()">Tomorrow</button><button class=btn id=refreshGuide>Refresh</button></div><div id=playerWrap></div><div class=timelineWrap><div class=timelineHead><div class=channelHead>Channel</div><div class=timeAxis style="grid-template-columns:repeat(${ticks.length},1fr)">${ticks.map(x=>`<span>${x.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>`).join('')}</div></div><div class=timeline>${rows.map(c=>timelineRowV319(c,by.get(c.id)||[],start,end,span)).join('')}</div></div>`;
+  content.innerHTML=`<div class="guideHeader"><div><span class=kicker>TV GUIDE</span><h2>Programme guide</h2></div><div class=toolbar>${providerSelect()}<button class="btn ${guideWindow==='now'?'activeBtn':''}" onclick="guideWindow='now';guide()">Now</button><button class="btn ${guideWindow==='tonight'?'activeBtn':''}" onclick="guideWindow='tonight';guide()">Tonight</button><button class="btn ${guideWindow==='tomorrow'?'activeBtn':''}" onclick="guideWindow='tomorrow';guide()">Tomorrow</button><button class=btn id=refreshGuide>↻ Refresh</button></div></div><div id=playerWrap></div><div class="timelineWrap premiumGuide"><div class=timelineHead><div class=channelHead>Channel</div><div class=timeAxis style="grid-template-columns:repeat(${ticks.length},1fr)">${ticks.map(x=>`<span>${x.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>`).join('')}</div></div><div class=timeline>${rows.map(c=>timelineRowV319(c,by.get(c.id)||[],start,end,span)).join('')}</div></div>`;
   $('#provider').onchange=async e=>{currentProvider=e.target.value;await guide()};$('#refreshGuide').onclick=guide;
 }
 function timelineRowV319(c,progs,start,end,span){
@@ -1192,7 +1290,7 @@ async function featureCompletionView(){
     const groups=[...new Set(features.map(x=>x.area))];
     content.innerHTML=`
       <div class=hero>
-        <span class=kicker>v20.1.0 FEATURE COMPLETION</span>
+        <span class=kicker>v20.2.0 FEATURE COMPLETION</span>
         <h2>Feature Completion audit</h2>
         <p class=muted>This page distinguishes working features from partial implementations, foundations and missing functionality. It intentionally does not count a contract/model as a finished feature.</p>
       </div>
@@ -2646,8 +2744,8 @@ window.MyOnlineOperations={
 };
 
 
-// v20.1.0 Native Client Generation
-window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'20.1.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
+// v20.2.0 Native Client Generation
+window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'20.2.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
 window.MyOnlineClientBridge={
  version:1,
  capabilities(){return {sourceEngine:true,player:true,live:true,guide:true,library:true,dvr:true,profiles:true,rooms:true,remote:true}},

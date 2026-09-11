@@ -825,3 +825,83 @@ html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px 
 
 /* v4.2.0 Sources 2.0 */
 .sourceUnavailable{opacity:.48;filter:saturate(.45)}
+
+
+/* v20.2.0 TV Experience */
+.liveToolbar{position:relative;top:auto;background:transparent;padding:0 0 14px}
+.tvLiveShell{display:grid;grid-template-columns:minmax(330px,390px) minmax(0,1fr);gap:14px;align-items:start}
+.liveChannelPane{position:sticky;top:86px;max-height:calc(100vh - 108px);overflow:hidden;background:#091722;border:1px solid #23465f;border-radius:18px;padding:12px;display:flex;flex-direction:column}
+.livePaneTitle{display:flex;align-items:center;justify-content:space-between;padding:4px 4px 10px}
+.livePaneTitle h2{margin:2px 0 0;font-size:22px}
+.countPill{min-width:34px;height:28px;display:grid;place-items:center;border-radius:999px;background:#12334a;border:1px solid #2c5b79;font-weight:800}
+.compactChannelGrid{overflow:auto;padding-right:3px;gap:6px}
+.channelCard.tvChannelRow{display:grid!important;grid-template-columns:48px minmax(0,1fr) auto!important;min-height:64px!important;padding:7px 8px!important;border-radius:12px!important;gap:9px!important;background:#0c1f2e}
+.tvChannelRow .logoBox{width:46px;height:46px;border-radius:10px}
+.tvChannelRow .logoBox img{max-width:42px;max-height:40px}
+.tvChannelRow .channelInfo{min-width:0;gap:1px}
+.tvChannelRow .channelInfo b,.tvChannelRow .channelInfo small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tvChannelRow .channelInfo b{font-size:14px}
+.tvChannelRow .channelInfo small{font-size:11px}
+.channelActions{display:flex;align-items:center;gap:5px;margin-left:auto}
+.tvChannelRow .round{width:34px;height:34px;font-size:13px;flex:0 0 34px}
+.hideChannelRound{opacity:.7}
+.hideChannelRound:hover{opacity:1;background:#493044;border-color:#9a516c}
+.tvChannelRow.selectedChannel{outline:2px solid #5bb7ff!important;outline-offset:0!important;transform:none!important;background:#102b3f;box-shadow:0 0 0 1px #163f5d inset}
+.liveStage{min-width:0;display:grid;gap:12px}
+.livePlayerWrap{margin:0!important}
+.liveEmptyState{min-height:390px;border:1px solid #23465f;border-radius:18px;background:radial-gradient(circle at 50% 0,#123653 0,transparent 55%),#050c12;display:grid;place-items:center;align-content:center;text-align:center;padding:30px}
+.liveEmptyState h2{margin:12px 0 4px}.liveEmptyState p{opacity:.65;margin:0}.liveEmptyIcon{font-size:46px;opacity:.35}
+.premiumLivePlayer{padding:8px;border-radius:18px}
+.premiumLivePlayer video{max-height:58vh}
+.premiumLiveControls{display:flex;gap:8px;flex-wrap:wrap;padding:8px 2px 4px}
+.liveStatusRow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:2px 4px 6px}
+.liveDetailsPanel{background:#091722;border:1px solid #23465f;border-radius:18px;padding:16px;display:grid;gap:14px}
+.liveDetailsHeader{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.liveDetailsIdentity{display:flex;align-items:center;gap:12px;min-width:0}
+.liveDetailsIdentity h2{margin:2px 0;font-size:23px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.liveDetailsLogo{width:54px;height:54px;border-radius:12px;background:#061019;display:grid;place-items:center;flex:0 0 54px}
+.liveDetailsLogo img{max-width:48px;max-height:46px}
+.liveProgrammeCard h3{font-size:23px;margin:0 0 5px}.liveProgrammeCard p{opacity:.75;line-height:1.45}
+.liveProgrammeTop{display:flex;justify-content:space-between;gap:18px;align-items:start}
+.liveProgrammeTop span,.nextProgramme small{opacity:.65}
+.liveProgrammeTop strong{font-size:13px;white-space:nowrap;background:#102d43;border:1px solid #285875;padding:6px 9px;border-radius:999px}
+.liveProgrammeProgress{height:6px;border-radius:999px;background:#173044;overflow:hidden;margin:11px 0}
+.liveProgrammeProgress span{display:block;height:100%;background:var(--accent)}
+.livePrimaryActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.primaryLiveBtn{background:#0b7fd8;border-color:#2c9df0}
+.nextProgramme{border-top:1px solid #1b3548;padding-top:12px;display:grid;gap:3px}
+.favouriteRound{font-size:18px}
+.liveHelp{font-size:12px;opacity:.5;padding:0 4px}
+
+/* premium guide */
+.guideHeader{display:flex;justify-content:space-between;gap:16px;align-items:end;margin-bottom:14px}
+.guideHeader h2{margin:3px 0 0}.guideHeader .toolbar{padding:0;position:static;background:transparent}
+.premiumGuide{border-radius:18px;border-color:#28506b;box-shadow:0 20px 60px #0004}
+.premiumGuide .timelineHead{background:#091722}
+.premiumGuide .timelineRow{min-height:74px}
+.premiumGuide .timelineChannel{background:#0b1d2b}
+.premiumGuide .programLane{min-height:74px}
+.premiumGuide .prog{top:5px;height:64px;background:#142b3e;border-color:#2b4b61}
+.premiumGuide .prog:hover{background:#193c56}
+.premiumGuide .prog.currentProgram{background:#0e6fb8;border-color:#46aef5;box-shadow:inset 4px 0 0 #9bd8ff}
+.premiumGuide .nowLine{z-index:6}
+
+/* Home: currently playing rail */
+.liveNowRail{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(240px,310px);gap:12px;overflow-x:auto;padding:2px 0 10px;scroll-snap-type:x proximity}
+.liveNowCard{scroll-snap-align:start;background:#0d1c29;border:1px solid var(--line);border-radius:14px;padding:12px;color:#fff;text-align:left;display:grid;grid-template-columns:54px 1fr;gap:10px;align-items:center;cursor:pointer}
+.liveNowCard:hover{border-color:#4184ae;transform:translateY(-1px)}
+.liveNowCard img{width:48px;max-height:44px;object-fit:contain}
+.liveNowCard div{min-width:0;display:grid;gap:3px}.liveNowCard b,.liveNowCard span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.liveNowCard span{font-size:13px}.liveNowCard small{opacity:.58}
+
+/* Avoid the old mobile rule moving the hide button to its own line. */
+@media(max-width:1100px){
+  .tvLiveShell{grid-template-columns:1fr}
+  .liveChannelPane{position:relative;top:auto;max-height:440px}
+}
+@media(max-width:700px){
+  .channelCard.tvChannelRow{grid-template-columns:42px minmax(0,1fr) auto!important}
+  .tvChannelRow .channelActions{gap:3px}
+  .tvChannelRow .round{width:31px;height:31px;flex-basis:31px}
+  .tvChannelRow .channelActions .recordRound{display:none}
+  .guideHeader{align-items:stretch;flex-direction:column}
+}
