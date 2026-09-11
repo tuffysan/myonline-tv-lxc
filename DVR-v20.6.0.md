@@ -1,4 +1,4 @@
-# v30.0.1 — DVR 2.0
+# v30.0.2 — DVR 2.0
 
 Adds executable planning logic for:
 - series recording rules

@@ -1,4 +1,4 @@
-# v30.0.1 — Admin UX Foundation
+# v30.0.2 — Admin UX Foundation
 
 This is a cumulative Admin release based on v25.0.0.
 

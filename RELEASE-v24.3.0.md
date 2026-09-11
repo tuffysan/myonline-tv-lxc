@@ -1,4 +1,4 @@
-# v30.0.1 — Rooms & Handoff
+# v30.0.2 — Rooms & Handoff
 
 Local room playback ownership and handoff contract.
 

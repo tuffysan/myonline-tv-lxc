@@ -1,4 +1,4 @@
-# v30.0.1 — Profiles 2.0
+# v30.0.2 — Profiles 2.0
 
 Profile, kids-mode and per-profile preference contract.
 

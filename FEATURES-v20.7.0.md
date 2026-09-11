@@ -1,4 +1,4 @@
-# v30.0.1 — Performance
+# v30.0.2 — Performance
 
 Local cache policy, bounded parallelism and fast-home performance diagnostics.
 

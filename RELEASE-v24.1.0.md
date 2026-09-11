@@ -1,4 +1,4 @@
-# v30.0.1 — Android TV First-class
+# v30.0.2 — Android TV First-class
 
 D-pad, Media3 and HLS-readiness Android-TV contract.
 

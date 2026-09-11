@@ -1,4 +1,4 @@
-# v30.0.1 — Full UX Polish
+# v30.0.2 — Full UX Polish
 
 Cumulative release based on v29.8.0.
 

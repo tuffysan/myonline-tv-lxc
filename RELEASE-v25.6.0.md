@@ -1,4 +1,4 @@
-# v30.0.1 — Admin Diagnostics
+# v30.0.2 — Admin Diagnostics
 
 This is a cumulative Admin release based on v25.5.0.
 

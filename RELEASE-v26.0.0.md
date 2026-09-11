@@ -1,4 +1,4 @@
-# v30.0.1 — Admin Production Edition
+# v30.0.2 — Admin Production Edition
 
 This is a cumulative Admin release based on v25.8.0.
 

@@ -2,7 +2,7 @@ public static class RuntimeMetricsV2310
 {
     public static object Capabilities() => new
     {
-        version = "30.0.1",
+        version = "30.0.2",
         feature = "Performance & Diagnostics",
         localFirst = true,
         mandatoryRuntimeCostSek = 0,

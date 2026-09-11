@@ -1,4 +1,4 @@
-# v30.0.1 compile hotfix
+# v30.0.2 compile hotfix
 
 The original local preflight build failed before publication with:
 

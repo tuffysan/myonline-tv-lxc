@@ -1,4 +1,4 @@
-# v30.0.1 — EPG & Live TV Completion
+# v30.0.2 — EPG & Live TV Completion
 - TV-first compact Live TV rail.
 - Now/Next programme information and progress.
 - Mini-guide toggle.

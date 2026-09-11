@@ -1,4 +1,4 @@
-# v30.0.1 — Search 3.0
+# v30.0.2 — Search 3.0
 
 This is a cumulative release based on v22.7.0.
 

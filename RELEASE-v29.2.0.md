@@ -1,4 +1,4 @@
-# v30.0.1 — Smart Home, EPG & Sports
+# v30.0.2 — Smart Home, EPG & Sports
 
 Cumulative release based on v29.1.0.
 
