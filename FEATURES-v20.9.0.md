@@ -1,4 +1,4 @@
-# v25.0.0 — Unified Media
+# v26.0.0 — Unified Media
 
 Source scoring and deterministic best-source selection for duplicate media.
 

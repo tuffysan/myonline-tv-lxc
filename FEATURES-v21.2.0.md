@@ -1,4 +1,4 @@
-# v25.0.0 — DVR 3.0
+# v26.0.0 — DVR 3.0
 
 Series/new-episode rules, priorities, retention decisions and conflict resolution.
 

@@ -1,4 +1,4 @@
-# v25.0.0 — Stable Platform
+# v26.0.0 — Stable Platform
 
 Feature freeze, zero-cost policy and release-gate evaluator for stable promotion.
 

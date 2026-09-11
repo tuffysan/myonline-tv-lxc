@@ -1431,7 +1431,7 @@ async function featureCompletionView(){
     const groups=[...new Set(features.map(x=>x.area))];
     content.innerHTML=`
       <div class=hero>
-        <span class=kicker>v25.0.0 FEATURE COMPLETION</span>
+        <span class=kicker>v26.0.0 FEATURE COMPLETION</span>
         <h2>Feature Completion audit</h2>
         <p class=muted>This page distinguishes working features from partial implementations, foundations and missing functionality. It intentionally does not count a contract/model as a finished feature.</p>
       </div>
@@ -2886,8 +2886,8 @@ window.MyOnlineOperations={
 };
 
 
-// v25.0.0 Native Client Generation
-window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'25.0.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
+// v26.0.0 Native Client Generation
+window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'26.0.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
 window.MyOnlineClientBridge={
  version:1,
  capabilities(){return {sourceEngine:true,player:true,live:true,guide:true,library:true,dvr:true,profiles:true,rooms:true,remote:true}},
@@ -2895,7 +2895,7 @@ window.MyOnlineClientBridge={
 };
 
 
-// v25.0.0 — Performance Engine
+// v26.0.0 — Performance Engine
 const perfCache=new Map();
 function perfCacheGet(key,maxAgeMs){
   const x=perfCache.get(key);
@@ -2932,7 +2932,7 @@ document.addEventListener('pointerover',e=>{
 },{passive:true});
 
 
-// v25.0.0 — Live TV 3.0
+// v26.0.0 — Live TV 3.0
 let liveNumberBuffer='',liveNumberTimer=null;
 function showLiveZapOverlay(c){
   let box=$('#liveZapOverlay');
@@ -2961,7 +2961,7 @@ document.addEventListener('keydown',e=>{
 });
 
 
-// v25.0.0 — Guide 3.0
+// v26.0.0 — Guide 3.0
 function scrollGuideToNow(){
   const wrap=document.querySelector('.timelineWrap');
   const line=document.querySelector('.programLane .nowLine');
@@ -2977,7 +2977,7 @@ function guideKeyboard(e){
 document.addEventListener('keydown',guideKeyboard);
 
 
-// v25.0.0 — Unified Library End-to-End
+// v26.0.0 — Unified Library End-to-End
 function unifiedSourceScore(s){
   let score=0;
   if(s.poster)score+=2;
@@ -2995,7 +2995,7 @@ async function playBestUnified(group){
 }
 
 
-// v25.0.0 — Unified Playback Engine
+// v26.0.0 — Unified Playback Engine
 async function tryUnifiedPlaybackSource(item){
   const parts=String(item?.id||'').split(':');
   if(parts.length<3)throw new Error('Invalid unified media source.');
@@ -3019,7 +3019,7 @@ async function playUnifiedWithFallback(group){
 }
 
 
-// v25.0.0 — Home 3.0
+// v26.0.0 — Home 3.0
 const HOME3_DEFAULT=['continue','live','next','recordings','favourites','new'];
 function home3Key(){return `myonline-home3:${currentProfile||'default'}`}
 function getHome3Order(){try{return JSON.parse(localStorage.getItem(home3Key())||'null')||HOME3_DEFAULT}catch{return HOME3_DEFAULT}}
@@ -3034,7 +3034,7 @@ function home3Customize(){
 }
 
 
-// v25.0.0 — Search 3.0
+// v26.0.0 — Search 3.0
 function searchHistoryKey(){return `myonline-search-history:${currentProfile||'default'}`}
 function rememberSearch(q){
   q=String(q||'').trim();if(q.length<2)return;
@@ -3049,7 +3049,7 @@ document.addEventListener('keydown',e=>{
 });
 
 
-// v25.0.0 — DVR End-to-End
+// v26.0.0 — DVR End-to-End
 async function dvrHealthPanel(){
   const [status,conflicts,upcoming]=await Promise.all([
     api('/api/dvr/status').catch(()=>null),
@@ -3068,9 +3068,9 @@ async function showDvrOperations(){
 }
 
 
-// v25.0.0 — Production Edition
+// v26.0.0 — Production Edition
 window.MyOnlineTvProduction={
-  version:'25.0.0',
+  version:'26.0.0',
   clientMode:()=>document.body.dataset.clientMode||'unknown',
   runtimeSummary:()=>({
     online:navigator.onLine,
@@ -3082,19 +3082,124 @@ window.MyOnlineTvProduction={
 };
 
 
-// v25.0.0 performance diagnostics
+// v26.0.0 performance diagnostics
 window.MyOnlinePerf={samples:[],mark(name,start){this.samples.push({name,ms:Math.round(performance.now()-start),at:Date.now()});this.samples=this.samples.slice(-200)},snapshot(){return [...this.samples]}};
 
 
-// v25.0.0 Live TV 4.0 state
+// v26.0.0 Live TV 4.0 state
 let livePreviousChannelKey=null,liveCurrentChannelKey=null;
 function rememberLiveTune(key){if(key&&key!==liveCurrentChannelKey){livePreviousChannelKey=liveCurrentChannelKey;liveCurrentChannelKey=key}}
 function previousLiveChannel(){const c=channels.find(x=>x.key===livePreviousChannelKey);if(c)return playLive(c.key,c.name)}
 
 
-// v25.0.0 local phone remote client
+// v26.0.0 local phone remote client
 async function remoteCommand(deviceId,command,value=null){return api('/api/devices/'+encodeURIComponent(deviceId)+'/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command,value})})}
 
 
-// v25.0.0 provider/device capability gate
+// v26.0.0 provider/device capability gate
 async function advancedTvCapabilities(){try{return await api('/api/platform/v25/capabilities',{timeoutMs:5000,attempts:1})}catch{return {productionVerified:false}}}
+
+
+// v26.0.0 — Admin UX Foundation
+window.AdminUx = {
+  sections: [
+    {id:'overview',label:'Overview'},
+    {id:'sources',label:'Sources'},
+    {id:'users',label:'Users'},
+    {id:'dvr',label:'DVR'},
+    {id:'storage',label:'Storage'},
+    {id:'devices',label:'Devices'},
+    {id:'system',label:'System'}
+  ],
+  renderNav(active='overview'){
+    return `<nav class="adminTopNav">${this.sections.map(x=>`<button class="adminTopNavBtn ${x.id===active?'active':''}" data-admin-section="${x.id}">${x.label}</button>`).join('')}</nav>`;
+  },
+  statusBadge(status,text){
+    const s=(status||'unknown').toLowerCase();
+    return `<span class="adminStatusBadge ${s}"><span class="dot"></span>${text||status||'Unknown'}</span>`;
+  }
+};
+document.addEventListener('click',e=>{
+  const b=e.target.closest?.('[data-admin-section]');
+  if(!b)return;
+  document.querySelectorAll('[data-admin-section]').forEach(x=>x.classList.toggle('active',x===b));
+  document.querySelectorAll('.adminSection').forEach(x=>x.hidden=x.dataset.adminPanel!==b.dataset.adminSection);
+});
+
+
+// v26.0.0 — Admin Overview & Health
+async function renderAdminOverviewV2(target){
+  const host=typeof target==='string'?document.querySelector(target):target;
+  if(!host)return;
+  host.innerHTML='<div class="adminSkeleton">Loading system health…</div>';
+  try{
+    const x=await api('/api/admin/overview-v2',{timeoutMs:6000,attempts:1});
+    host.innerHTML=`<section class="adminOverview">
+      <div class="adminCardGrid">
+        <article class="adminCard"><div>${AdminUx.statusBadge(x.health,'System healthy')}</div><h3>MyOnline TV</h3><p>Version ${esc(x.version)}</p></article>
+        <article class="adminCard"><h3>Runtime</h3><p>.NET ${esc(x.runtime)}</p><small>${esc(x.machine)}</small></article>
+        <article class="adminCard"><h3>Uptime</h3><p>${Math.round((x.uptime||0)/3600000)} hours</p><small>Updated ${new Date(x.timestamp).toLocaleTimeString()}</small></article>
+      </div>
+      <div id="adminNeedsAttention" class="adminAttention"></div>
+    </section>`;
+  }catch(e){host.innerHTML=`<div class="adminError">Could not load health overview: ${esc(friendlyError(e))}</div>`}
+}
+
+
+// v26.0.0 — Admin Sources
+function adminSourceCard(s){
+  return `<article class="adminCard adminSourceCard">
+    <div class="adminCardHead"><div><h3>${esc(s.name||s.type||'Source')}</h3><small>${esc(s.detail||'')}</small></div>${AdminUx.statusBadge(s.status||'unknown',s.statusText||s.status||'Unknown')}</div>
+    <div class="adminSourceStats">${(s.stats||[]).map(x=>`<div><b>${esc(String(x.value))}</b><small>${esc(x.label)}</small></div>`).join('')}</div>
+    <div class="adminActions"><button class="btn" data-source-test="${escAttr(s.id||'')}">Test connection</button><button class="btn" data-source-refresh="${escAttr(s.id||'')}">Refresh</button><button class="btn" data-source-edit="${escAttr(s.id||'')}">Edit</button></div>
+  </article>`;
+}
+
+
+// v26.0.0 — Admin DVR & Storage
+function adminDvrSummary(x){
+  return `<div class="adminCardGrid">
+    ${[['Active',x.active],['Upcoming',x.upcoming],['Failed',x.failed],['Conflicts',x.conflicts]].map(([k,v])=>`<article class="adminCard adminMetric"><b>${Number(v||0)}</b><small>${k}</small></article>`).join('')}
+  </div>`;
+}
+function adminStorageBar(used,total){
+  const pct=total>0?Math.min(100,Math.max(0,used/total*100)):0;
+  return `<div class="storageBar"><span style="width:${pct.toFixed(1)}%"></span></div><small>${pct.toFixed(0)}% used</small>`;
+}
+
+
+// v26.0.0 — Admin Users & Devices
+function adminUserRow(u){
+  return `<div class="adminListRow"><div><b>${esc(u.name||u.username||'User')}</b><small>${esc((u.roles||[]).join(', '))}</small></div><div>${AdminUx.statusBadge(u.enabled===false?'warning':'ok',u.enabled===false?'Disabled':'Enabled')}<button class="btn" data-user-edit="${escAttr(u.id||'')}">Edit</button></div></div>`;
+}
+function adminDeviceRow(d){
+  return `<div class="adminListRow"><div><b>${esc(d.name||'Device')}</b><small>${esc(d.kind||'')} · ${esc(d.room||'Unassigned')}</small></div><div>${AdminUx.statusBadge(d.online?'ok':'warning',d.online?'Online':'Offline')}<button class="btn" data-device-manage="${escAttr(d.id||'')}">Manage</button></div></div>`;
+}
+
+
+// v26.0.0 — Admin Diagnostics
+function diagnosticGrade(ms){
+  return ms<500?['excellent','Excellent']:ms<1000?['good','Good']:ms<2000?['warning','Slow']:['error','Very slow'];
+}
+function diagnosticTimingRow(name,ms){
+  const [cls,label]=diagnosticGrade(Number(ms||0));
+  const pct=Math.min(100,Math.max(4,Number(ms||0)/25));
+  return `<div class="diagRow"><div><b>${esc(name)}</b><small>${Math.round(ms||0)} ms · ${label}</small></div><div class="diagMeter ${cls}"><span style="width:${pct}%"></span></div></div>`;
+}
+
+
+// v26.0.0 — Backup, Update & Recovery
+function adminRecoveryCard(x){
+  return `<article class="adminCard">
+    <div class="adminCardHead"><div><h3>Backup & Recovery</h3><small>Safe update workflow</small></div>${AdminUx.statusBadge(x?.healthy?'ok':'warning',x?.healthy?'Ready':'Check required')}</div>
+    <div class="recoverySteps"><span>1. Backup</span><span>2. Verify</span><span>3. Update</span><span>4. Health check</span><span>5. Rollback if needed</span></div>
+    <div class="adminActions"><button class="btn" data-admin-backup>Create backup</button><button class="btn" data-admin-update>Update MyOnline TV</button></div>
+  </article>`;
+}
+
+
+// v26.0.0 — Mobile Admin
+function adminMobileClass(){
+  document.documentElement.classList.toggle('adminCompact',matchMedia('(max-width:720px)').matches);
+}
+addEventListener('resize',adminMobileClass,{passive:true});adminMobileClass();

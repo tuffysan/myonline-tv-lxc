@@ -1,4 +1,4 @@
-# v25.0.0 — Live TV 4.0
+# v26.0.0 — Live TV 4.0
 
 TV-first zapping, Now/Next and previous-channel capabilities.
 

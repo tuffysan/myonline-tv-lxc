@@ -1,4 +1,4 @@
-# v25.0.0 — PiP & Multi-view
+# v26.0.0 — PiP & Multi-view
 
 Capability/resource-gated PiP and bounded multi-view layout planner.
 

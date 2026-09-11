@@ -2,7 +2,7 @@ public static class PlaybackResilienceV2360
 {
     public static object Capabilities() => new
     {
-        version = "25.0.0",
+        version = "26.0.0",
         feature = "Playback Resilience",
         localFirst = true,
         mandatoryRuntimeCostSek = 0,

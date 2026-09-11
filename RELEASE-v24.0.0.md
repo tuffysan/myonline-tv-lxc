@@ -1,4 +1,4 @@
-# v25.0.0 — Multi-device Platform
+# v26.0.0 — Multi-device Platform
 
 Browser/mobile/tablet/TV/Android-TV device platform.
 

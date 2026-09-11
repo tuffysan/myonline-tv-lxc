@@ -1,4 +1,4 @@
-# v25.0.0 — Fast Home
+# v26.0.0 — Fast Home
 
 Root cause:
 Home previously waited for several expensive operations before rendering:

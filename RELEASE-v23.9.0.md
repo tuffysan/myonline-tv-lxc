@@ -1,4 +1,4 @@
-# v25.0.0 — Universal Search
+# v26.0.0 — Universal Search
 
 One local search domain across TV, EPG, media and recordings.
 

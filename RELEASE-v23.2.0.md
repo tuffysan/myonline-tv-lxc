@@ -1,4 +1,4 @@
-# v25.0.0 — Server Media Index
+# v26.0.0 — Server Media Index
 
 Local searchable media-index contract.
 
