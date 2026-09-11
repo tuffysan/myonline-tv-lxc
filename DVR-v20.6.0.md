@@ -1,4 +1,4 @@
-# v20.6.0 — DVR 2.0
+# v20.6.1 — DVR 2.0
 
 Adds executable planning logic for:
 - series recording rules

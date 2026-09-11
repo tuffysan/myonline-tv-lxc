@@ -45,12 +45,20 @@ const jpost=(url,obj)=>api(url,{method:'POST',headers:{'content-type':'applicati
 
 function updateResponsiveMode(){
   const w=window.innerWidth;
+  const h=window.innerHeight;
   const coarse=window.matchMedia?.('(pointer:coarse)')?.matches===true;
+  const noHover=window.matchMedia?.('(hover:none)')?.matches===true;
+  const standalone=window.matchMedia?.('(display-mode:standalone)')?.matches===true;
+  const landscape=w>h;
+  const likelyTenFoot=(w>=1280&&landscape&&(coarse||noHover));
   const root=document.documentElement;
   root.classList.toggle('isMobile',w<720);
   root.classList.toggle('isTablet',w>=720&&w<1180);
-  root.classList.toggle('isTV',w>=1400&&coarse);
-  root.classList.toggle('isDesktop',w>=1180&&!coarse);
+  root.classList.toggle('isTV',likelyTenFoot);
+  root.classList.toggle('isDesktop',w>=1180&&!likelyTenFoot);
+  root.classList.toggle('isLandscape',landscape);
+  root.classList.toggle('isStandalone',standalone);
+  document.body.dataset.clientMode=w<720?'mobile':w<1180?'tablet':likelyTenFoot?'tv':'desktop';
 }
 
 function renderMobileNavigation(){
@@ -115,6 +123,11 @@ document.addEventListener('click',e=>{
   sheet.setAttribute('aria-hidden','true');
 });
 updateResponsiveMode();
+try{
+  window.matchMedia('(pointer:coarse)').addEventListener('change',updateResponsiveMode);
+  window.matchMedia('(hover:none)').addEventListener('change',updateResponsiveMode);
+  window.matchMedia('(display-mode:standalone)').addEventListener('change',updateResponsiveMode);
+}catch{}
 
 async function boot(){
   const st=await fetch('/api/auth/status',{credentials:'same-origin'}).then(r=>r.json());
@@ -1327,7 +1340,7 @@ async function featureCompletionView(){
     const groups=[...new Set(features.map(x=>x.area))];
     content.innerHTML=`
       <div class=hero>
-        <span class=kicker>v20.6.0 FEATURE COMPLETION</span>
+        <span class=kicker>v20.6.1 FEATURE COMPLETION</span>
         <h2>Feature Completion audit</h2>
         <p class=muted>This page distinguishes working features from partial implementations, foundations and missing functionality. It intentionally does not count a contract/model as a finished feature.</p>
       </div>
@@ -2523,8 +2536,8 @@ async function adminOverview(){try{return await api('/api/admin/overview')}catch
 
 // v3.9.0 TV/mobile focus recovery
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&matchMedia('(pointer:coarse)').matches){document.querySelector('nav button:not(.hidden):not(.navConfigHidden)')?.focus({preventScroll:true})}});
-window.addEventListener('pageshow',()=>{document.body.dataset.clientMode=innerWidth<721?'mobile':innerWidth>1400?'tv':'desktop'});
-window.addEventListener('resize',()=>{document.body.dataset.clientMode=innerWidth<721?'mobile':innerWidth>1400?'tv':'desktop'});
+window.addEventListener('pageshow',()=>updateResponsiveMode());
+window.addEventListener('orientationchange',()=>setTimeout(updateResponsiveMode,80));
 
 
 // v4.2.0 Sources 2.0
@@ -2781,8 +2794,8 @@ window.MyOnlineOperations={
 };
 
 
-// v20.6.0 Native Client Generation
-window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'20.6.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
+// v20.6.1 Native Client Generation
+window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'20.6.1',generation:6,experience:'Server + Web/PWA + Native Client API'};
 window.MyOnlineClientBridge={
  version:1,
  capabilities(){return {sourceEngine:true,player:true,live:true,guide:true,library:true,dvr:true,profiles:true,rooms:true,remote:true}},

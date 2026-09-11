@@ -1,4 +1,4 @@
-# MyOnline TV v20.6.0 — TV Experience
+# MyOnline TV v20.6.1 — TV Experience
 
 This release turns the existing Live TV/EPG capabilities into a denser TV-first experience.
 

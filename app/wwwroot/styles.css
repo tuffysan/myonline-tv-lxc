@@ -827,7 +827,7 @@ html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px 
 .sourceUnavailable{opacity:.48;filter:saturate(.45)}
 
 
-/* v20.6.0 TV Experience */
+/* v20.6.1 TV Experience */
 .liveToolbar{position:relative;top:auto;background:transparent;padding:0 0 14px}
 .tvLiveShell{display:grid;grid-template-columns:minmax(330px,390px) minmax(0,1fr);gap:14px;align-items:start}
 .liveChannelPane{position:sticky;top:86px;max-height:calc(100vh - 108px);overflow:hidden;background:#091722;border:1px solid #23465f;border-radius:18px;padding:12px;display:flex;flex-direction:column}
@@ -907,7 +907,7 @@ html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px 
 }
 
 
-/* v20.6.0 — Scrollbar polish */
+/* v20.6.1 — Scrollbar polish */
 :root{
   scrollbar-color:#315a73 #091722;
   scrollbar-width:thin;
@@ -988,7 +988,139 @@ html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px 
   scrollbar-gutter:stable;
 }
 
-/* v20.6.0 Live/EPG completion */
+/* v20.6.1 Live/EPG completion */
 .liveChannelPane.miniGuideOpen{box-shadow:0 0 0 2px #4faeff,0 24px 70px #0008}
 @media(min-width:1101px){.liveChannelPane.miniGuideOpen{max-height:calc(100vh - 92px)}}
 .premiumGuide .prog:focus,.tvChannelRow:focus-within{outline:2px solid #74c2ff;outline-offset:1px}
+
+
+/* =========================================================
+   v20.6.1 — Multi-device polish
+   Mobile · Tablet · Desktop · TV / 10-foot
+   ========================================================= */
+
+html,body{min-height:100%;min-height:100dvh}
+body{overscroll-behavior-y:none}
+button,a,input,select{touch-action:manipulation}
+img,video{max-width:100%}
+video{background:#000}
+
+/* Avoid long labels breaking layouts at any size. */
+.channelInfo,.posterBody,.historyCardBody,.liveDetailsIdentity>div{min-width:0}
+.channelInfo b,.channelInfo small,.posterBody b,.posterBody small{
+  overflow:hidden;text-overflow:ellipsis
+}
+
+/* Phone: safe areas, portrait and compact landscape. */
+@media(max-width:719px){
+  main header{
+    padding-left:max(14px,env(safe-area-inset-left));
+    padding-right:max(14px,env(safe-area-inset-right));
+    padding-top:max(10px,env(safe-area-inset-top));
+  }
+  #content{
+    padding-left:max(12px,env(safe-area-inset-left));
+    padding-right:max(12px,env(safe-area-inset-right));
+  }
+  .mobileBottomNav{
+    padding-left:env(safe-area-inset-left);
+    padding-right:env(safe-area-inset-right);
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .tvLiveShell{display:block}
+  .liveChannelPane{max-height:46dvh;margin-bottom:12px}
+  .premiumLivePlayer video{width:100%;max-height:52dvh;aspect-ratio:16/9;object-fit:contain}
+  .liveDetailsPanel{padding:12px}
+  .liveDetailsIdentity h2{font-size:1.05rem}
+  .liveProgrammeCard h3{font-size:1.05rem}
+  .liveProgrammeTop{gap:8px}
+  .liveProgrammeTop strong{font-size:.72rem}
+  .livePrimaryActions{display:grid;grid-template-columns:1fr 1fr}
+  .livePrimaryActions .btn{width:100%}
+  .liveHelp{display:none}
+}
+
+/* Phone landscape: prioritize video and keep controls reachable. */
+@media(max-width:950px) and (max-height:520px) and (orientation:landscape){
+  main header{display:none!important}
+  #content{padding-top:8px}
+  .mobileBottomNav{opacity:.96}
+  .liveChannelPane{max-height:72dvh}
+  .premiumLivePlayer video{max-height:72dvh}
+  .liveDetailsPanel{padding:10px}
+  .liveProgrammeCard p,.nextProgramme{display:none}
+}
+
+/* Tablet portrait: bottom nav, 3-column posters, comfortable touch. */
+@media(min-width:720px) and (max-width:900px) and (orientation:portrait){
+  .tvLiveShell{grid-template-columns:1fr}
+  .liveChannelPane{position:relative;top:auto;max-height:42dvh}
+  .premiumLivePlayer video{max-height:54dvh}
+  .livePrimaryActions .btn{min-height:48px}
+}
+
+/* Tablet landscape: compact rail + player side by side. */
+@media(min-width:901px) and (max-width:1179px){
+  .tvLiveShell{grid-template-columns:minmax(285px,34vw) minmax(0,1fr)}
+  .liveChannelPane{position:sticky;top:72px;max-height:calc(100dvh - 92px)}
+  .channelCard.tvChannelRow{grid-template-columns:42px minmax(0,1fr) auto!important}
+  .tvChannelRow .logoBox{width:40px;height:40px}
+  .tvChannelRow .round{width:32px;height:32px;flex-basis:32px}
+  .premiumLivePlayer video{max-height:56dvh}
+}
+
+/* Desktop: keep content readable on ultrawide monitors. */
+@media(min-width:1180px) and (pointer:fine){
+  #content{max-width:1920px;margin-inline:auto;width:100%}
+  .tvLiveShell{grid-template-columns:clamp(340px,26vw,430px) minmax(0,1fr)}
+  .premiumLivePlayer video{aspect-ratio:16/9;object-fit:contain;width:100%}
+}
+
+/* TV / 10-foot — include common 1280/1366 TV browser viewports. */
+@media(min-width:1280px) and (hover:none){
+  html.isTV body{font-size:19px}
+  html.isTV #app{grid-template-columns:280px minmax(0,1fr)}
+  html.isTV aside{padding:22px 16px}
+  html.isTV nav button,html.isTV .logout{min-height:60px}
+  html.isTV main header{min-height:78px;padding:22px 34px}
+  html.isTV #content{padding:30px 36px}
+  html.isTV .btn,html.isTV button,html.isTV select{min-height:52px}
+  html.isTV .tvLiveShell{grid-template-columns:390px minmax(0,1fr);gap:20px}
+  html.isTV .liveChannelPane{top:92px;max-height:calc(100dvh - 118px)}
+  html.isTV .channelCard.tvChannelRow{min-height:72px!important}
+  html.isTV .tvChannelRow .round{width:42px;height:42px;flex-basis:42px}
+  html.isTV .premiumLivePlayer video{max-height:62dvh;aspect-ratio:16/9}
+  html.isTV .liveDetailsPanel{padding:20px}
+  html.isTV .liveProgrammeCard h3{font-size:1.35rem}
+  html.isTV .timelineHead,html.isTV .timelineRow{grid-template-columns:190px minmax(1180px,1fr)}
+  html.isTV .prog{font-size:.92rem}
+}
+
+/* TV at 1080p/4K: larger focus target but not giant desktop spacing. */
+@media(min-width:1800px) and (hover:none){
+  html.isTV #app{grid-template-columns:320px minmax(0,1fr)}
+  html.isTV #content{padding:38px 46px}
+  html.isTV .tvLiveShell{grid-template-columns:440px minmax(0,1fr)}
+  html.isTV .channelCard.tvChannelRow{min-height:82px!important}
+}
+
+/* Keyboard/remote focus must be visible everywhere. */
+:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+html.isTV :focus-visible{outline-width:5px;outline-offset:5px}
+
+/* Accessibility: reduce animation when the OS/user asks for it. */
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    scroll-behavior:auto!important;
+    animation-duration:.01ms!important;
+    animation-iteration-count:1!important;
+    transition-duration:.01ms!important;
+  }
+}
+
+/* PWA standalone: avoid content colliding with display cutouts. */
+html.isStandalone body{
+  padding-top:env(safe-area-inset-top);
+  padding-left:env(safe-area-inset-left);
+  padding-right:env(safe-area-inset-right);
+}
