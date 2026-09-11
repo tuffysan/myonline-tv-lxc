@@ -1,4 +1,4 @@
-# v20.6.2 — Unified Library
+# v22.0.0 — Unified Library
 - Adds executable server-side UnifiedLibraryResolver for title/year/type de-duplication.
 - Adds client-side unified-media de-duplication helper.
 - Preserves alternate source references instead of discarding duplicates.

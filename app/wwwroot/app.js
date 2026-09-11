@@ -1431,7 +1431,7 @@ async function featureCompletionView(){
     const groups=[...new Set(features.map(x=>x.area))];
     content.innerHTML=`
       <div class=hero>
-        <span class=kicker>v20.6.2 FEATURE COMPLETION</span>
+        <span class=kicker>v22.0.0 FEATURE COMPLETION</span>
         <h2>Feature Completion audit</h2>
         <p class=muted>This page distinguishes working features from partial implementations, foundations and missing functionality. It intentionally does not count a contract/model as a finished feature.</p>
       </div>
@@ -2885,8 +2885,8 @@ window.MyOnlineOperations={
 };
 
 
-// v20.6.2 Native Client Generation
-window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'20.6.2',generation:6,experience:'Server + Web/PWA + Native Client API'};
+// v22.0.0 Native Client Generation
+window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'22.0.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
 window.MyOnlineClientBridge={
  version:1,
  capabilities(){return {sourceEngine:true,player:true,live:true,guide:true,library:true,dvr:true,profiles:true,rooms:true,remote:true}},
