@@ -827,7 +827,7 @@ html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px 
 .sourceUnavailable{opacity:.48;filter:saturate(.45)}
 
 
-/* v20.2.0 TV Experience */
+/* v20.2.1 TV Experience */
 .liveToolbar{position:relative;top:auto;background:transparent;padding:0 0 14px}
 .tvLiveShell{display:grid;grid-template-columns:minmax(330px,390px) minmax(0,1fr);gap:14px;align-items:start}
 .liveChannelPane{position:sticky;top:86px;max-height:calc(100vh - 108px);overflow:hidden;background:#091722;border:1px solid #23465f;border-radius:18px;padding:12px;display:flex;flex-direction:column}
@@ -904,4 +904,86 @@ html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px 
   .tvChannelRow .round{width:31px;height:31px;flex-basis:31px}
   .tvChannelRow .channelActions .recordRound{display:none}
   .guideHeader{align-items:stretch;flex-direction:column}
+}
+
+
+/* v20.2.1 — Scrollbar polish */
+:root{
+  scrollbar-color:#315a73 #091722;
+  scrollbar-width:thin;
+}
+
+/* Firefox */
+.compactChannelGrid,
+.liveNowRail,
+.timelineWrap,
+.mediaGrid,
+.modalBody,
+.adminScroll,
+.scrollPanel{
+  scrollbar-width:thin;
+  scrollbar-color:#315a73 #091722;
+}
+
+/* Chromium / Edge / WebKit */
+.compactChannelGrid::-webkit-scrollbar,
+.liveNowRail::-webkit-scrollbar,
+.timelineWrap::-webkit-scrollbar,
+.mediaGrid::-webkit-scrollbar,
+.modalBody::-webkit-scrollbar,
+.adminScroll::-webkit-scrollbar,
+.scrollPanel::-webkit-scrollbar{
+  width:10px;
+  height:10px;
+}
+
+.compactChannelGrid::-webkit-scrollbar-track,
+.liveNowRail::-webkit-scrollbar-track,
+.timelineWrap::-webkit-scrollbar-track,
+.mediaGrid::-webkit-scrollbar-track,
+.modalBody::-webkit-scrollbar-track,
+.adminScroll::-webkit-scrollbar-track,
+.scrollPanel::-webkit-scrollbar-track{
+  background:#091722;
+  border-radius:999px;
+}
+
+.compactChannelGrid::-webkit-scrollbar-thumb,
+.liveNowRail::-webkit-scrollbar-thumb,
+.timelineWrap::-webkit-scrollbar-thumb,
+.mediaGrid::-webkit-scrollbar-thumb,
+.modalBody::-webkit-scrollbar-thumb,
+.adminScroll::-webkit-scrollbar-thumb,
+.scrollPanel::-webkit-scrollbar-thumb{
+  background:linear-gradient(180deg,#315a73,#24485f);
+  border:2px solid #091722;
+  border-radius:999px;
+  min-height:32px;
+}
+
+.compactChannelGrid::-webkit-scrollbar-thumb:hover,
+.liveNowRail::-webkit-scrollbar-thumb:hover,
+.timelineWrap::-webkit-scrollbar-thumb:hover,
+.mediaGrid::-webkit-scrollbar-thumb:hover,
+.modalBody::-webkit-scrollbar-thumb:hover,
+.adminScroll::-webkit-scrollbar-thumb:hover,
+.scrollPanel::-webkit-scrollbar-thumb:hover{
+  background:linear-gradient(180deg,#4d7f9f,#315f7a);
+}
+
+.compactChannelGrid::-webkit-scrollbar-corner,
+.liveNowRail::-webkit-scrollbar-corner,
+.timelineWrap::-webkit-scrollbar-corner{
+  background:#091722;
+}
+
+/* Keep the channel list visually integrated with the card container. */
+.liveChannelPane{
+  padding-right:8px;
+}
+
+.compactChannelGrid{
+  padding-right:4px;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
 }
