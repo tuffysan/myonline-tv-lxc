@@ -827,7 +827,7 @@ html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px 
 .sourceUnavailable{opacity:.48;filter:saturate(.45)}
 
 
-/* v20.6.1 TV Experience */
+/* v20.6.2 TV Experience */
 .liveToolbar{position:relative;top:auto;background:transparent;padding:0 0 14px}
 .tvLiveShell{display:grid;grid-template-columns:minmax(330px,390px) minmax(0,1fr);gap:14px;align-items:start}
 .liveChannelPane{position:sticky;top:86px;max-height:calc(100vh - 108px);overflow:hidden;background:#091722;border:1px solid #23465f;border-radius:18px;padding:12px;display:flex;flex-direction:column}
@@ -907,7 +907,7 @@ html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px 
 }
 
 
-/* v20.6.1 — Scrollbar polish */
+/* v20.6.2 — Scrollbar polish */
 :root{
   scrollbar-color:#315a73 #091722;
   scrollbar-width:thin;
@@ -988,14 +988,14 @@ html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px 
   scrollbar-gutter:stable;
 }
 
-/* v20.6.1 Live/EPG completion */
+/* v20.6.2 Live/EPG completion */
 .liveChannelPane.miniGuideOpen{box-shadow:0 0 0 2px #4faeff,0 24px 70px #0008}
 @media(min-width:1101px){.liveChannelPane.miniGuideOpen{max-height:calc(100vh - 92px)}}
 .premiumGuide .prog:focus,.tvChannelRow:focus-within{outline:2px solid #74c2ff;outline-offset:1px}
 
 
 /* =========================================================
-   v20.6.1 — Multi-device polish
+   v20.6.2 — Multi-device polish
    Mobile · Tablet · Desktop · TV / 10-foot
    ========================================================= */
 
@@ -1123,4 +1123,28 @@ html.isStandalone body{
   padding-top:env(safe-area-inset-top);
   padding-left:env(safe-area-inset-left);
   padding-right:env(safe-area-inset-right);
+}
+
+
+/* v20.6.2 — Fast Home */
+.homeDeferredPlaceholder{
+  min-height:72px;
+  display:flex;
+  align-items:center;
+  padding:14px 16px;
+  margin:8px 0 18px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:linear-gradient(90deg,#0b1823,#102433,#0b1823);
+  background-size:220% 100%;
+  animation:homeDeferredShimmer 1.8s ease-in-out infinite;
+  color:#a9c1d2;
+}
+@keyframes homeDeferredShimmer{
+  0%{background-position:0% 0}
+  50%{background-position:100% 0}
+  100%{background-position:0% 0}
+}
+@media(prefers-reduced-motion:reduce){
+  .homeDeferredPlaceholder{animation:none}
 }

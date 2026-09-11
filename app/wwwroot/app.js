@@ -301,23 +301,70 @@ function localGlobalSearch(query){
   }catch{}
   return out.slice(0,50);
 }
-async function home(){
-  let unifiedMovies=[],unifiedSeries=[];
-  try{
-    [unifiedMovies,unifiedSeries]=await Promise.all([
-      api('/api/unified/movies',{timeoutMs:65000}),
-      api('/api/unified/series',{timeoutMs:65000})
-    ]);
-  }catch{}
-  const cont=await api('/api/continue');
-  let homeHistory=getMediaHistory();
-  let continueItems=cont.map(x=>({...x,poster:findLegacyPoster(x,homeHistory,unifiedMovies,unifiedSeries)}));
-  if(continueItems.some(x=>!x.poster)||homeHistory.some(x=>!x.poster)){
-    const repaired=await repairMissingHomePosters(continueItems,homeHistory);
-    continueItems=repaired.continueItems;
-    homeHistory=repaired.history;
-  }
+const HOME_CACHE_TTL_MS=5*60*1000;
+let homeRefreshGeneration=0;
 
+function homeCacheKey(name){
+  return `myonline-home-cache-v2:${currentProfile||'default'}:${name}`;
+}
+function getHomeCache(name,fallback=[]){
+  try{
+    const x=JSON.parse(sessionStorage.getItem(homeCacheKey(name))||'null');
+    if(!x||!Array.isArray(x.items))return fallback;
+    return x.items;
+  }catch{return fallback}
+}
+function setHomeCache(name,items){
+  try{sessionStorage.setItem(homeCacheKey(name),JSON.stringify({saved:Date.now(),items:Array.isArray(items)?items:[]}))}catch{}
+}
+function homeCacheFresh(name){
+  try{
+    const x=JSON.parse(sessionStorage.getItem(homeCacheKey(name))||'null');
+    return !!x&&Number(x.saved)>0&&(Date.now()-Number(x.saved))<HOME_CACHE_TTL_MS;
+  }catch{return false}
+}
+
+async function loadHomeUnified(){
+  const [movies,series]=await Promise.all([
+    api('/api/unified/movies',{timeoutMs:20000,attempts:1}).catch(()=>null),
+    api('/api/unified/series',{timeoutMs:20000,attempts:1}).catch(()=>null)
+  ]);
+  if(Array.isArray(movies))setHomeCache('unifiedMovies',movies);
+  if(Array.isArray(series))setHomeCache('unifiedSeries',series);
+  return {
+    movies:Array.isArray(movies)?movies:getHomeCache('unifiedMovies',[]),
+    series:Array.isArray(series)?series:getHomeCache('unifiedSeries',[])
+  };
+}
+
+async function loadHomeLiveNow(){
+  if(!currentProvider&&providers?.length)currentProvider=providers[0].id;
+  if(!currentProvider)return [];
+  const [liveChannels,liveEpg]=await Promise.all([
+    api('/api/channels/'+currentProvider,{timeoutMs:12000,attempts:1}).catch(()=>null),
+    api('/api/epg/'+currentProvider+'?hours=3',{timeoutMs:12000,attempts:1}).catch(()=>null)
+  ]);
+  if(!Array.isArray(liveChannels)||!Array.isArray(liveEpg))return getHomeCache('liveNow',[]);
+  const now=Date.now();
+  const epgByChannel=new Map();
+  for(const p of liveEpg){
+    const k=String(p.channel||'');
+    if(!epgByChannel.has(k))epgByChannel.set(k,[]);
+    epgByChannel.get(k).push(p);
+  }
+  const rows=liveChannels.filter(c=>!isChannelHidden(c)).map(c=>{
+    const candidates=[
+      ...(epgByChannel.get(String(c.id||''))||[]),
+      ...(epgByChannel.get(String(c.epgId||''))||[])
+    ];
+    const current=candidates.find(p=>new Date(p.start).getTime()<=now&&new Date(p.stop).getTime()>now);
+    return current?{channel:c,program:current}:null;
+  }).filter(Boolean).slice(0,12);
+  setHomeCache('liveNow',rows);
+  return rows;
+}
+
+function renderHomeContent({unifiedMovies=[],unifiedSeries=[],continueItems=[],homeHistory=[],homeLiveNow=[]}){
   const recentlyAdded=[...unifiedMovies,...unifiedSeries]
     .filter(x=>x.addedAt)
     .sort((a,b)=>new Date(b.addedAt)-new Date(a.addedAt))
@@ -325,19 +372,6 @@ async function home(){
   const hasPlex=(mediaLibraries||[]).some(x=>x.enabled!==false&&String(x.type).toLowerCase()==='plex');
   const hasJellyfin=(mediaLibraries||[]).some(x=>x.enabled!==false&&String(x.type).toLowerCase()==='jellyfin');
   const mediaFavs=getMediaFavs().slice(0,12);
-  let homeLiveNow=[];
-  try{
-    if(await ensureProvider()){
-      const liveChannels=await api('/api/channels/'+currentProvider);
-      const liveEpg=await api('/api/epg/'+currentProvider+'?hours=3');
-      const now=Date.now();
-      homeLiveNow=liveChannels.filter(c=>!isChannelHidden(c)).map(c=>{
-        const rows=liveEpg.filter(p=>p.channel===c.id||p.channel===c.epgId);
-        const current=rows.find(p=>new Date(p.start).getTime()<=now&&new Date(p.stop).getTime()>now);
-        return current?{channel:c,program:current}:null;
-      }).filter(Boolean).slice(0,12);
-    }
-  }catch{}
 
   content.innerHTML=`${smartHomeStatus()}<div class="hero homeHero"><div><span class=kicker>MYONLINE TV</span><h2>What do you want to watch?</h2>
   <p class=muted>Live TV, IPTV, Plex and Jellyfin — one home screen.</p>
@@ -352,11 +386,11 @@ async function home(){
     ${hasJellyfin?`<button class=homeSourceCard onclick="show('jellyfin')"><span>◇</span><b>Jellyfin</b><small>Media library</small></button>`:''}
   </div>
 
-  ${homeLiveNow.length?`<div class=sectionHead><h2>On TV now</h2><button class=linkButton onclick="show('guide')">Open Guide</button></div><div class=liveNowRail>${homeLiveNow.map(x=>`<button class=liveNowCard onclick='show("live").then(()=>playLive(${JSON.stringify(x.channel.key)},${JSON.stringify(x.channel.name)}))'>${x.channel.logo?`<img src="${escAttr(x.channel.logo)}">`:''}<div><b>${esc(channelName(x.channel))}</b><span>${esc(x.program.title)}</span><small>${esc(liveProgramTimes(x.program))}</small></div></button>`).join('')}</div>`:''}
+  ${homeLiveNow.length?`<div class=sectionHead><h2>On TV now</h2><button class=linkButton onclick="show('guide')">Open Guide</button></div><div class=liveNowRail>${homeLiveNow.map(x=>`<button class=liveNowCard onclick='show("live").then(()=>playLive(${JSON.stringify(x.channel.key)},${JSON.stringify(x.channel.name)}))'>${x.channel.logo?`<img src="${escAttr(x.channel.logo)}">`:''}<div><b>${esc(channelName(x.channel))}</b><span>${esc(x.program.title)}</span><small>${esc(liveProgramTimes(x.program))}</small></div></button>`).join('')}</div>`:`<div id=homeLivePlaceholder class=homeDeferredPlaceholder><span>Loading what's on TV…</span></div>`}
 
   ${continueItems.length?`<div class=sectionHead><h2>Continue watching</h2><button class=linkButton onclick="clearContinueWatching()">Clear all</button></div><div class="continueRow mediaHistoryRail">${continueItems.slice(0,16).map(x=>`<div class="continueCard historyCard"><button class=historyMain onclick='resumeContinueItem(${JSON.stringify(x)})'>${mediaPosterMarkup(x.poster,x.title)}<div class=historyCardBody><b>${esc(x.title)}</b><small>${formatMediaTime(x.positionSeconds||0)}${x.durationSeconds?' / '+formatMediaTime(x.durationSeconds):''}</small>${x.durationSeconds?`<div class=continueProgress><span style="width:${continueProgress(x)}%"></span></div>`:''}</div></button><div class=historyActions><button class=historyWatched title="Mark as watched" onclick='markContinueWatched(${JSON.stringify(x.id)})'>✓</button><button class=historyRemove title="Remove" onclick='removeContinueWatching(${JSON.stringify(x.id)})'>×</button></div></div>`).join('')}</div><div id=mediaPlayer></div>`:''}
 
-  ${recentlyAdded.length?`<div class=sectionHead><h2>New for you</h2><button class=linkButton onclick="show('search')">Browse all</button></div><div class=posterRail>${recentlyAdded.map(x=>`<button class=posterCard onclick='playUnifiedItem(${JSON.stringify(x.kind==='series'?{...x,kind:"series"}:x)})'>${x.poster?`<img loading=lazy decoding=async src="${escAttr(x.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(x.name)}</b><small><span class=sourceBadge>${esc(x.source||'media')}</span> ${esc(x.year||'')}</small></div></button>`).join('')}</div>`:''}
+  ${recentlyAdded.length?`<div class=sectionHead><h2>New for you</h2><button class=linkButton onclick="show('search')">Browse all</button></div><div class=posterRail>${recentlyAdded.map(x=>`<button class=posterCard onclick='playUnifiedItem(${JSON.stringify(x.kind==='series'?{...x,kind:"series"}:x)})'>${x.poster?`<img loading=lazy decoding=async src="${escAttr(x.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(x.name)}</b><small><span class=sourceBadge>${esc(x.source||'media')}</span> ${esc(x.year||'')}</small></div></button>`).join('')}</div>`:`<div id=homeMediaPlaceholder class=homeDeferredPlaceholder><span>Loading media libraries…</span></div>`}
 
   ${homeMediaRails(homeHistory)}
 
@@ -378,15 +412,72 @@ async function home(){
   $('#homeSearch').onkeydown=e=>{if(e.key==='Enter')homeQuickSearch()};
 }
 
-async function openHomeFavourite(item){
-  if(item.type==='movie'){
-    if(item.providerId)currentProvider=item.providerId;
-    await show('movies');
-    const q=$('#mediaq');if(q){q.value=item.name||'';filterMedia()}
-  }else{
-    if(item.providerId)currentProvider=item.providerId;
-    await show('series');
-    if(item.id)await openSeries(item.id);
+async function home(){
+  const generation=++homeRefreshGeneration;
+  const homeHistory=getMediaHistory();
+
+  // Fast first paint: only use local/session data and a short Continue Watching request.
+  const cachedMovies=getHomeCache('unifiedMovies',[]);
+  const cachedSeries=getHomeCache('unifiedSeries',[]);
+  const cachedLive=getHomeCache('liveNow',[]);
+
+  let cont=[];
+  try{cont=await api('/api/continue',{timeoutMs:5000,attempts:1})}catch{}
+  const continueItems=cont.map(x=>({...x,poster:findLegacyPoster(x,homeHistory,cachedMovies,cachedSeries)}));
+
+  renderHomeContent({
+    unifiedMovies:cachedMovies,
+    unifiedSeries:cachedSeries,
+    continueItems,
+    homeHistory,
+    homeLiveNow:cachedLive
+  });
+
+  // Do not block Home on catalogue, EPG or poster-repair calls.
+  requestAnimationFrame(()=>window.scrollTo({top:0,behavior:'auto'}));
+
+  const unifiedPromise=homeCacheFresh('unifiedMovies')&&homeCacheFresh('unifiedSeries')
+    ? Promise.resolve({movies:cachedMovies,series:cachedSeries})
+    : loadHomeUnified();
+
+  const livePromise=homeCacheFresh('liveNow')
+    ? Promise.resolve(cachedLive)
+    : loadHomeLiveNow();
+
+  Promise.allSettled([unifiedPromise,livePromise]).then(results=>{
+    if(currentView!=='home'||generation!==homeRefreshGeneration)return;
+    const unified=results[0].status==='fulfilled'?results[0].value:{movies:getHomeCache('unifiedMovies',[]),series:getHomeCache('unifiedSeries',[])};
+    const live=results[1].status==='fulfilled'?results[1].value:getHomeCache('liveNow',[]);
+    const refreshedContinue=cont.map(x=>({...x,poster:findLegacyPoster(x,homeHistory,unified.movies,unified.series)}));
+    renderHomeContent({
+      unifiedMovies:unified.movies,
+      unifiedSeries:unified.series,
+      continueItems:refreshedContinue,
+      homeHistory,
+      homeLiveNow:live
+    });
+  });
+
+  // Poster recovery used to block Home for up to several minutes on large IPTV catalogues.
+  // Run it only in the background after the visible Home screen is usable.
+  if(continueItems.some(x=>!x.poster)||homeHistory.some(x=>!x.poster)){
+    setTimeout(async()=>{
+      if(currentView!=='home'||generation!==homeRefreshGeneration)return;
+      try{
+        const repaired=await repairMissingHomePosters(continueItems,homeHistory);
+        if(currentView!=='home'||generation!==homeRefreshGeneration)return;
+        const movies=getHomeCache('unifiedMovies',[]);
+        const series=getHomeCache('unifiedSeries',[]);
+        const live=getHomeCache('liveNow',[]);
+        renderHomeContent({
+          unifiedMovies:movies,
+          unifiedSeries:series,
+          continueItems:repaired.continueItems,
+          homeHistory:repaired.history,
+          homeLiveNow:live
+        });
+      }catch{}
+    },2500);
   }
 }
 
@@ -1340,7 +1431,7 @@ async function featureCompletionView(){
     const groups=[...new Set(features.map(x=>x.area))];
     content.innerHTML=`
       <div class=hero>
-        <span class=kicker>v20.6.1 FEATURE COMPLETION</span>
+        <span class=kicker>v20.6.2 FEATURE COMPLETION</span>
         <h2>Feature Completion audit</h2>
         <p class=muted>This page distinguishes working features from partial implementations, foundations and missing functionality. It intentionally does not count a contract/model as a finished feature.</p>
       </div>
@@ -2794,8 +2885,8 @@ window.MyOnlineOperations={
 };
 
 
-// v20.6.1 Native Client Generation
-window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'20.6.1',generation:6,experience:'Server + Web/PWA + Native Client API'};
+// v20.6.2 Native Client Generation
+window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'20.6.2',generation:6,experience:'Server + Web/PWA + Native Client API'};
 window.MyOnlineClientBridge={
  version:1,
  capabilities(){return {sourceEngine:true,player:true,live:true,guide:true,library:true,dvr:true,profiles:true,rooms:true,remote:true}},
