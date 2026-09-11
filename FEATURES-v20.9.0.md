@@ -1,4 +1,4 @@
-# v30.0.2 — Unified Media
+# v30.1.0 — Unified Media
 
 Source scoring and deterministic best-source selection for duplicate media.
 

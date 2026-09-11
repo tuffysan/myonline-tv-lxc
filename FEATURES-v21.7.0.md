@@ -1,4 +1,4 @@
-# v30.0.2 — PiP & Multi-view
+# v30.1.0 — PiP & Multi-view
 
 Capability/resource-gated PiP and bounded multi-view layout planner.
 

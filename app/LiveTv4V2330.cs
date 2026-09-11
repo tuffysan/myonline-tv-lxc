@@ -2,7 +2,7 @@ public static class LiveTv4V2330
 {
     public static object Capabilities() => new
     {
-        version = "30.0.2",
+        version = "30.1.0",
         feature = "Live TV 4.0",
         localFirst = true,
         mandatoryRuntimeCostSek = 0,

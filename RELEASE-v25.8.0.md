@@ -1,4 +1,4 @@
-# v30.0.2 — Mobile Admin
+# v30.1.0 — Mobile Admin
 
 This is a cumulative Admin release based on v25.7.0.
 

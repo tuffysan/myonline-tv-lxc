@@ -1,4 +1,4 @@
-# v30.0.2 — Phone Remote & Pairing
+# v30.1.0 — Phone Remote & Pairing
 
 Local expiring pairing and validated remote commands.
 

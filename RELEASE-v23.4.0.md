@@ -1,4 +1,4 @@
-# v30.0.2 — Unified Library 4.0
+# v30.1.0 — Unified Library 4.0
 
 Deterministic dedupe and best-source policy.
 

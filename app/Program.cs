@@ -321,30 +321,18 @@ string MediaOwner(MediaLibraryProvider p) =>
 bool CanAccessProvider(HttpContext ctx, ProviderStored p)
 {
     var username = ctx.User.Identity?.Name ?? "";
-    var accountOwner = ProviderAccountOwner(p);
-    if (!SameAccount(accountOwner, username)) return false;
-    if (username.Equals(ProviderOwner(p), StringComparison.OrdinalIgnoreCase)) return true;
-    return (p.SharedWithUsernames ?? Array.Empty<string>())
-        .Any(x => x.Equals(username, StringComparison.OrdinalIgnoreCase));
+    return !string.IsNullOrWhiteSpace(username) && username.Equals(ProviderOwner(p), StringComparison.OrdinalIgnoreCase);
 }
 
 bool CanAccessMediaLibrary(HttpContext ctx, MediaLibraryProvider p)
 {
     var username = ctx.User.Identity?.Name ?? "";
-    var accountOwner = MediaAccountOwner(p);
-    if (!SameAccount(accountOwner, username)) return false;
-    if (username.Equals(MediaOwner(p), StringComparison.OrdinalIgnoreCase)) return true;
-    return (p.SharedWithUsernames ?? Array.Empty<string>())
-        .Any(x => x.Equals(username, StringComparison.OrdinalIgnoreCase));
+    return !string.IsNullOrWhiteSpace(username) && username.Equals(MediaOwner(p), StringComparison.OrdinalIgnoreCase);
 }
 
-bool CanManageProvider(HttpContext ctx, ProviderStored p) =>
-    ctx.User.IsInRole("Admin") &&
-    (ctx.User.Identity?.Name ?? "").Equals(ProviderOwner(p), StringComparison.OrdinalIgnoreCase);
+bool CanManageProvider(HttpContext ctx, ProviderStored p) => CanAccessProvider(ctx, p);
 
-bool CanManageMediaLibrary(HttpContext ctx, MediaLibraryProvider p) =>
-    ctx.User.IsInRole("Admin") &&
-    (ctx.User.Identity?.Name ?? "").Equals(MediaOwner(p), StringComparison.OrdinalIgnoreCase);
+bool CanManageMediaLibrary(HttpContext ctx, MediaLibraryProvider p) => CanAccessMediaLibrary(ctx, p);
 
 string[] ValidShareTargets(string accountOwner, string owner, IEnumerable<string>? requested)
 {
@@ -681,7 +669,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 
-// v30.0.2: enforce source tenancy before source-specific endpoints run.
+// v30.1.0: enforce source tenancy before source-specific endpoints run.
 // A source can only be consumed by its owner or an explicitly shared user in the same account.
 app.Use(async (ctx, next) =>
 {
@@ -805,7 +793,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "30.0.2",
+    version = "30.1.0",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -843,14 +831,34 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = AuthConfigured();
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "30.0.2", checks })
-        : Results.Json(new { status = "not-ready", version = "30.0.2", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "30.1.0", checks })
+        : Results.Json(new { status = "not-ready", version = "30.1.0", checks }, statusCode: 503);
 }).AllowAnonymous();
+
+app.MapGet("/api/onboarding/status", (HttpContext ctx) =>
+{
+    var username = ctx.User.Identity?.Name ?? "";
+    var user = LoadUsers().FirstOrDefault(x => x.Username.Equals(username, StringComparison.OrdinalIgnoreCase));
+    var iptv = LoadProviders().Count(x => CanAccessProvider(ctx, x));
+    var media = LoadMediaLibraries().Where(x => CanAccessMediaLibrary(ctx, x)).ToList();
+    return Results.Ok(new { required = user is not null && !user.OnboardingCompleted, completed = user?.OnboardingCompleted ?? false, username, sources = new { iptv, plex = media.Count(x => x.Type.Equals("plex", StringComparison.OrdinalIgnoreCase)), jellyfin = media.Count(x => x.Type.Equals("jellyfin", StringComparison.OrdinalIgnoreCase)) }, personalSourcesOnly = true, sharingEnabled = false });
+}).RequireAuthorization();
+
+app.MapPost("/api/onboarding/complete", (HttpContext ctx) =>
+{
+    var username = ctx.User.Identity?.Name ?? ""; var users = LoadUsers();
+    var idx = users.FindIndex(x => x.Username.Equals(username, StringComparison.OrdinalIgnoreCase));
+    if (idx < 0) return Results.NotFound();
+    var hasSource = LoadProviders().Any(x => CanAccessProvider(ctx, x)) || LoadMediaLibraries().Any(x => CanAccessMediaLibrary(ctx, x));
+    if (!hasSource) return Results.BadRequest("Add at least one personal IPTV, Plex or Jellyfin source before completing setup.");
+    users[idx] = users[idx] with { OnboardingCompleted = true }; Save(usersFile, users);
+    return Results.Ok(new { completed = true });
+}).RequireAuthorization();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "30.0.2",
+    version = "30.1.0",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = AuthConfigured(),
@@ -1012,7 +1020,7 @@ app.MapGet("/api/providers/{id}/edit", (string id, HttpContext ctx) =>
         username = c.Username ?? "",
         passwordStored = !string.IsNullOrWhiteSpace(c.Password)
     });
-}).RequireAuthorization(p => p.RequireRole("Admin"));
+}).RequireAuthorization();
 
 app.MapPost("/api/providers", (ProviderInput input, HttpContext ctx) =>
 {
@@ -1073,7 +1081,7 @@ app.MapPost("/api/providers", (ProviderInput input, HttpContext ctx) =>
     ClearDiskCatalogueCache(id);
 
     return Results.Ok(new { stored.Id, stored.Name, stored.Type });
-}).RequireAuthorization(p => p.RequireRole("Admin"));
+}).RequireAuthorization();
 
 app.MapDelete("/api/providers/{id}", (string id, HttpContext ctx) =>
 {
@@ -1087,7 +1095,7 @@ app.MapDelete("/api/providers/{id}", (string id, HttpContext ctx) =>
         channelCache.TryRemove(id, out _);
     }
     return changed ? Results.NoContent() : Results.NotFound();
-}).RequireAuthorization(p => p.RequireRole("Admin"));
+}).RequireAuthorization();
 
 app.MapGet("/api/channels/{providerId}", async (string providerId) =>
 {
@@ -1707,15 +1715,16 @@ app.MapGet("/api/media-libraries", (HttpContext ctx) =>
         var c = MediaConnection(x);
         return new { x.Id, x.Name, x.Type, x.Enabled, host = SafeHost(c.BaseUrl), x.LibraryIds, hasToken = !string.IsNullOrWhiteSpace(c.Token), owner = MediaOwner(x), shared = (x.SharedWithUsernames ?? Array.Empty<string>()).Length > 0, sharedWithCount = (x.SharedWithUsernames ?? Array.Empty<string>()).Length };
     }));
-}).RequireAuthorization(p => p.RequireRole("Admin"));
+}).RequireAuthorization();
 
-app.MapGet("/api/media-libraries/{id}/edit", (string id) =>
+app.MapGet("/api/media-libraries/{id}/edit", (string id, HttpContext ctx) =>
 {
     var p = LoadMediaLibraries().FirstOrDefault(x => x.Id == id);
     if (p is null) return Results.NotFound();
+    if (!CanManageMediaLibrary(ctx, p)) return Results.Forbid();
     var c = MediaConnection(p);
     return Results.Ok(new { p.Id, p.Name, p.Type, p.Enabled, baseUrl = c.BaseUrl, p.LibraryIds, tokenStored = !string.IsNullOrWhiteSpace(c.Token) });
-}).RequireAuthorization(p => p.RequireRole("Admin"));
+}).RequireAuthorization();
 
 app.MapPost("/api/media-libraries", (MediaLibraryInput input, HttpContext ctx) =>
 {
@@ -1741,20 +1750,23 @@ app.MapPost("/api/media-libraries", (MediaLibraryInput input, HttpContext ctx) =
     var idx = rows.FindIndex(x => x.Id == id); if (idx >= 0) rows[idx]=row; else rows.Add(row);
     Save(mediaLibrariesFile, rows);
     return Results.Ok(new { row.Id, row.Name, row.Type, row.Enabled, row.LibraryIds });
-}).RequireAuthorization(p => p.RequireRole("Admin"));
+}).RequireAuthorization();
 
-app.MapDelete("/api/media-libraries/{id}", (string id) =>
+app.MapDelete("/api/media-libraries/{id}", (string id, HttpContext ctx) =>
 {
     var rows=LoadMediaLibraries();
+    var owned=rows.FirstOrDefault(x=>x.Id==id);
+    if(owned is not null && !CanManageMediaLibrary(ctx,owned)) return Results.Forbid();
     var next=rows.Where(x=>x.Id!=id).ToList();
     if(next.Count==rows.Count)return Results.NotFound();
     Save(mediaLibrariesFile,next);
     return Results.NoContent();
-}).RequireAuthorization(p => p.RequireRole("Admin"));
+}).RequireAuthorization();
 
-app.MapPost("/api/media-libraries/{id}/test", async (string id) =>
+app.MapPost("/api/media-libraries/{id}/test", async (string id, HttpContext ctx) =>
 {
     var p=LoadMediaLibraries().FirstOrDefault(x=>x.Id==id); if(p is null)return Results.NotFound();
+    if(!CanManageMediaLibrary(ctx,p))return Results.Forbid();
     var c=MediaConnection(p);
     using var client=new HttpClient{Timeout=TimeSpan.FromSeconds(20)};
     try
@@ -1776,11 +1788,12 @@ app.MapPost("/api/media-libraries/{id}/test", async (string id) =>
         return Results.BadRequest("Unsupported media library type.");
     }
     catch(Exception ex){RecordError("media-library-test:"+id,ex);return Results.Ok(new{ok=false,error=ex.Message});}
-}).RequireAuthorization(p => p.RequireRole("Admin"));
+}).RequireAuthorization();
 
-app.MapGet("/api/media-libraries/{id}/libraries", async (string id) =>
+app.MapGet("/api/media-libraries/{id}/libraries", async (string id, HttpContext ctx) =>
 {
     var p=LoadMediaLibraries().FirstOrDefault(x=>x.Id==id); if(p is null)return Results.NotFound();
+    if(!CanManageMediaLibrary(ctx,p))return Results.Forbid();
     var c=MediaConnection(p);
     using var client=new HttpClient{Timeout=TimeSpan.FromSeconds(30)};
     try
@@ -1818,13 +1831,14 @@ app.MapGet("/api/media-libraries/{id}/libraries", async (string id) =>
         return Results.BadRequest();
     }
     catch(Exception ex){RecordError("media-libraries:"+id,ex);return Results.Problem(ex.Message);}
-}).RequireAuthorization(p=>p.RequireRole("Admin"));
+}).RequireAuthorization();
 
-app.MapPost("/api/media-libraries/{id}/libraries/selection", (string id, MediaLibrarySelectionInput input) =>
+app.MapPost("/api/media-libraries/{id}/libraries/selection", (string id, MediaLibrarySelectionInput input, HttpContext ctx) =>
 {
     var rows = LoadMediaLibraries();
     var idx = rows.FindIndex(x => x.Id == id);
     if (idx < 0) return Results.NotFound();
+    if(!CanManageMediaLibrary(ctx,rows[idx])) return Results.Forbid();
 
     var selected = (input.LibraryIds ?? Array.Empty<string>())
         .Where(x => !string.IsNullOrWhiteSpace(x))
@@ -1834,7 +1848,7 @@ app.MapPost("/api/media-libraries/{id}/libraries/selection", (string id, MediaLi
     rows[idx] = rows[idx] with { LibraryIds = selected };
     Save(mediaLibrariesFile, rows);
     return Results.Ok(new { id, libraryIds = selected });
-}).RequireAuthorization(p=>p.RequireRole("Admin"));
+}).RequireAuthorization();
 
 
 Dictionary<string,UserSourceAccess> LoadUserSourceAccess() => Load<Dictionary<string,UserSourceAccess>>(userSourceAccessFile) ?? new(StringComparer.OrdinalIgnoreCase);
@@ -2515,7 +2529,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "30.0.2",
+        version = "30.1.0",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -2931,7 +2945,7 @@ app.MapGet("/api/appliance/health", () =>
 {
     var drive=new DriveInfo(Path.GetPathRoot(dataDir)!);
     return Results.Ok(new {
-        version="30.0.2", dataDirectory=dataDir,
+        version="30.1.0", dataDirectory=dataDir,
         storageTargets=LoadStorageTargets().Count,
         dvrRules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count,
         rooms=(Load<List<RoomDevice>>(roomsFile)??new()).Count,
@@ -3050,7 +3064,7 @@ app.MapGet("/api/platform/status", () =>
 {
     var drive=new DriveInfo(Path.GetPathRoot(dataDir)!);
     return Results.Ok(new {
-        version="30.0.2",platform="MyOnline TV Platform",
+        version="30.1.0",platform="MyOnline TV Platform",
         providers=LoadProviders().Count,
         storageTargets=LoadStorageTargets().Count(x=>x.Enabled),
         dvrRules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count(x=>x.Enabled),
@@ -3063,7 +3077,7 @@ app.MapGet("/api/platform/status", () =>
 
 
 
-// v30.0.2 Source & Access Architecture
+// v30.1.0 Source & Access Architecture
 app.MapGet("/api/sources/effective",(HttpContext ctx)=>{
     var providers=LoadProviders().Where(x=>CanAccessProvider(ctx,x)).ToList();
     var libs=LoadMediaLibraries().Where(x=>x.Enabled&&CanAccessMediaLibrary(ctx,x)).ToList();
@@ -3080,76 +3094,10 @@ app.MapGet("/api/sources/capabilities",(HttpContext ctx)=>Results.Ok(new{
 })).RequireAuthorization();
 
 
-// v30.0.2 Account Source Isolation
-app.MapGet("/api/source-sharing/{kind}/{id}", (string kind, string id, HttpContext ctx) =>
-{
-    var username = ctx.User.Identity?.Name ?? "";
-    if (kind.Equals("iptv", StringComparison.OrdinalIgnoreCase))
-    {
-        var row = LoadProviders().FirstOrDefault(x => x.Id == id);
-        if (row is null) return Results.NotFound();
-        if (!CanManageProvider(ctx, row)) return Results.Forbid();
-        var accountOwner = ProviderAccountOwner(row);
-        var users = LoadUsers().Where(x => x.Enabled && SameAccount(accountOwner, x.Username))
-            .Where(x => !x.Username.Equals(ProviderOwner(row), StringComparison.OrdinalIgnoreCase))
-            .Select(x => new { x.Username, x.Role })
-            .OrderBy(x => x.Username);
-        return Results.Ok(new { kind="iptv", id=row.Id, owner=ProviderOwner(row), accountOwner, sharedWith=row.SharedWithUsernames ?? Array.Empty<string>(), users });
-    }
-
-    var media = LoadMediaLibraries().FirstOrDefault(x => x.Id == id);
-    if (media is null) return Results.NotFound();
-    if (!CanManageMediaLibrary(ctx, media)) return Results.Forbid();
-    var mediaAccount = MediaAccountOwner(media);
-    var mediaUsers = LoadUsers().Where(x => x.Enabled && SameAccount(mediaAccount, x.Username))
-        .Where(x => !x.Username.Equals(MediaOwner(media), StringComparison.OrdinalIgnoreCase))
-        .Select(x => new { x.Username, x.Role })
-        .OrderBy(x => x.Username);
-    return Results.Ok(new { kind=media.Type, id=media.Id, owner=MediaOwner(media), accountOwner=mediaAccount, sharedWith=media.SharedWithUsernames ?? Array.Empty<string>(), users=mediaUsers });
-}).RequireAuthorization(p => p.RequireRole("Admin"));
-
-app.MapPut("/api/source-sharing/{kind}/{id}", (string kind, string id, SourceSharingInput input, HttpContext ctx) =>
-{
-    if (kind.Equals("iptv", StringComparison.OrdinalIgnoreCase))
-    {
-        var rows = LoadProviders();
-        var idx = rows.FindIndex(x => x.Id == id);
-        if (idx < 0) return Results.NotFound();
-        var row = rows[idx];
-        if (!CanManageProvider(ctx, row)) return Results.Forbid();
-        var shared = ValidShareTargets(ProviderAccountOwner(row), ProviderOwner(row), input.Usernames);
-        rows[idx] = row with { SharedWithUsernames = shared };
-        Save(providersFile, rows);
-        return Results.Ok(new { id, sharedWith=shared });
-    }
-
-    var mediaRows = LoadMediaLibraries();
-    var mediaIdx = mediaRows.FindIndex(x => x.Id == id);
-    if (mediaIdx < 0) return Results.NotFound();
-    var media = mediaRows[mediaIdx];
-    if (!CanManageMediaLibrary(ctx, media)) return Results.Forbid();
-    var mediaShared = ValidShareTargets(MediaAccountOwner(media), MediaOwner(media), input.Usernames);
-    mediaRows[mediaIdx] = media with { SharedWithUsernames = mediaShared };
-    Save(mediaLibrariesFile, mediaRows);
-    return Results.Ok(new { id, sharedWith=mediaShared });
-}).RequireAuthorization(p => p.RequireRole("Admin"));
-
-app.MapGet("/api/account/source-isolation", (HttpContext ctx) =>
-{
-    var username = ctx.User.Identity?.Name ?? "";
-    return Results.Ok(new {
-        version="30.0.2",
-        username,
-        accountOwner=AccountOwnerFor(username),
-        crossAccountSharing=false,
-        sharingScope="same-account-users-only",
-        iptv=LoadProviders().Count(x=>CanAccessProvider(ctx,x)),
-        mediaLibraries=LoadMediaLibraries().Count(x=>x.Enabled&&CanAccessMediaLibrary(ctx,x))
-    });
-}).RequireAuthorization();
+// v30.1.0 Personal Source Isolation: no cross-user source sharing.
 
 
-// v30.0.2 Player 3.0
+// v30.1.0 Player 3.0
 app.MapGet("/api/player/preferences",(HttpContext ctx)=>{
     var all=Load<Dictionary<string,Dictionary<string,object>>>(playerPrefsFile)??new();
     var key=ctx.User.Identity?.Name??"default";
@@ -3164,7 +3112,7 @@ app.MapGet("/api/player/capabilities",()=>Results.Ok(new{
 })).RequireAuthorization();
 
 
-// v30.0.2 DVR 3.0
+// v30.1.0 DVR 3.0
 app.MapGet("/api/dvr/engine",()=>Results.Ok(Load<Dictionary<string,object>>(dvrEngineFile)??new Dictionary<string,object>{
  {"enabled",true},{"maxConcurrent",2},{"defaultPrePaddingMinutes",2},{"defaultPostPaddingMinutes",5},{"conflictPolicy","newest-wins"},{"keepLatest",0}
 })).RequireAuthorization();
@@ -3178,7 +3126,7 @@ app.MapGet("/api/dvr/upcoming",()=>{
 }).RequireAuthorization();
 
 
-// v30.0.2 EPG & Live TV 3.0
+// v30.1.0 EPG & Live TV 3.0
 app.MapGet("/api/epg/preferences",(HttpContext ctx)=>{
  var all=Load<Dictionary<string,Dictionary<string,object>>>(epgPrefsFile)??new();
  var key=ctx.User.Identity?.Name??"default";
@@ -3201,7 +3149,7 @@ app.MapGet("/api/live/now-next",async (HttpContext ctx)=>{
 }).RequireAuthorization();
 
 
-// v30.0.2 Unified Library 3.0
+// v30.1.0 Unified Library 3.0
 app.MapGet("/api/library/preferences",(HttpContext ctx)=>{
  var all=Load<Dictionary<string,Dictionary<string,object>>>(libraryPrefsFile)??new();var key=ctx.User.Identity?.Name??"default";
  return Results.Ok(all.TryGetValue(key,out var v)?v:new Dictionary<string,object>{{"mergeDuplicates",true},{"preferredSource","auto"},{"sort","recent"},{"hideUnavailable",true}});
@@ -3215,7 +3163,7 @@ app.MapGet("/api/library/sources",(HttpContext ctx)=>{
 }).RequireAuthorization();
 
 
-// v30.0.2 Profiles & Household 3.0
+// v30.1.0 Profiles & Household 3.0
 app.MapGet("/api/household/preferences",(HttpContext ctx)=>{
  var all=Load<Dictionary<string,Dictionary<string,object>>>(householdPrefsFile)??new();var key=ctx.User.Identity?.Name??"default";
  return Results.Ok(all.TryGetValue(key,out var v)?v:new Dictionary<string,object>{{"syncWatchState",true},{"syncFavorites",true},{"syncContinueWatching",true},{"handoffEnabled",true}});
@@ -3230,21 +3178,21 @@ app.MapGet("/api/household/sync-status",(HttpContext ctx)=>{
 }).RequireAuthorization();
 
 
-// v30.0.2 Admin 2.0
+// v30.1.0 Admin 2.0
 app.MapGet("/api/admin/overview",(HttpContext ctx)=>{
  var users=LoadUsers();var providers=LoadProviders();var libs=LoadMediaLibraries();var stores=Load<List<StorageTarget>>(storageTargetsFile)??new();
  return Results.Ok(new{
    users=users.Count,admins=users.Count(x=>x.Role.Equals("Admin",StringComparison.OrdinalIgnoreCase)&&x.Enabled),iptvProviders=providers.Count,mediaLibraries=libs.Count,
    storageTargets=stores.Count,navigation=LoadNavigationConfig().Items.Count,sourcePolicies=LoadUserSourceAccess().Count,
-   version="30.0.2"
+   version="30.1.0"
  });
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
 
 
-// v30.0.2 Backup, Restore & Migration
+// v30.1.0 Backup, Restore & Migration
 app.MapGet("/api/system/migration-manifest",(HttpContext ctx)=>{
  var files=Directory.Exists(dataDir)?Directory.GetFiles(dataDir,"*.json").Select(Path.GetFileName).OrderBy(x=>x).ToArray():Array.Empty<string>();
- return Results.Ok(new{version="30.0.2",created=DateTimeOffset.UtcNow,dataDirectory=dataDir,configurationFiles=files,
+ return Results.Ok(new{version="30.1.0",created=DateTimeOffset.UtcNow,dataDirectory=dataDir,configurationFiles=files,
    includes=new[]{"users","profiles","providers","media-libraries","navigation","source-access","user-sources","storage","dvr","preferences"}});
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
 app.MapGet("/api/system/backup-readiness",()=>{
@@ -3253,7 +3201,7 @@ app.MapGet("/api/system/backup-readiness",()=>{
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
 
 
-// v30.0.2 Appliance
+// v30.1.0 Appliance
 app.MapGet("/api/appliance/readiness",async ()=>{
  var checks=new List<object>();
  bool ffmpeg=File.Exists("/usr/bin/ffmpeg")||File.Exists("/usr/local/bin/ffmpeg");
@@ -3266,12 +3214,12 @@ app.MapGet("/api/appliance/readiness",async ()=>{
  checks.Add(new{name="Authentication",ok=LoadUsers().Count>0});
  checks.Add(new{name="Media source",ok=providers.Any()||libs.Any(x=>x.Enabled)});
  await Task.CompletedTask;
- return Results.Ok(new{version="30.0.2",ready=ffmpeg&&ffprobe&&dataWritable&&LoadUsers().Count>0,checks});
+ return Results.Ok(new{version="30.1.0",ready=ffmpeg&&ffprobe&&dataWritable&&LoadUsers().Count>0,checks});
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
-app.MapGet("/api/appliance/version",()=>Results.Ok(new{product="MyOnline TV",version="30.0.2",channel="stable",platform="LXC"}));
+app.MapGet("/api/appliance/version",()=>Results.Ok(new{product="MyOnline TV",version="30.1.0",channel="stable",platform="LXC"}));
 
 
-// v30.0.2 Feature Completion audit
+// v30.1.0 Feature Completion audit
 app.MapGet("/api/admin/feature-completion", () => Results.Ok(new
 {
     summary = FeatureCompletionCatalog.Summary(),
@@ -3389,7 +3337,7 @@ app.MapGet("/api/admin/recovery/capabilities", () => Results.Ok(new {
 }));
 
 app.MapGet("/api/admin/production-readiness", () => Results.Ok(new {
-    version = "30.0.2",
+    version = "30.1.0",
     adminUx = true,
     overview = true,
     sources = true,
@@ -3423,7 +3371,7 @@ app.MapGet("/api/system/self-healing-v27",()=>Results.Ok(SelfHealingV2700.Capabi
 
 app.MapGet("/api/platform/v28/architecture",()=>Results.Ok(ArchitectureV28V2800.Capabilities()));
 
-app.MapGet("/api/platform/release-gate",()=>Results.Ok(new { version="30.0.2", focus="stabilization", zeroMandatoryCost=true })).RequireAuthorization();
+app.MapGet("/api/platform/release-gate",()=>Results.Ok(new { version="30.1.0", focus="stabilization", zeroMandatoryCost=true })).RequireAuthorization();
 
 app.MapGet("/api/playback/engine",()=>Results.Ok(new { version="2.0", live=true, vod=true, unified=true, recordings=true, fallback=true, zeroMandatoryCost=true })).RequireAuthorization();
 
@@ -4029,7 +3977,7 @@ record GroupVisibilityRequest(string Group, bool Hidden);
 record ChannelPreferenceRequest(string ChannelKey, bool Hidden, string? Alias);
 record SetupRequest(string? Username, string Password);
 record LoginRequest(string Username, string Password);
-record AppUser(string Id, string Username, string Role, bool Enabled, PasswordCredential Credential, string? AccountOwnerUsername = null);
+record AppUser(string Id, string Username, string Role, bool Enabled, PasswordCredential Credential, string? AccountOwnerUsername = null, bool OnboardingCompleted = false);
 record UserInput(string? Id, string? Username, string? Password, string? Role, bool Enabled);
 record UserProfileAccess(string[] AllowedProfileIds, string DefaultProfileId);
 record ProfilePolicy(bool Live, bool Movies, bool Series, bool Downloads, string[] AllowedProviderIds, PasswordCredential? PinCredential);

@@ -1,4 +1,4 @@
-# v30.0.2 — Universal Search
+# v30.1.0 — Universal Search
 
 One local search domain across TV, EPG, media and recordings.
 
