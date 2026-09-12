@@ -1,6 +1,6 @@
-# v30.1.0 — Production Edition
+# v30.2.0 — Production Edition
 
-v30.1.0 is a stabilization release. It introduces no mandatory cloud or paid service.
+v30.2.0 is a stabilization release. It introduces no mandatory cloud or paid service.
 
 ## Promotion checklist
 - PUBLISH.cmd / .NET 10 build passes.

@@ -1,4 +1,4 @@
-# v30.1.0 — Playback Engine 2.0
+# v30.2.0 — Playback Engine 2.0
 
 Central direct/HLS/remux/transcode decision policy.
 

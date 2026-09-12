@@ -1,4 +1,4 @@
-# v30.1.0 — Admin Production Edition
+# v30.2.0 — Admin Production Edition
 
 The Admin redesign is consolidated into a production-oriented release.
 

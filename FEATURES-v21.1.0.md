@@ -1,4 +1,4 @@
-# v30.1.0 — Search 2.0
+# v30.2.0 — Search 2.0
 
 Deterministic multi-domain search ranking across media, EPG and recordings.
 

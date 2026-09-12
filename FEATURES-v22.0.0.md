@@ -1,4 +1,4 @@
-# v30.1.0 — Stable Platform
+# v30.2.0 — Stable Platform
 
 Feature freeze, zero-cost policy and release-gate evaluator for stable promotion.
 

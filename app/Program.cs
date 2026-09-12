@@ -669,7 +669,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 
-// v30.1.0: enforce source tenancy before source-specific endpoints run.
+// v30.2.0: enforce source tenancy before source-specific endpoints run.
 // A source can only be consumed by its owner or an explicitly shared user in the same account.
 app.Use(async (ctx, next) =>
 {
@@ -701,8 +701,7 @@ app.Use(async (ctx, next) =>
             var provider = LoadProviders().FirstOrDefault(x => x.Id == providerId);
             if (provider is not null && !CanAccessProvider(ctx, provider))
             {
-                ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
-                await ctx.Response.WriteAsJsonAsync(new { error = "This IPTV source belongs to another account or has not been shared with this user." });
+                ctx.Response.StatusCode = StatusCodes.Status404NotFound;
                 return;
             }
         }
@@ -712,8 +711,7 @@ app.Use(async (ctx, next) =>
             var library = LoadMediaLibraries().FirstOrDefault(x => x.Id == mediaId);
             if (library is not null && !CanAccessMediaLibrary(ctx, library))
             {
-                ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
-                await ctx.Response.WriteAsJsonAsync(new { error = "This Plex/Jellyfin source belongs to another account or has not been shared with this user." });
+                ctx.Response.StatusCode = StatusCodes.Status404NotFound;
                 return;
             }
         }
@@ -793,7 +791,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "30.1.0",
+    version = "30.2.0",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -831,9 +829,90 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = AuthConfigured();
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "30.1.0", checks })
-        : Results.Json(new { status = "not-ready", version = "30.1.0", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "30.2.0", checks })
+        : Results.Json(new { status = "not-ready", version = "30.2.0", checks }, statusCode: 503);
 }).AllowAnonymous();
+
+
+// v30.2.0 Personal Media Setup 2.0: validate credentials before persisting them.
+app.MapPost("/api/onboarding/test/iptv", async (ProviderInput input) =>
+{
+    var sw = Stopwatch.StartNew();
+    try
+    {
+        if (input.Type is not ("m3u" or "xtream")) return Results.BadRequest("Type must be m3u or xtream.");
+        if (input.Type == "m3u")
+        {
+            var url = Clean(input.PlaylistUrl);
+            if (string.IsNullOrWhiteSpace(url)) return Results.BadRequest("M3U playlist URL is required.");
+            ValidateHttpUrl(url);
+            var probe = await ProbeProvider(url, TimeSpan.FromSeconds(15));
+            sw.Stop();
+            return Results.Ok(new { ok = probe.Ok, type = "m3u", latencyMs = sw.ElapsedMilliseconds, status = probe.StatusCode, message = probe.Message });
+        }
+
+        var c = new ProviderConnection(null, null, Clean(input.BaseUrl)?.TrimEnd('/'), Clean(input.Username), input.Password ?? "");
+        if (string.IsNullOrWhiteSpace(c.BaseUrl) || string.IsNullOrWhiteSpace(c.Username) || string.IsNullOrWhiteSpace(c.Password))
+            return Results.BadRequest("Xtream base URL, username and password are required.");
+        ValidateHttpUrl(c.BaseUrl);
+        var auth = await ProbeProvider(BuildXtreamPlayerApiUrl(c), TimeSpan.FromSeconds(10));
+        ProviderProbe? live = null;
+        if (auth.Ok) live = await ProbeProvider(BuildXtreamPlayerApiUrl(c, "get_live_streams"), TimeSpan.FromSeconds(15));
+        sw.Stop();
+        return Results.Ok(new { ok = auth.Ok && (live?.Ok ?? false), type = "xtream", latencyMs = sw.ElapsedMilliseconds, auth, live });
+    }
+    catch (Exception ex)
+    {
+        sw.Stop();
+        return Results.Ok(new { ok = false, latencyMs = sw.ElapsedMilliseconds, error = SafeProviderError(ex) });
+    }
+}).RequireAuthorization();
+
+app.MapPost("/api/onboarding/test/media", async (MediaLibraryInput input) =>
+{
+    var type = (input.Type ?? "").Trim().ToLowerInvariant();
+    if (type is not ("plex" or "jellyfin")) return Results.BadRequest("Type must be plex or jellyfin.");
+    var baseUrl = (input.BaseUrl ?? "").Trim().TrimEnd('/');
+    var token = input.Token ?? "";
+    if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(token)) return Results.BadRequest("Server URL and token/API key are required.");
+    ValidateHttpUrl(baseUrl);
+    var sw = Stopwatch.StartNew();
+    using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+    try
+    {
+        HttpRequestMessage req;
+        if (type == "plex")
+        {
+            req = new HttpRequestMessage(HttpMethod.Get, baseUrl + "/identity");
+            req.Headers.TryAddWithoutValidation("X-Plex-Token", token);
+        }
+        else
+        {
+            req = new HttpRequestMessage(HttpMethod.Get, baseUrl + "/System/Info");
+            req.Headers.TryAddWithoutValidation("X-Emby-Token", token);
+        }
+        using var response = await client.SendAsync(req);
+        sw.Stop();
+        return Results.Ok(new { ok = response.IsSuccessStatusCode, type, status = (int)response.StatusCode, latencyMs = sw.ElapsedMilliseconds });
+    }
+    catch (Exception ex)
+    {
+        sw.Stop();
+        return Results.Ok(new { ok = false, type, latencyMs = sw.ElapsedMilliseconds, error = ex.Message });
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/onboarding/summary", (HttpContext ctx) =>
+{
+    var iptv = LoadProviders().Where(x => CanAccessProvider(ctx, x)).ToList();
+    var media = LoadMediaLibraries().Where(x => CanAccessMediaLibrary(ctx, x)).ToList();
+    return Results.Ok(new
+    {
+        iptv = iptv.Select(x => new { x.Id, x.Name, x.Type }).ToArray(),
+        plex = media.Where(x => x.Type.Equals("plex", StringComparison.OrdinalIgnoreCase)).Select(x => new { x.Id, x.Name, selectedLibraries = x.LibraryIds.Length }).ToArray(),
+        jellyfin = media.Where(x => x.Type.Equals("jellyfin", StringComparison.OrdinalIgnoreCase)).Select(x => new { x.Id, x.Name, selectedLibraries = x.LibraryIds.Length }).ToArray()
+    });
+}).RequireAuthorization();
 
 app.MapGet("/api/onboarding/status", (HttpContext ctx) =>
 {
@@ -858,7 +937,7 @@ app.MapPost("/api/onboarding/complete", (HttpContext ctx) =>
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "30.1.0",
+    version = "30.2.0",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = AuthConfigured(),
@@ -2529,7 +2608,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "30.1.0",
+        version = "30.2.0",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -2945,7 +3024,7 @@ app.MapGet("/api/appliance/health", () =>
 {
     var drive=new DriveInfo(Path.GetPathRoot(dataDir)!);
     return Results.Ok(new {
-        version="30.1.0", dataDirectory=dataDir,
+        version="30.2.0", dataDirectory=dataDir,
         storageTargets=LoadStorageTargets().Count,
         dvrRules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count,
         rooms=(Load<List<RoomDevice>>(roomsFile)??new()).Count,
@@ -3064,7 +3143,7 @@ app.MapGet("/api/platform/status", () =>
 {
     var drive=new DriveInfo(Path.GetPathRoot(dataDir)!);
     return Results.Ok(new {
-        version="30.1.0",platform="MyOnline TV Platform",
+        version="30.2.0",platform="MyOnline TV Platform",
         providers=LoadProviders().Count,
         storageTargets=LoadStorageTargets().Count(x=>x.Enabled),
         dvrRules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count(x=>x.Enabled),
@@ -3077,7 +3156,7 @@ app.MapGet("/api/platform/status", () =>
 
 
 
-// v30.1.0 Source & Access Architecture
+// v30.2.0 Source & Access Architecture
 app.MapGet("/api/sources/effective",(HttpContext ctx)=>{
     var providers=LoadProviders().Where(x=>CanAccessProvider(ctx,x)).ToList();
     var libs=LoadMediaLibraries().Where(x=>x.Enabled&&CanAccessMediaLibrary(ctx,x)).ToList();
@@ -3094,10 +3173,10 @@ app.MapGet("/api/sources/capabilities",(HttpContext ctx)=>Results.Ok(new{
 })).RequireAuthorization();
 
 
-// v30.1.0 Personal Source Isolation: no cross-user source sharing.
+// v30.2.0 Personal Source Isolation: no cross-user source sharing.
 
 
-// v30.1.0 Player 3.0
+// v30.2.0 Player 3.0
 app.MapGet("/api/player/preferences",(HttpContext ctx)=>{
     var all=Load<Dictionary<string,Dictionary<string,object>>>(playerPrefsFile)??new();
     var key=ctx.User.Identity?.Name??"default";
@@ -3112,7 +3191,7 @@ app.MapGet("/api/player/capabilities",()=>Results.Ok(new{
 })).RequireAuthorization();
 
 
-// v30.1.0 DVR 3.0
+// v30.2.0 DVR 3.0
 app.MapGet("/api/dvr/engine",()=>Results.Ok(Load<Dictionary<string,object>>(dvrEngineFile)??new Dictionary<string,object>{
  {"enabled",true},{"maxConcurrent",2},{"defaultPrePaddingMinutes",2},{"defaultPostPaddingMinutes",5},{"conflictPolicy","newest-wins"},{"keepLatest",0}
 })).RequireAuthorization();
@@ -3126,7 +3205,7 @@ app.MapGet("/api/dvr/upcoming",()=>{
 }).RequireAuthorization();
 
 
-// v30.1.0 EPG & Live TV 3.0
+// v30.2.0 EPG & Live TV 3.0
 app.MapGet("/api/epg/preferences",(HttpContext ctx)=>{
  var all=Load<Dictionary<string,Dictionary<string,object>>>(epgPrefsFile)??new();
  var key=ctx.User.Identity?.Name??"default";
@@ -3149,7 +3228,7 @@ app.MapGet("/api/live/now-next",async (HttpContext ctx)=>{
 }).RequireAuthorization();
 
 
-// v30.1.0 Unified Library 3.0
+// v30.2.0 Unified Library 3.0
 app.MapGet("/api/library/preferences",(HttpContext ctx)=>{
  var all=Load<Dictionary<string,Dictionary<string,object>>>(libraryPrefsFile)??new();var key=ctx.User.Identity?.Name??"default";
  return Results.Ok(all.TryGetValue(key,out var v)?v:new Dictionary<string,object>{{"mergeDuplicates",true},{"preferredSource","auto"},{"sort","recent"},{"hideUnavailable",true}});
@@ -3163,7 +3242,7 @@ app.MapGet("/api/library/sources",(HttpContext ctx)=>{
 }).RequireAuthorization();
 
 
-// v30.1.0 Profiles & Household 3.0
+// v30.2.0 Profiles & Household 3.0
 app.MapGet("/api/household/preferences",(HttpContext ctx)=>{
  var all=Load<Dictionary<string,Dictionary<string,object>>>(householdPrefsFile)??new();var key=ctx.User.Identity?.Name??"default";
  return Results.Ok(all.TryGetValue(key,out var v)?v:new Dictionary<string,object>{{"syncWatchState",true},{"syncFavorites",true},{"syncContinueWatching",true},{"handoffEnabled",true}});
@@ -3178,21 +3257,21 @@ app.MapGet("/api/household/sync-status",(HttpContext ctx)=>{
 }).RequireAuthorization();
 
 
-// v30.1.0 Admin 2.0
+// v30.2.0 Admin 2.0
 app.MapGet("/api/admin/overview",(HttpContext ctx)=>{
  var users=LoadUsers();var providers=LoadProviders();var libs=LoadMediaLibraries();var stores=Load<List<StorageTarget>>(storageTargetsFile)??new();
  return Results.Ok(new{
    users=users.Count,admins=users.Count(x=>x.Role.Equals("Admin",StringComparison.OrdinalIgnoreCase)&&x.Enabled),iptvProviders=providers.Count,mediaLibraries=libs.Count,
    storageTargets=stores.Count,navigation=LoadNavigationConfig().Items.Count,sourcePolicies=LoadUserSourceAccess().Count,
-   version="30.1.0"
+   version="30.2.0"
  });
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
 
 
-// v30.1.0 Backup, Restore & Migration
+// v30.2.0 Backup, Restore & Migration
 app.MapGet("/api/system/migration-manifest",(HttpContext ctx)=>{
  var files=Directory.Exists(dataDir)?Directory.GetFiles(dataDir,"*.json").Select(Path.GetFileName).OrderBy(x=>x).ToArray():Array.Empty<string>();
- return Results.Ok(new{version="30.1.0",created=DateTimeOffset.UtcNow,dataDirectory=dataDir,configurationFiles=files,
+ return Results.Ok(new{version="30.2.0",created=DateTimeOffset.UtcNow,dataDirectory=dataDir,configurationFiles=files,
    includes=new[]{"users","profiles","providers","media-libraries","navigation","source-access","user-sources","storage","dvr","preferences"}});
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
 app.MapGet("/api/system/backup-readiness",()=>{
@@ -3201,7 +3280,7 @@ app.MapGet("/api/system/backup-readiness",()=>{
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
 
 
-// v30.1.0 Appliance
+// v30.2.0 Appliance
 app.MapGet("/api/appliance/readiness",async ()=>{
  var checks=new List<object>();
  bool ffmpeg=File.Exists("/usr/bin/ffmpeg")||File.Exists("/usr/local/bin/ffmpeg");
@@ -3214,12 +3293,12 @@ app.MapGet("/api/appliance/readiness",async ()=>{
  checks.Add(new{name="Authentication",ok=LoadUsers().Count>0});
  checks.Add(new{name="Media source",ok=providers.Any()||libs.Any(x=>x.Enabled)});
  await Task.CompletedTask;
- return Results.Ok(new{version="30.1.0",ready=ffmpeg&&ffprobe&&dataWritable&&LoadUsers().Count>0,checks});
+ return Results.Ok(new{version="30.2.0",ready=ffmpeg&&ffprobe&&dataWritable&&LoadUsers().Count>0,checks});
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
-app.MapGet("/api/appliance/version",()=>Results.Ok(new{product="MyOnline TV",version="30.1.0",channel="stable",platform="LXC"}));
+app.MapGet("/api/appliance/version",()=>Results.Ok(new{product="MyOnline TV",version="30.2.0",channel="stable",platform="LXC"}));
 
 
-// v30.1.0 Feature Completion audit
+// v30.2.0 Feature Completion audit
 app.MapGet("/api/admin/feature-completion", () => Results.Ok(new
 {
     summary = FeatureCompletionCatalog.Summary(),
@@ -3337,7 +3416,7 @@ app.MapGet("/api/admin/recovery/capabilities", () => Results.Ok(new {
 }));
 
 app.MapGet("/api/admin/production-readiness", () => Results.Ok(new {
-    version = "30.1.0",
+    version = "30.2.0",
     adminUx = true,
     overview = true,
     sources = true,
@@ -3371,7 +3450,7 @@ app.MapGet("/api/system/self-healing-v27",()=>Results.Ok(SelfHealingV2700.Capabi
 
 app.MapGet("/api/platform/v28/architecture",()=>Results.Ok(ArchitectureV28V2800.Capabilities()));
 
-app.MapGet("/api/platform/release-gate",()=>Results.Ok(new { version="30.1.0", focus="stabilization", zeroMandatoryCost=true })).RequireAuthorization();
+app.MapGet("/api/platform/release-gate",()=>Results.Ok(new { version="30.2.0", focus="stabilization", zeroMandatoryCost=true })).RequireAuthorization();
 
 app.MapGet("/api/playback/engine",()=>Results.Ok(new { version="2.0", live=true, vod=true, unified=true, recordings=true, fallback=true, zeroMandatoryCost=true })).RequireAuthorization();
 

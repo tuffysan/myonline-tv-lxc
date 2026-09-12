@@ -1,4 +1,4 @@
-# v30.1.0 — Feature Completion
+# v30.2.0 — Feature Completion
 
 This release changes the project from a version-history view to an audited capability view.
 
@@ -11,7 +11,7 @@ This release changes the project from a version-history view to an audited capab
 
 ## Important result
 
-v30.1.0 intentionally does **not** claim that every feature proposed before v20 is complete.
+v30.2.0 intentionally does **not** claim that every feature proposed before v20 is complete.
 
 The application now exposes the audit in:
 

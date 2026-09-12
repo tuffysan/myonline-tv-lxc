@@ -1,4 +1,4 @@
-# v30.1.0 — Personal Sources & First Login Guide
+# v30.2.0 — Personal Sources & First Login Guide
 
 - IPTV, Plex and Jellyfin are private per user and cannot be shared.
 - Every authenticated user can manage only their own connections.

@@ -13,4 +13,4 @@ $script=Get-Content (Join-Path $PSScriptRoot "update-local.sh") -Raw
 ) | ForEach-Object {
   if(-not $script.Contains($_)){ throw "Missing updater safety marker: $_" }
 }
-Write-Host "v30.1.0 updater safety markers verified." -ForegroundColor Green
+Write-Host "v30.2.0 updater safety markers verified." -ForegroundColor Green

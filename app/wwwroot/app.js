@@ -176,22 +176,45 @@ async function authGate(state){
   }
 }
 
-async function firstLoginGuide(state){
-  currentView='onboarding'; title.textContent='Welcome'; const c=state?.sources||{};
-  content.innerHTML=`<div class="onboardingShell"><div class="onboardingHero"><span class=eyebrow>FIRST LOGIN</span><h1>Set up your personal media</h1><p>Every user connects their own IPTV, Plex and Jellyfin. Sources and credentials are never shared with another MyOnline TV user.</p></div><div class=onboardingProgress><span class=active>Welcome</span><span>IPTV</span><span>Plex</span><span>Jellyfin</span><span>Finish</span></div><div id=onboardingBody class=onboardingCard></div></div>`;
-  onboardingStep(1,{iptv:c.iptv||0,plex:c.plex||0,jellyfin:c.jellyfin||0});
+async function firstLoginGuide(state,manual=false){
+  currentView='onboarding';title.textContent='Personal Media Setup';
+  const counts=state?.sources||{};
+  window._ob={manual,selected:[],counts:{iptv:counts.iptv||0,plex:counts.plex||0,jellyfin:counts.jellyfin||0},queue:[],index:0,lastSaved:null};
+  content.innerHTML=`<div class="onboardingShell"><div class="onboardingHero"><span class=eyebrow>PERSONAL MEDIA SETUP 2.0</span><h1>Connect your own media</h1><p>Your IPTV, Plex and Jellyfin connections belong only to <b>${esc(authState.user)}</b>. Other users cannot see, use or discover them.</p></div><div id=obProgress class=onboardingProgress></div><div id=onboardingBody class=onboardingCard></div></div>`;
+  obChooseServices();
 }
-function onboardingStep(step,c){
-  document.querySelectorAll('.onboardingProgress span').forEach((x,i)=>x.classList.toggle('active',i<step)); const h=$('#onboardingBody');if(!h)return;
-  if(step===1){h.innerHTML=`<h2>Your own sources</h2><p>This wizard belongs to <b>${esc(authState.user)}</b>. Add the services you use. You need at least one source to finish.</p><div class=onboardingFacts><div><b>IPTV</b><span>M3U / Xtream</span></div><div><b>Plex</b><span>Server + token</span></div><div><b>Jellyfin</b><span>Server + API key</span></div></div><button class=btn onclick='onboardingStep(2,${JSON.stringify(c)})'>Start</button>`;return}
-  if(step===2){h.innerHTML=`<h2>Add IPTV</h2><label>Name</label><input id=obName value="My IPTV"><label>Type</label><select id=obType onchange=obIptvFields()><option value=xtream>Xtream Codes</option><option value=m3u>M3U</option></select><div id=obFields></div><div id=obMsg class=muted></div><div class=row><button class=btn onclick='obSaveIptv(${JSON.stringify(c)})'>Save IPTV</button><button class=btn onclick='onboardingStep(3,${JSON.stringify(c)})'>Skip</button></div>`;obIptvFields();return}
-  if(step===3||step===4){const type=step===3?'plex':'jellyfin',name=step===3?'Plex':'Jellyfin';h.innerHTML=`<h2>Add ${name}</h2><label>Name</label><input id=obMediaName value="My ${name}"><label>Server URL</label><input id=obMediaUrl placeholder="http://server:port"><label>Token / API key</label><input id=obMediaToken type=password autocomplete=off><div id=obMsg class=muted></div><div class=row><button class=btn onclick='obSaveMedia("${type}",${step+1},${JSON.stringify(c)})'>Save ${name}</button><button class=btn onclick='onboardingStep(${step+1},${JSON.stringify(c)})'>Skip</button></div>`;return}
-  h.innerHTML=`<h2>Ready</h2><div class=onboardingFacts><div><b>IPTV</b><span>${c.iptv} source(s)</span></div><div><b>Plex</b><span>${c.plex} source(s)</span></div><div><b>Jellyfin</b><span>${c.jellyfin} source(s)</span></div></div><div id=obMsg class=muted></div><button class=btn onclick=finishOnboarding()>Finish setup</button>`;
+function obProgress(labels,current){const p=$('#obProgress');if(!p)return;p.innerHTML=labels.map((x,i)=>`<span class="${i<=current?'active':''}">${esc(x)}</span>`).join('')}
+function obChooseServices(){
+  obProgress(['Choose','Connect','Review'],0);const h=$('#onboardingBody');
+  h.innerHTML=`<h2>What do you want to use?</h2><p>Select only the services you want to configure now. You can run this guide again later from <b>My Sources</b>.</p><div class=onboardingChoiceGrid>
+   <label class=onboardingChoice><input type=checkbox id=obWantIptv><b>Live TV / IPTV</b><span>M3U or Xtream Codes</span></label>
+   <label class=onboardingChoice><input type=checkbox id=obWantPlex><b>Plex</b><span>Your Plex server and token</span></label>
+   <label class=onboardingChoice><input type=checkbox id=obWantJelly><b>Jellyfin</b><span>Your Jellyfin server and API key</span></label></div><div id=obMsg class=muted></div><div class=row><button class=btn onclick=obStartSelected()>Continue</button>${window._ob.manual?'<button class=btn onclick="show(\'sources\')">Cancel</button>':''}</div>`;
 }
-function obIptvFields(){const t=$('#obType')?.value,h=$('#obFields');if(!h)return;h.innerHTML=t==='m3u'?`<label>M3U URL</label><input id=obPlaylist><label>EPG URL (optional)</label><input id=obEpg>`:`<label>Server URL</label><input id=obBase><label>Username</label><input id=obUser><label>Password</label><input id=obPass type=password>`}
-async function obSaveIptv(c){const t=$('#obType').value;try{await jpost('/api/providers',{name:$('#obName').value,type:t,playlistUrl:t==='m3u'?$('#obPlaylist').value:'',epgUrl:t==='m3u'?$('#obEpg').value:'',baseUrl:t==='xtream'?$('#obBase').value:'',username:t==='xtream'?$('#obUser').value:'',password:t==='xtream'?$('#obPass').value:'',keepExistingConnection:false,keepExistingPassword:false});c.iptv++;providers=await api('/api/providers');onboardingStep(3,c)}catch(e){$('#obMsg').textContent=friendlyError(e)}}
-async function obSaveMedia(type,next,c){try{await jpost('/api/media-libraries',{name:$('#obMediaName').value,type,enabled:true,baseUrl:$('#obMediaUrl').value,token:$('#obMediaToken').value,keepExistingToken:false,libraryIds:[]});c[type]++;mediaLibraries=await api('/api/media-libraries');onboardingStep(next,c)}catch(e){$('#obMsg').textContent=friendlyError(e)}}
-async function finishOnboarding(){try{await api('/api/onboarding/complete',{method:'POST'});providers=await api('/api/providers');mediaLibraries=await api('/api/media-libraries');renderMediaLibraryNav();if(!currentProvider&&providers.length)currentProvider=providers[0].id;show('home')}catch(e){$('#obMsg').textContent=friendlyError(e)}}
+function obStartSelected(){
+ const q=[];if($('#obWantIptv')?.checked)q.push('iptv');if($('#obWantPlex')?.checked)q.push('plex');if($('#obWantJelly')?.checked)q.push('jellyfin');
+ if(!q.length){$('#obMsg').textContent='Select at least one service.';return}
+ window._ob.queue=q;window._ob.index=0;obRenderCurrent();
+}
+function obRenderCurrent(){
+ const o=window._ob;if(o.index>=o.queue.length){obReview();return}const t=o.queue[o.index];
+ obProgress(['Choose',...o.queue.map(x=>x==='iptv'?'IPTV':x==='plex'?'Plex':'Jellyfin'),'Review'],o.index+1);
+ if(t==='iptv')obIptv();else obMedia(t);
+}
+function obIptv(){const h=$('#onboardingBody');h.innerHTML=`<h2>Connect your IPTV</h2><p>The connection is tested before it is saved.</p><label>Name</label><input id=obName value="My IPTV"><label>Type</label><select id=obType onchange=obIptvFields()><option value=xtream>Xtream Codes</option><option value=m3u>M3U playlist</option></select><div id=obFields></div><div id=obMsg class=muted></div><div class=row><button id=obTestSave class=btn onclick=obTestSaveIptv()>Test & save</button><button class=btn onclick=obSkipCurrent()>Skip</button></div>`;obIptvFields()}
+function obIptvFields(){const t=$('#obType')?.value,h=$('#obFields');if(!h)return;h.innerHTML=t==='m3u'?`<label>M3U URL</label><input id=obPlaylist placeholder="https://provider/list.m3u"><label>EPG URL (optional)</label><input id=obEpg placeholder="https://provider/epg.xml">`:`<label>Server URL</label><input id=obBase placeholder="http://provider:8080"><label>Username</label><input id=obUser autocomplete=off><label>Password</label><input id=obPass type=password autocomplete=off>`}
+function obIptvPayload(){const t=$('#obType').value;return{name:$('#obName').value,type:t,playlistUrl:t==='m3u'?$('#obPlaylist').value:'',epgUrl:t==='m3u'?$('#obEpg').value:'',baseUrl:t==='xtream'?$('#obBase').value:'',username:t==='xtream'?$('#obUser').value:'',password:t==='xtream'?$('#obPass').value:'',keepExistingConnection:false,keepExistingPassword:false}}
+async function obTestSaveIptv(){const btn=$('#obTestSave'),msg=$('#obMsg');btn.disabled=true;msg.textContent='Testing connection…';try{const payload=obIptvPayload();const test=await jpost('/api/onboarding/test/iptv',payload);if(!test.ok){msg.className='danger';msg.textContent='Connection failed · '+(test.error||test.message||test.auth?.message||test.status||'Check the details.');return}msg.className='muted';msg.textContent=`Connection OK · ${test.latencyMs||0} ms. Saving…`;const saved=await jpost('/api/providers',payload);providers=await api('/api/providers');window._ob.counts.iptv++;window._ob.lastSaved=saved;await obDiscoverIptv(saved.id||saved.Id)}catch(e){msg.className='danger';msg.textContent=friendlyError(e)}finally{btn.disabled=false}}
+async function obDiscoverIptv(id){const h=$('#onboardingBody');h.innerHTML='<h2>IPTV connected</h2><p class=muted>Loading channels and groups…</p>';try{const rows=await api('/api/channels/'+encodeURIComponent(id),{timeoutMs:20000,attempts:1});const groups=[...new Set(rows.map(x=>x.group).filter(Boolean))].sort();h.innerHTML=`<h2>IPTV connected ✓</h2><p><b>${rows.length}</b> channels found in <b>${groups.length}</b> groups.</p>${groups.length?`<p>Select the groups you want visible:</p><div class=obGroupList>${groups.map(g=>`<label><input type=checkbox data-ob-group value="${escAttr(g)}" checked> ${esc(g)}</label>`).join('')}</div>`:'<p class=muted>No named channel groups were returned.</p>'}<div id=obMsg class=muted></div><div class=row><button class=btn onclick="obSaveGroups('${escAttr(id)}')">Continue</button></div>`}catch(e){h.innerHTML=`<h2>IPTV saved ✓</h2><p>The connection worked, but channel discovery is still loading or unavailable.</p><p class=muted>${esc(friendlyError(e))}</p><button class=btn onclick=obNext()>Continue</button>`}}
+async function obSaveGroups(id){const all=[...document.querySelectorAll('[data-ob-group]')];const hidden=all.filter(x=>!x.checked).map(x=>x.value);const msg=$('#obMsg');try{for(const g of hidden)await jpost('/api/channel-preferences/'+encodeURIComponent(id)+'/group',{group:g,hidden:true});obNext()}catch(e){msg.textContent=friendlyError(e)}}
+function obMedia(type){const name=type==='plex'?'Plex':'Jellyfin',h=$('#onboardingBody');h.innerHTML=`<h2>Connect ${name}</h2><p>The server and token are tested before anything is saved.</p><label>Name</label><input id=obMediaName value="My ${name}"><label>Server URL</label><input id=obMediaUrl placeholder="${type==='plex'?'http://server:32400':'http://server:8096'}"><label>${name} token / API key</label><input id=obMediaToken type=password autocomplete=off><div id=obMsg class=muted></div><div class=row><button id=obTestSave class=btn onclick="obTestSaveMedia('${type}')">Test & save</button><button class=btn onclick=obSkipCurrent()>Skip</button></div>`}
+async function obTestSaveMedia(type){const btn=$('#obTestSave'),msg=$('#obMsg');btn.disabled=true;msg.textContent='Testing connection…';try{const payload={name:$('#obMediaName').value,type,enabled:true,baseUrl:$('#obMediaUrl').value,token:$('#obMediaToken').value,keepExistingToken:false,libraryIds:[]};const test=await jpost('/api/onboarding/test/media',payload);if(!test.ok){msg.className='danger';msg.textContent='Connection failed · '+(test.error||('HTTP '+test.status));return}msg.className='muted';msg.textContent=`Connection OK · ${test.latencyMs||0} ms. Saving…`;const saved=await jpost('/api/media-libraries',payload);mediaLibraries=await api('/api/media-libraries');window._ob.counts[type]++;await obChooseLibraries(type,saved.id||saved.Id)}catch(e){msg.className='danger';msg.textContent=friendlyError(e)}finally{btn.disabled=false}}
+async function obChooseLibraries(type,id){const name=type==='plex'?'Plex':'Jellyfin',h=$('#onboardingBody');h.innerHTML=`<h2>${name} connected ✓</h2><p class=muted>Loading libraries…</p>`;try{const rows=await api('/api/media-libraries/'+encodeURIComponent(id)+'/libraries',{timeoutMs:20000,attempts:1});h.innerHTML=`<h2>${name} connected ✓</h2><p>${rows.length?`Choose which libraries MyOnline TV should display.`:'No libraries were returned. You can change this later from My Sources.'}</p>${rows.length?`<div class=obGroupList>${rows.map(x=>`<label><input type=checkbox data-ob-lib value="${escAttr(x.id)}" checked> <b>${esc(x.name)}</b> <span>${esc(x.type||'')}</span></label>`).join('')}</div>`:''}<div id=obMsg class=muted></div><button class=btn onclick="obSaveLibraries('${escAttr(id)}')">Continue</button>`}catch(e){h.innerHTML=`<h2>${name} saved ✓</h2><p class=muted>${esc(friendlyError(e))}</p><button class=btn onclick=obNext()>Continue</button>`}}
+async function obSaveLibraries(id){const ids=[...document.querySelectorAll('[data-ob-lib]:checked')].map(x=>x.value);try{await jpost('/api/media-libraries/'+encodeURIComponent(id)+'/libraries/selection',{libraryIds:ids});obNext()}catch(e){$('#obMsg').textContent=friendlyError(e)}}
+function obSkipCurrent(){obNext()}
+function obNext(){window._ob.index++;obRenderCurrent()}
+async function obReview(){obProgress(['Choose','Connect','Review'],2);const h=$('#onboardingBody');let summary=null;try{summary=await api('/api/onboarding/summary')}catch{}const i=summary?.iptv?.length??window._ob.counts.iptv,p=summary?.plex?.length??window._ob.counts.plex,j=summary?.jellyfin?.length??window._ob.counts.jellyfin;h.innerHTML=`<h2>Setup summary</h2><p>These are your private sources. No other MyOnline TV user can use them.</p><div class=onboardingFacts><div><b>IPTV</b><span>${i} connected</span></div><div><b>Plex</b><span>${p} connected</span></div><div><b>Jellyfin</b><span>${j} connected</span></div></div><div id=obMsg class=muted></div><div class=row><button class=btn onclick=finishOnboarding()>${window._ob.manual?'Done':'Finish setup'}</button><button class=btn onclick=obChooseServices()>Add another</button></div>`}
+async function finishOnboarding(){try{const st=await api('/api/onboarding/status');if(!st.completed)await api('/api/onboarding/complete',{method:'POST'});providers=await api('/api/providers');mediaLibraries=await api('/api/media-libraries');renderMediaLibraryNav();if(!currentProvider&&providers.length)currentProvider=providers[0].id;show(window._ob?.manual?'sources':'home')}catch(e){$('#obMsg').textContent=friendlyError(e)}}
 
 async function enterApp(st){
   $('#auth').classList.add('hidden');$('#app').classList.remove('hidden');
@@ -433,6 +456,10 @@ function renderHomeContent({unifiedMovies=[],unifiedSeries=[],continueItems=[],h
 }
 
 async function home(){
+  if((providers||[]).length===0 && (mediaLibraries||[]).filter(x=>x.enabled!==false).length===0){
+    content.innerHTML=`<div class="hero emptyHomeHero"><span class=kicker>WELCOME</span><h2>Your media starts here</h2><p class=muted>Connect your personal IPTV, Plex or Jellyfin. Sources are private to ${esc(authState.user)}.</p><div class=row><button class=btn onclick="firstLoginGuide({sources:{iptv:0,plex:0,jellyfin:0}},true)">Run setup guide</button><button class=btn onclick="show('sources')">My Sources</button></div></div>`;
+    return;
+  }
   const generation=++homeRefreshGeneration;
   const homeHistory=getMediaHistory();
 
@@ -1373,12 +1400,12 @@ async function deleteDownload(id){if(!confirm('Remove this download and its stor
 
 
 async function sourcesView(){
- let rows=[];try{rows=await api('/api/my-sources')}catch{}
- const defs=[['iptv','IPTV',sourceAccess.adminIptv],['plex','Plex',sourceAccess.adminPlex],['jellyfin','Jellyfin',sourceAccess.adminJellyfin]];
- content.innerHTML=`<div class=hero><h2>My Sources</h2><p class=muted>Admin-managed sources are ready to use. Add your own only where self-management is enabled.</p></div><div class=grid>${defs.map(([t,n,m])=>`<div class=card><h3>${n}</h3>${m?'<p>Managed by administrator.</p>':`<p>You manage this source.</p><div class=formGrid><div class=field><label>Name</label><input id="src-name-${t}" value="${n}"></div><div class=field><label>Base URL</label><input id="src-base-${t}"></div>${t==='iptv'?'<div class=field><label>M3U URL</label><input id=src-playlist-iptv></div><div class=field><label>EPG URL</label><input id=src-epg-iptv></div><div class=field><label>Username</label><input id=src-user-iptv></div><div class=field><label>Password</label><input type=password id=src-secret-iptv></div>':'<div class=field><label>Token / API key</label><input type=password id="src-secret-'+t+'"></div>'}</div><button class=btn onclick="saveMySource('${t}')">Save</button>`}</div>`).join('')}</div><h2>Saved personal sources</h2><div class=grid>${rows.map(x=>`<div class=card><h3>${esc(x.name)}</h3><p>${esc(x.type)}</p><button class=btn onclick="deleteMySource('${escAttr(x.id)}')">Remove</button></div>`).join('')||'<div class=card>No personal sources saved.</div>'}</div>`;
+  providers=await api('/api/providers').catch(()=>[]);mediaLibraries=await api('/api/media-libraries').catch(()=>[]);
+  const cards=[...providers.map(x=>({...x,kind:'iptv'})),...mediaLibraries.map(x=>({...x,kind:x.type}))];
+  content.innerHTML=`<div class=hero><span class=kicker>PERSONAL SOURCES</span><h2>My Sources</h2><p class=muted>Every connection on this page belongs only to <b>${esc(authState.user)}</b>. There is no source sharing between users.</p><div class=row><button class=btn onclick="firstLoginGuide({sources:{iptv:${providers.length},plex:${mediaLibraries.filter(x=>x.type==='plex').length},jellyfin:${mediaLibraries.filter(x=>x.type==='jellyfin').length}}},true)">Run setup guide</button></div></div>
+   <div class=grid>${cards.map(x=>`<article class=card><span class=kicker>${esc(String(x.kind).toUpperCase())}</span><h3>${esc(x.name)}</h3><p class=muted>${esc(x.host||'Personal source')}</p><div class=row>${x.kind==='iptv'?`<button class=btn onclick="testProvider('${escAttr(x.id)}',this)">Test connection</button><button class=btn onclick="editProvider('${escAttr(x.id)}')">Edit</button><button class="btn danger" onclick="removeProvider('${escAttr(x.id)}')">Remove</button>`:`<button class=btn onclick="testMediaLibrary('${escAttr(x.id)}')">Test connection</button><button class=btn onclick="editMediaLibrary('${escAttr(x.id)}')">Edit</button><button class=btn onclick="chooseMediaLibraries('${escAttr(x.id)}')">Libraries</button><button class="btn danger" onclick="removeMediaLibrary('${escAttr(x.id)}')">Remove</button>`}</div><div id="${x.kind==='iptv'?'ptest-':'mlstat-'}${escAttr(x.id)}" class=muted></div></article>`).join('')||`<div class=card><h3>No personal sources yet</h3><p>Use the setup guide to connect IPTV, Plex or Jellyfin.</p><button class=btn onclick="firstLoginGuide({sources:{iptv:0,plex:0,jellyfin:0}},true)">Start setup</button></div>`}</div>`;
 }
-async function saveMySource(t){const b={type:t,name:$('#src-name-'+t)?.value||t,baseUrl:$('#src-base-'+t)?.value||'',playlistUrl:$('#src-playlist-'+t)?.value||'',epgUrl:$('#src-epg-'+t)?.value||'',username:$('#src-user-'+t)?.value||'',enabled:true};const x=$('#src-secret-'+t)?.value||'';if(t==='iptv')b.password=x;else b.token=x;try{await jpost('/api/my-sources',b);await sourcesView()}catch(e){alert(friendlyError(e))}}
-async function deleteMySource(id){if(!confirm('Remove source?'))return;await api('/api/my-sources/'+encodeURIComponent(id),{method:'DELETE'});await sourcesView()}
+
 async function systemView(){
   content.innerHTML='<div class=card>Loading system information…</div>';
   try{
@@ -1424,8 +1451,6 @@ let adminSourceAccess={};
 
 
 
-function editUserSources(u){const x=adminSourceAccess[u]||{adminIptv:true,adminPlex:true,adminJellyfin:true};const b=$('#userSourceAccessEditor');b.style.display='block';b.innerHTML=`<h3>Source access · ${esc(u)}</h3><p class=muted>Checked = use Admin configuration. Unchecked = user manages own source.</p><label class=checkline><input id=usaIptv type=checkbox ${x.adminIptv?'checked':''}> IPTV — Admin configuration</label><label class=checkline><input id=usaPlex type=checkbox ${x.adminPlex?'checked':''}> Plex — Admin configuration</label><label class=checkline><input id=usaJelly type=checkbox ${x.adminJellyfin?'checked':''}> Jellyfin — Admin configuration</label><div class=row><button class=btn onclick="saveUserSources('${escAttr(u)}')">Save source access</button></div>`;b.scrollIntoView({behavior:'smooth',block:'center'})}
-async function saveUserSources(u){const x={adminIptv:$('#usaIptv').checked,adminPlex:$('#usaPlex').checked,adminJellyfin:$('#usaJelly').checked};await api('/api/admin/source-access/'+encodeURIComponent(u),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(x)});adminSourceAccess[u]=x;await adminView()}
 
 async function featureCompletionView(){
   if(authState.role!=='Admin'){content.innerHTML='<div class=card>Administrator access is required.</div>';return}
@@ -1454,7 +1479,7 @@ async function featureCompletionView(){
     const groups=[...new Set(features.map(x=>x.area))];
     content.innerHTML=`
       <div class=hero>
-        <span class=kicker>v30.1.0 FEATURE COMPLETION</span>
+        <span class=kicker>v30.2.0 FEATURE COMPLETION</span>
         <h2>Feature Completion audit</h2>
         <p class=muted>This page distinguishes working features from partial implementations, foundations and missing functionality. It intentionally does not count a contract/model as a finished feature.</p>
       </div>
@@ -1521,7 +1546,7 @@ async function adminView(){
   <div class="admin2Shell">
     <div class="admin2Hero">
       <div>
-        <span class="admin2Kicker">MYONLINE TV v30.1.0</span>
+        <span class="admin2Kicker">MYONLINE TV v30.2.0</span>
         <h1>Administration</h1>
         <p>Everything needed to configure, monitor and maintain your media center — without one endless settings page.</p>
       </div>
@@ -3078,8 +3103,8 @@ window.MyOnlineOperations={
 };
 
 
-// v30.1.0 Native Client Generation
-window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'30.1.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
+// v30.2.0 Native Client Generation
+window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'30.2.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
 window.MyOnlineClientBridge={
  version:1,
  capabilities(){return {sourceEngine:true,player:true,live:true,guide:true,library:true,dvr:true,profiles:true,rooms:true,remote:true}},
@@ -3087,7 +3112,7 @@ window.MyOnlineClientBridge={
 };
 
 
-// v30.1.0 — Performance Engine
+// v30.2.0 — Performance Engine
 const perfCache=new Map();
 function perfCacheGet(key,maxAgeMs){
   const x=perfCache.get(key);
@@ -3124,7 +3149,7 @@ document.addEventListener('pointerover',e=>{
 },{passive:true});
 
 
-// v30.1.0 — Live TV 3.0
+// v30.2.0 — Live TV 3.0
 let liveNumberBuffer='',liveNumberTimer=null;
 function showLiveZapOverlay(c){
   let box=$('#liveZapOverlay');
@@ -3153,7 +3178,7 @@ document.addEventListener('keydown',e=>{
 });
 
 
-// v30.1.0 — Guide 3.0
+// v30.2.0 — Guide 3.0
 function scrollGuideToNow(){
   const wrap=document.querySelector('.timelineWrap');
   const line=document.querySelector('.programLane .nowLine');
@@ -3169,7 +3194,7 @@ function guideKeyboard(e){
 document.addEventListener('keydown',guideKeyboard);
 
 
-// v30.1.0 — Unified Library End-to-End
+// v30.2.0 — Unified Library End-to-End
 function unifiedSourceScore(s){
   let score=0;
   if(s.poster)score+=2;
@@ -3187,7 +3212,7 @@ async function playBestUnified(group){
 }
 
 
-// v30.1.0 — Unified Playback Engine
+// v30.2.0 — Unified Playback Engine
 async function tryUnifiedPlaybackSource(item){
   const parts=String(item?.id||'').split(':');
   if(parts.length<3)throw new Error('Invalid unified media source.');
@@ -3211,7 +3236,7 @@ async function playUnifiedWithFallback(group){
 }
 
 
-// v30.1.0 — Home 3.0
+// v30.2.0 — Home 3.0
 const HOME3_DEFAULT=['continue','live','next','recordings','favourites','new'];
 function home3Key(){return `myonline-home3:${currentProfile||'default'}`}
 function getHome3Order(){try{return JSON.parse(localStorage.getItem(home3Key())||'null')||HOME3_DEFAULT}catch{return HOME3_DEFAULT}}
@@ -3226,7 +3251,7 @@ function home3Customize(){
 }
 
 
-// v30.1.0 — Search 3.0
+// v30.2.0 — Search 3.0
 function searchHistoryKey(){return `myonline-search-history:${currentProfile||'default'}`}
 function rememberSearch(q){
   q=String(q||'').trim();if(q.length<2)return;
@@ -3241,7 +3266,7 @@ document.addEventListener('keydown',e=>{
 });
 
 
-// v30.1.0 — DVR End-to-End
+// v30.2.0 — DVR End-to-End
 async function dvrHealthPanel(){
   const [status,conflicts,upcoming]=await Promise.all([
     api('/api/dvr/status').catch(()=>null),
@@ -3260,9 +3285,9 @@ async function showDvrOperations(){
 }
 
 
-// v30.1.0 — Production Edition
+// v30.2.0 — Production Edition
 window.MyOnlineTvProduction={
-  version:'30.1.0',
+  version:'30.2.0',
   clientMode:()=>document.body.dataset.clientMode||'unknown',
   runtimeSummary:()=>({
     online:navigator.onLine,
@@ -3274,25 +3299,25 @@ window.MyOnlineTvProduction={
 };
 
 
-// v30.1.0 performance diagnostics
+// v30.2.0 performance diagnostics
 window.MyOnlinePerf={samples:[],mark(name,start){this.samples.push({name,ms:Math.round(performance.now()-start),at:Date.now()});this.samples=this.samples.slice(-200)},snapshot(){return [...this.samples]}};
 
 
-// v30.1.0 Live TV 4.0 state
+// v30.2.0 Live TV 4.0 state
 let livePreviousChannelKey=null,liveCurrentChannelKey=null;
 function rememberLiveTune(key){if(key&&key!==liveCurrentChannelKey){livePreviousChannelKey=liveCurrentChannelKey;liveCurrentChannelKey=key}}
 function previousLiveChannel(){const c=channels.find(x=>x.key===livePreviousChannelKey);if(c)return playLive(c.key,c.name)}
 
 
-// v30.1.0 local phone remote client
+// v30.2.0 local phone remote client
 async function remoteCommand(deviceId,command,value=null){return api('/api/devices/'+encodeURIComponent(deviceId)+'/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command,value})})}
 
 
-// v30.1.0 provider/device capability gate
+// v30.2.0 provider/device capability gate
 async function advancedTvCapabilities(){try{return await api('/api/platform/v25/capabilities',{timeoutMs:5000,attempts:1})}catch{return {productionVerified:false}}}
 
 
-// v30.1.0 — Admin UX Foundation
+// v30.2.0 — Admin UX Foundation
 window.AdminUx = {
   sections: [
     {id:'overview',label:'Overview'},
@@ -3319,7 +3344,7 @@ document.addEventListener('click',e=>{
 });
 
 
-// v30.1.0 — Admin Overview & Health
+// v30.2.0 — Admin Overview & Health
 async function renderAdminOverviewV2(target){
   const host=typeof target==='string'?document.querySelector(target):target;
   if(!host)return;
@@ -3338,7 +3363,7 @@ async function renderAdminOverviewV2(target){
 }
 
 
-// v30.1.0 — Admin Sources
+// v30.2.0 — Admin Sources
 function adminSourceCard(s){
   return `<article class="adminCard adminSourceCard">
     <div class="adminCardHead"><div><h3>${esc(s.name||s.type||'Source')}</h3><small>${esc(s.detail||'')}</small></div>${AdminUx.statusBadge(s.status||'unknown',s.statusText||s.status||'Unknown')}</div>
@@ -3348,7 +3373,7 @@ function adminSourceCard(s){
 }
 
 
-// v30.1.0 — Admin DVR & Storage
+// v30.2.0 — Admin DVR & Storage
 function adminDvrSummary(x){
   return `<div class="adminCardGrid">
     ${[['Active',x.active],['Upcoming',x.upcoming],['Failed',x.failed],['Conflicts',x.conflicts]].map(([k,v])=>`<article class="adminCard adminMetric"><b>${Number(v||0)}</b><small>${k}</small></article>`).join('')}
@@ -3360,7 +3385,7 @@ function adminStorageBar(used,total){
 }
 
 
-// v30.1.0 — Admin Users & Devices
+// v30.2.0 — Admin Users & Devices
 function adminUserRow(u){
   return `<div class="adminListRow"><div><b>${esc(u.name||u.username||'User')}</b><small>${esc((u.roles||[]).join(', '))}</small></div><div>${AdminUx.statusBadge(u.enabled===false?'warning':'ok',u.enabled===false?'Disabled':'Enabled')}<button class="btn" data-user-edit="${escAttr(u.id||'')}">Edit</button></div></div>`;
 }
@@ -3369,7 +3394,7 @@ function adminDeviceRow(d){
 }
 
 
-// v30.1.0 — Admin Diagnostics
+// v30.2.0 — Admin Diagnostics
 function diagnosticGrade(ms){
   return ms<500?['excellent','Excellent']:ms<1000?['good','Good']:ms<2000?['warning','Slow']:['error','Very slow'];
 }
@@ -3380,7 +3405,7 @@ function diagnosticTimingRow(name,ms){
 }
 
 
-// v30.1.0 — Backup, Update & Recovery
+// v30.2.0 — Backup, Update & Recovery
 function adminRecoveryCard(x){
   return `<article class="adminCard">
     <div class="adminCardHead"><div><h3>Backup & Recovery</h3><small>Safe update workflow</small></div>${AdminUx.statusBadge(x?.healthy?'ok':'warning',x?.healthy?'Ready':'Check required')}</div>
@@ -3390,35 +3415,35 @@ function adminRecoveryCard(x){
 }
 
 
-// v30.1.0 — Mobile Admin
+// v30.2.0 — Mobile Admin
 function adminMobileClass(){
   document.documentElement.classList.toggle('adminCompact',matchMedia('(max-width:720px)').matches);
 }
 addEventListener('resize',adminMobileClass,{passive:true});adminMobileClass();
 
 
-// v30.1.0 Stream Doctor
+// v30.2.0 Stream Doctor
 function streamDoctorMetric(label,value,state='ok'){return `<div class="streamDoctorRow"><span>${esc(label)}</span><b class="${state}">${esc(String(value))}</b></div>`}
 function renderStreamDoctor(x){return `<section class="card streamDoctor"><h3>Stream Doctor</h3>${streamDoctorMetric('Provider',x.provider||'Unknown',x.providerOk?'ok':'error')}${streamDoctorMetric('Codec',x.codec||'—')}${streamDoctorMetric('Resolution',x.resolution||'—')}${streamDoctorMetric('Bitrate',x.bitrate||'—')}${streamDoctorMetric('FPS',x.fps||'—')}${streamDoctorMetric('Buffer',x.buffer||'—')}${streamDoctorMetric('Playback mode',x.mode||'—')}</section>`}
 
 
-// v30.1.0 Notification Center
+// v30.2.0 Notification Center
 const NotificationCenter={key:'myonline-notifications',all(){try{return JSON.parse(localStorage.getItem(this.key)||'[]')}catch{return[]}},push(n){const a=this.all();a.unshift({id:String(Date.now())+Math.random(),at:Date.now(),read:false,...n});localStorage.setItem(this.key,JSON.stringify(a.slice(0,100)));return a[0]},read(id){localStorage.setItem(this.key,JSON.stringify(this.all().map(x=>x.id===id?{...x,read:true}:x)))}};
 
 
-// v30.1.0 What's On Tonight
+// v30.2.0 What's On Tonight
 function tonightFilter(rows,kind='all'){const now=new Date();return (rows||[]).filter(x=>{const d=new Date(x.start||x.startTime);return d.toDateString()===now.toDateString()&&d.getHours()>=17&&(kind==='all'||String(x.category||x.kind||'').toLowerCase().includes(kind))}).sort((a,b)=>new Date(a.start||a.startTime)-new Date(b.start||b.startTime))}
 
 
-// v30.1.0 Unified Watchlist
+// v30.2.0 Unified Watchlist
 const UnifiedWatchlist={key(){return `myonline-watchlist:${currentProfile||'default'}`},all(){try{return JSON.parse(localStorage.getItem(this.key())||'[]')}catch{return[]}},toggle(item){let a=this.all();const i=a.findIndex(x=>x.id===item.id);if(i>=0)a.splice(i,1);else a.unshift(item);localStorage.setItem(this.key(),JSON.stringify(a.slice(0,500)));return i<0}};
 
 
-// v30.1.0 Sports Hub
+// v30.2.0 Sports Hub
 function sportsMatches(rows,teams=[]){const n=teams.map(x=>String(x).toLowerCase()).filter(Boolean);return (rows||[]).filter(x=>{const t=String(x.title||'').toLowerCase();return n.some(q=>t.includes(q))||/(football|soccer|hockey|champions league|premier league|allsvenskan|match)/i.test(t)})}
 
 
-// v30.1.0 Guest Mode
+// v30.2.0 Guest Mode
 function enterGuestMode(){sessionStorage.setItem('myonline-guest','1');currentProfile='guest';show('home')} function isGuestMode(){return sessionStorage.getItem('myonline-guest')==='1'}
 
 
@@ -3426,7 +3451,7 @@ function enterGuestMode(){sessionStorage.setItem('myonline-guest','1');currentPr
 async function uiAction(action,{busyText='Working…',errorTitle='Action failed'}={}){
   try{return await action()}catch(e){console.error(errorTitle,e);alert(`${errorTitle}: ${friendlyError(e)}`);throw e}
 }
-window.MyOnlineRelease={version:'30.1.0',qualityGate:'stabilization'};
+window.MyOnlineRelease={version:'30.2.0',qualityGate:'stabilization'};
 
 
 // v28.3 — reusable UI states

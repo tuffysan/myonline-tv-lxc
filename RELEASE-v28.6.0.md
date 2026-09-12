@@ -1,4 +1,4 @@
-# v30.1.0 — Live TV Production
+# v30.2.0 — Live TV Production
 
 Cumulative release based on v28.5.0.
 

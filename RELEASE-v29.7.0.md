@@ -1,4 +1,4 @@
-# v30.1.0 — Performance & Media Index
+# v30.2.0 — Performance & Media Index
 
 Cumulative release based on v29.6.0.
 
