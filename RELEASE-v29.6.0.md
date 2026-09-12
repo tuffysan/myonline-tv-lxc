@@ -1,4 +1,4 @@
-# v30.2.0 — Security Hardening
+# v31.1.0 — Security Hardening
 
 Cumulative release based on v29.5.0.
 

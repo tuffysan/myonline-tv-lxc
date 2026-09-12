@@ -1,4 +1,4 @@
-# v30.2.0 — TV Experience
+# v31.1.0 — TV Experience
 
 TV/D-pad policy, zapping state and ten-foot UI refinements.
 

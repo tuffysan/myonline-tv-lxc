@@ -2,7 +2,7 @@ public static class PlaybackEngine2V2350
 {
     public static object Capabilities() => new
     {
-        version = "30.2.0",
+        version = "31.1.0",
         feature = "Playback Engine 2.0",
         localFirst = true,
         mandatoryRuntimeCostSek = 0,

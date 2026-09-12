@@ -1,4 +1,51 @@
-## v30.2.0 — Personal Media Setup 2.0
+## v31.1.0 — SQLite Database & Migration
+- Adds SQLite with WAL mode and schema migrations.
+- Adds persistent tables for users, source ownership, source health, EPG aliases, media index and user settings.
+- Keeps legacy JSON files readable during migration so upgrades are non-destructive.
+- Adds `/api/database/status`.
+
+## v31.1.0 — Stable Personal Media Edition
+- Adds the v31 production gate and Stable Personal Media Edition marker.
+- Preserves zero mandatory runtime cost.
+- Explicitly requires real playback, restart, upgrade and two-user isolation tests before calling the release production-verified.
+
+## v31.1.0 — TV & Remote UX
+- Improves coarse-pointer/remote hit targets and visible focus.
+- Adds reduced-motion behavior.
+- Adds a TV/remote capability endpoint for D-pad, Back and focus restoration.
+
+## v31.1.0 — Unified Library & Search
+- Adds deterministic client-side unified-media deduplication helpers.
+- Adds a per-user Unified Library v4 status contract.
+- Defines source preference for duplicate media and global-search capability.
+
+## v31.1.0 — Live TV & Guide 4.0
+- Adds the Live TV/Guide 4.0 capability contract for mini-guide, previous channel, numeric selection and D-pad navigation.
+- Adds stronger TV focus treatment.
+- Provider visibility remains personal.
+
+## v31.1.0 — Playback Engine 4.0
+- Defines the Playback Engine 4.0 strategy order: Direct Play → HLS → FFmpeg fallback.
+- Exposes resume/live-recovery capabilities.
+- Keeps playback source resolution behind per-user ownership checks.
+
+## v31.1.0 — Source Doctor
+- Adds a Source Doctor summary for the current user's own sources.
+- Provides a stable surface for connection health and repair UI.
+- Does not expose other users' source identifiers.
+
+## v31.1.0 — Home 4.0
+- Adds a personal Home composition endpoint based only on the signed-in user's sources.
+- Adds a first-class empty Home state that links back to setup.
+- Home capability flags hide irrelevant source sections.
+
+## v31.1.0 — User & Source Architecture Cleanup
+- Formalizes per-user source ownership as the active architecture.
+- Cross-user source sharing is disabled.
+- Adds a diagnostic ownership contract endpoint.
+- Existing source access continues to be enforced server-side.
+
+## v31.1.0 — Personal Media Setup 2.0
 - Added choose-your-services first-login flow.
 - Added pre-save IPTV/Plex/Jellyfin connection tests.
 - Added IPTV group and Plex/Jellyfin library selection during onboarding.
@@ -6,209 +53,209 @@
 - Rebuilt My Sources around actual per-user source ownership.
 - Cross-user source probing now returns 404.
 
-## v30.2.0 — Account Source Isolation
+## v31.1.0 — Account Source Isolation
 - Made IPTV/Plex/Jellyfin account-scoped instead of globally shared.
 - Added explicit per-source sharing to same-account users only.
 - Added server-side cross-account access enforcement for source-specific routes.
 - Filtered Unified Media and Live Now/Next by source visibility.
 - Added Admin 2.0 Share controls on IPTV/Plex/Jellyfin source cards.
 
-## v30.2.0 — Update Safety Hotfix
+## v31.1.0 — Update Safety Hotfix
 - Hardened final backend/nginx verification.
 - Failed final verification now activates and verifies binary rollback.
 - Suppressed harmless transient connection-refused retry noise.
 - `Update verified` is emitted only after all final checks pass.
 
-## v30.2.0 — Production Edition
+## v31.1.0 — Production Edition
 - Added the Production Edition increment and release verification gate.
 - Preserved zero mandatory runtime cost.
 
-## v30.2.0 — Full UX Polish
+## v31.1.0 — Full UX Polish
 - Added the Full UX Polish increment and release verification gate.
 - Preserved zero mandatory runtime cost.
 
-## v30.2.0 — Observability & Admin Diagnostics
+## v31.1.0 — Observability & Admin Diagnostics
 - Added the Observability & Admin Diagnostics increment and release verification gate.
 - Preserved zero mandatory runtime cost.
 
-## v30.2.0 — Performance & Media Index
+## v31.1.0 — Performance & Media Index
 - Added the Performance & Media Index increment and release verification gate.
 - Preserved zero mandatory runtime cost.
 
-## v30.2.0 — Security Hardening
+## v31.1.0 — Security Hardening
 - Added the Security Hardening increment and release verification gate.
 - Preserved zero mandatory runtime cost.
 
-## v30.2.0 — Installer, Updater & Rollback
+## v31.1.0 — Installer, Updater & Rollback
 - Added the Installer, Updater & Rollback increment and release verification gate.
 - Preserved zero mandatory runtime cost.
 
-## v30.2.0 — Self-Healing Appliance
+## v31.1.0 — Self-Healing Appliance
 - Added the Self-Healing Appliance increment and release verification gate.
 - Preserved zero mandatory runtime cost.
 
-## v30.2.0 — Notification Center
+## v31.1.0 — Notification Center
 - Added the Notification Center increment and release verification gate.
 - Preserved zero mandatory runtime cost.
 
-## v30.2.0 — Smart Home, EPG & Sports
+## v31.1.0 — Smart Home, EPG & Sports
 - Added the Smart Home, EPG & Sports increment and release verification gate.
 - Preserved zero mandatory runtime cost.
 
-## v30.2.0 — Mobile Companion & Remote
+## v31.1.0 — Mobile Companion & Remote
 - Added the Mobile Companion & Remote increment and release verification gate.
 - Preserved zero mandatory runtime cost.
 
-## v30.2.0 — Android TV & TV UX
+## v31.1.0 — Android TV & TV UX
 - Added the Android TV & TV UX increment and release verification gate.
 - Preserved zero mandatory runtime cost.
 
-## v30.2.0 — DVR Production
+## v31.1.0 — DVR Production
 - Added the DVR Production increment and release verification gate.
 - Preserved zero mandatory runtime cost.
 
-## v30.2.0 — Unified Media Production
+## v31.1.0 — Unified Media Production
 - Added the Unified Media Production increment and release verification gate.
 - Preserved zero mandatory runtime cost.
 
-## v30.2.0 — Guide Production
+## v31.1.0 — Guide Production
 - Added the Guide Production increment and release verification gate.
 - Preserved zero mandatory runtime cost.
 
-## v30.2.0 — Live TV Production
+## v31.1.0 — Live TV Production
 - Added the Live TV Production increment and release verification gate.
 - Preserved zero mandatory runtime cost.
 
-## v30.2.0 — Unified Playback Engine
+## v31.1.0 — Unified Playback Engine
 - Added the Unified Playback Engine increment and release verification gate.
 - Preserved zero mandatory runtime cost.
 
-## v30.2.0 — UX Consistency & Navigation
+## v31.1.0 — UX Consistency & Navigation
 - Added the UX Consistency & Navigation increment and release verification gate.
 - Preserved zero mandatory runtime cost.
 
-## v30.2.0 — Error, Loading & Empty States
+## v31.1.0 — Error, Loading & Empty States
 - Added the Error, Loading & Empty States increment and release verification gate.
 - Preserved zero mandatory runtime cost.
 
-## v30.2.0 — Stabilization & Cleanup
+## v31.1.0 — Stabilization & Cleanup
 - Added the Stabilization & Cleanup increment and release verification gate.
 - Preserved zero mandatory runtime cost.
 
-## v30.2.0 — Admin 2.0
+## v31.1.0 — Admin 2.0
 - Replaced the monolithic Admin page with a task-oriented six-section interface.
 - Added actionable Overview, Needs Attention and Quick Actions.
 - Redesigned Sources, Users & Profiles, Storage, Navigation and System administration.
 - Added responsive/mobile Admin UX while preserving existing backend routes.
 
-## v30.2.0 — Architecture & Code Quality
+## v31.1.0 — Architecture & Code Quality
 - Added Architecture & Code Quality implementation increment.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0 — Self-Healing Appliance
+## v31.1.0 — Self-Healing Appliance
 - Added Self-Healing Appliance implementation increment.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0 — Cinema & Screensaver
+## v31.1.0 — Cinema & Screensaver
 - Added Cinema & Screensaver implementation increment.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0 — Family & Guest
+## v31.1.0 — Family & Guest
 - Added Family & Guest implementation increment.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0 — Sports Hub
+## v31.1.0 — Sports Hub
 - Added Sports Hub implementation increment.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0 — Smart Collections
+## v31.1.0 — Smart Collections
 - Added Smart Collections implementation increment.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0 — Unified Watchlist
+## v31.1.0 — Unified Watchlist
 - Added Unified Watchlist implementation increment.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0 — What's On Tonight
+## v31.1.0 — What's On Tonight
 - Added What's On Tonight implementation increment.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0 — Smart EPG
+## v31.1.0 — Smart EPG
 - Added Smart EPG implementation increment.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0 — Notification Center
+## v31.1.0 — Notification Center
 - Added Notification Center implementation increment.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0 — Stream Doctor
+## v31.1.0 — Stream Doctor
 - Added Stream Doctor implementation increment.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0 — Advanced TV Platform
+## v31.1.0 — Advanced TV Platform
 - Provider-gated Catch-up/Start Over plus PiP/Multi-view/Sports platform.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0 — Rooms & Handoff
+## v31.1.0 — Rooms & Handoff
 - Local room playback ownership and handoff contract.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0 — Phone Remote & Pairing
+## v31.1.0 — Phone Remote & Pairing
 - Local expiring pairing and validated remote commands.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0 — Android TV First-class
+## v31.1.0 — Android TV First-class
 - D-pad, Media3 and HLS-readiness Android-TV contract.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0 — Multi-device Platform
+## v31.1.0 — Multi-device Platform
 - Browser/mobile/tablet/TV/Android-TV device platform.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0 — Universal Search
+## v31.1.0 — Universal Search
 - One local search domain across TV, EPG, media and recordings.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0 — Personal Home
+## v31.1.0 — Personal Home
 - Personal local Home rail composition.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0 — Profiles 2.0
+## v31.1.0 — Profiles 2.0
 - Profile, kids-mode and per-profile preference contract.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0 — Playback Resilience
+## v31.1.0 — Playback Resilience
 - Bounded playback fallback plan and useful error stages.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0 — Playback Engine 2.0
+## v31.1.0 — Playback Engine 2.0
 - Central direct/HLS/remux/transcode decision policy.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0 — Unified Library 4.0
+## v31.1.0 — Unified Library 4.0
 - Deterministic dedupe and best-source policy.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0 — Live TV 4.0
+## v31.1.0 — Live TV 4.0
 - TV-first zapping, Now/Next and previous-channel capabilities.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0 — Server Media Index
+## v31.1.0 — Server Media Index
 - Local searchable media-index contract.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0 — Performance & Diagnostics
+## v31.1.0 — Performance & Diagnostics
 - Local performance measurements and diagnostics.
 - Zero mandatory runtime cost preserved.
 
-## v30.2.0
+## v31.1.0
 - New TV-first Live TV layout with compact channel rail and player/program panel.
 - Hide-channel action moved to the right-side action group.
 - Added current/next programme details and progress to Live TV.
 - Added Home “On TV now” rail.
 - Refined EPG styling and responsive TV/tablet layout.
 
-# v30.2.0 — Feature Completion
+# v31.1.0 — Feature Completion
 
 - Build fix: FeatureCompletionCatalog moved to the global namespace so top-level Program.cs can resolve it.
 

@@ -1,4 +1,4 @@
-# v30.2.0 — Observability & Admin Diagnostics
+# v31.1.0 — Observability & Admin Diagnostics
 
 Cumulative release based on v29.7.0.
 

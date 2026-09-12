@@ -1,6 +1,6 @@
 {
   "product": "MyOnline TV",
-  "platformVersion": "30.2.0",
+  "platformVersion": "31.1.0",
   "apiVersion": 1,
   "capabilities": [
     "live",
