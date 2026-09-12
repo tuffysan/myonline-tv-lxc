@@ -1,2 +1,0 @@
-# v7.2.0 — Source Engine
-Introduces server-side effective-source contracts with explicit user/source scope and availability. This is the architectural boundary for enforcing Admin vs personal sources across Live, Guide, Movies, Series, Search, Library and playback. Existing legacy routes are retained for compatibility; complete route-by-route enforcement must be verified before calling personal-source isolation complete.
