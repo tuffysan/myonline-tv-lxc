@@ -1,3 +1,3 @@
-# v31.1.2 — Self-Healing Appliance
+# v31.1.3 — Self-Healing Appliance
 
 Cumulative from v26.9.0. Zero mandatory runtime cost. Capability/helper code is not a production claim until end-to-end verified.

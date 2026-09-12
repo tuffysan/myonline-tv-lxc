@@ -1,4 +1,4 @@
-# v31.1.2 — Playback Resilience
+# v31.1.3 — Playback Resilience
 
 Bounded playback fallback plan and useful error stages.
 

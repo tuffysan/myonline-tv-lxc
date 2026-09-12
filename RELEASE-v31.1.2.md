@@ -1,4 +1,4 @@
-# v31.1.2 — Never Show Onboarding Guide
+# v31.1.3 — Never Show Onboarding Guide
 
 Adds a third onboarding choice:
 

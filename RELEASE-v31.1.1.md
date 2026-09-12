@@ -1,4 +1,4 @@
-# v31.1.2 — Onboarding Skip Hotfix
+# v31.1.3 — Onboarding Skip Hotfix
 
 - Fixes the first-login guide appearing after every login when no media source is configured.
 - Adds a persistent **Skip for now** action.

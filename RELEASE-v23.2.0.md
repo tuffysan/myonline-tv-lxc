@@ -1,4 +1,4 @@
-# v31.1.2 — Server Media Index
+# v31.1.3 — Server Media Index
 
 Local searchable media-index contract.
 

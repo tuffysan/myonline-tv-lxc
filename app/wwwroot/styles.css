@@ -827,7 +827,7 @@ html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px 
 .sourceUnavailable{opacity:.48;filter:saturate(.45)}
 
 
-/* v31.1.2 TV Experience */
+/* v31.1.3 TV Experience */
 .liveToolbar{position:relative;top:auto;background:transparent;padding:0 0 14px}
 .tvLiveShell{display:grid;grid-template-columns:minmax(330px,390px) minmax(0,1fr);gap:14px;align-items:start}
 .liveChannelPane{position:sticky;top:86px;max-height:calc(100vh - 108px);overflow:hidden;background:#091722;border:1px solid #23465f;border-radius:18px;padding:12px;display:flex;flex-direction:column}
@@ -907,7 +907,7 @@ html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px 
 }
 
 
-/* v31.1.2 — Scrollbar polish */
+/* v31.1.3 — Scrollbar polish */
 :root{
   scrollbar-color:#315a73 #091722;
   scrollbar-width:thin;
@@ -988,14 +988,14 @@ html.isTV button:focus,html.isTV a:focus,html.isTV [tabindex]:focus{outline:4px 
   scrollbar-gutter:stable;
 }
 
-/* v31.1.2 Live/EPG completion */
+/* v31.1.3 Live/EPG completion */
 .liveChannelPane.miniGuideOpen{box-shadow:0 0 0 2px #4faeff,0 24px 70px #0008}
 @media(min-width:1101px){.liveChannelPane.miniGuideOpen{max-height:calc(100vh - 92px)}}
 .premiumGuide .prog:focus,.tvChannelRow:focus-within{outline:2px solid #74c2ff;outline-offset:1px}
 
 
 /* =========================================================
-   v31.1.2 — Multi-device polish
+   v31.1.3 — Multi-device polish
    Mobile · Tablet · Desktop · TV / 10-foot
    ========================================================= */
 
@@ -1126,7 +1126,7 @@ html.isStandalone body{
 }
 
 
-/* v31.1.2 — Fast Home */
+/* v31.1.3 — Fast Home */
 .homeDeferredPlaceholder{
   min-height:72px;
   display:flex;
@@ -1150,7 +1150,7 @@ html.isStandalone body{
 }
 
 
-/* v31.1.2 — Live TV 3.0 */
+/* v31.1.3 — Live TV 3.0 */
 .liveZapOverlay{position:fixed;left:50%;bottom:7vh;transform:translate(-50%,24px);z-index:1200;display:flex;gap:14px;align-items:center;min-width:min(620px,82vw);padding:16px 20px;border:1px solid #315a73;border-radius:18px;background:rgba(5,15,24,.94);backdrop-filter:blur(16px);opacity:0;pointer-events:none;transition:.18s ease}
 .liveZapOverlay.visible{opacity:1;transform:translate(-50%,0)}
 .liveZapOverlay .zapLogo{width:64px;height:48px;display:grid;place-items:center}
@@ -1161,30 +1161,30 @@ html.isStandalone body{
 .liveNumberOverlay.visible{opacity:1}
 
 
-/* v31.1.2 — Guide 3.0 */
+/* v31.1.3 — Guide 3.0 */
 .premiumGuide .timelineHead{position:sticky;top:0;z-index:12}
 .premiumGuide .timelineChannel{position:sticky;left:0;z-index:8}
 .premiumGuide .nowLine{z-index:6;box-shadow:0 0 16px rgba(78,177,255,.28)}
 .premiumGuide .currentProgram{border-color:#4eb1ff;box-shadow:inset 0 0 0 1px rgba(78,177,255,.3)}
 
 
-/* v31.1.2 — Unified Library */
+/* v31.1.3 — Unified Library */
 .primaryLibraryPlay{width:100%;margin-top:8px}
 .sourceDetails{margin-top:8px}.sourceDetails summary{cursor:pointer;color:var(--muted)}
 .sourceChoices{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 
 
-/* v31.1.2 — Home 3.0 */
+/* v31.1.3 — Home 3.0 */
 .homeHero{min-height:220px;display:flex;align-items:center}
 .homeSourceGrid{margin-bottom:22px}
 @media(max-width:719px){.homeHero{min-height:auto}.homeHero .row{display:grid;grid-template-columns:1fr auto}.homeHero .row .btn:last-child{grid-column:1/-1}}
 
 
-/* v31.1.2 — Search 3.0 */
+/* v31.1.3 — Search 3.0 */
 .searchResultGroup{content-visibility:auto;contain-intrinsic-size:300px}
 
 
-/* v31.1.2 — Admin UX Foundation */
+/* v31.1.3 — Admin UX Foundation */
 .adminShell{max-width:1400px;margin:0 auto;padding:20px}
 .adminTopNav{display:flex;gap:8px;overflow:auto;padding:4px 0 16px;scrollbar-width:thin}
 .adminTopNavBtn{border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.035);color:inherit;border-radius:10px;padding:10px 14px;white-space:nowrap;cursor:pointer}
@@ -1199,14 +1199,14 @@ html.isStandalone body{
 .adminCard h3{margin:0 0 10px}
 
 
-/* v31.1.2 — Overview */
+/* v31.1.3 — Overview */
 .adminOverview{display:grid;gap:18px}
 .adminAttention{display:grid;gap:10px}
 .adminSkeleton,.adminError{padding:18px;border-radius:14px;background:rgba(255,255,255,.04)}
 .adminError{border:1px solid rgba(255,90,90,.35)}
 
 
-/* v31.1.2 — Sources */
+/* v31.1.3 — Sources */
 .adminCardHead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
 .adminSourceStats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0}
 .adminSourceStats>div{padding:10px;border-radius:10px;background:rgba(255,255,255,.035)}
@@ -1215,29 +1215,29 @@ html.isStandalone body{
 .adminActions{display:flex;gap:8px;flex-wrap:wrap}
 
 
-/* v31.1.2 — DVR & Storage */
+/* v31.1.3 — DVR & Storage */
 .adminMetric b{font-size:1.8rem}.adminMetric small{display:block;color:var(--muted);margin-top:4px}
 .storageBar{height:10px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden;margin:10px 0 5px}
 .storageBar span{display:block;height:100%;background:linear-gradient(90deg,#2e6a8a,#4eb1ff)}
 
 
-/* v31.1.2 — Users & Devices */
+/* v31.1.3 — Users & Devices */
 .adminListRow{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.07)}
 .adminListRow:last-child{border-bottom:0}.adminListRow small{display:block;color:var(--muted);margin-top:3px}
 .adminListRow>div:last-child{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 
 
-/* v31.1.2 — Diagnostics */
+/* v31.1.3 — Diagnostics */
 .diagRow{display:grid;grid-template-columns:minmax(140px,220px) 1fr;gap:14px;align-items:center;padding:9px 0}
 .diagRow small{display:block;color:var(--muted);margin-top:3px}.diagMeter{height:9px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden}
 .diagMeter span{display:block;height:100%;background:#4eb1ff}.diagMeter.warning span{background:#eab65c}.diagMeter.error span{background:#ff6a6a}
 
 
-/* v31.1.2 — Backup / Update / Recovery */
+/* v31.1.3 — Backup / Update / Recovery */
 .recoverySteps{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0}.recoverySteps span{padding:6px 9px;border-radius:999px;background:rgba(255,255,255,.05);font-size:.84rem}
 
 
-/* v31.1.2 — Mobile Admin */
+/* v31.1.3 — Mobile Admin */
 @media(max-width:720px){
   .adminShell{padding:12px}
   .adminTopNav{position:sticky;top:0;z-index:40;background:rgba(5,15,24,.96);backdrop-filter:blur(14px);margin:0 -12px;padding:10px 12px 12px}
@@ -1262,7 +1262,7 @@ body.cinemaMode .sidebar,body.cinemaMode .topbar{opacity:0;pointer-events:none;t
 
 
 /* =========================================================
-   v31.1.2 — Admin 2.0
+   v31.1.3 — Admin 2.0
    Task-oriented administration with overview + focused sections.
    ========================================================= */
 .admin2Shell{max-width:1500px;margin:0 auto;padding-bottom:40px}
@@ -1370,14 +1370,14 @@ body.cinemaMode .sidebar,body.cinemaMode .topbar{opacity:0;pointer-events:none;t
 /* v29.9 final UX polish */
 :root{--control-radius:11px}.btn,input,select,textarea{border-radius:var(--control-radius)}.card{border-radius:16px}.muted{line-height:1.45}button:disabled{opacity:.5;cursor:not-allowed}
 
-/* v31.1.2 account-scoped source sharing */
+/* v31.1.3 account-scoped source sharing */
 .admin2ShareUsers{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin:14px 0}
 .admin2ShareUsers .checkline{padding:12px 14px;border:1px solid var(--line,#29495e);border-radius:12px;background:rgba(255,255,255,.025)}
 .admin2ShareUsers small{display:block;color:var(--muted);margin-left:25px}
-/* v31.1.2 personal source onboarding */
+/* v31.1.3 personal source onboarding */
 .onboardingShell{max-width:900px;margin:auto;padding:18px}.onboardingHero{padding:24px 4px}.onboardingHero h1{font-size:clamp(28px,5vw,48px);margin:.2em 0}.onboardingHero p{color:var(--muted);max-width:720px}.onboardingProgress{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:12px 0 18px}.onboardingProgress span{padding:10px;border-radius:999px;text-align:center;background:rgba(255,255,255,.04);color:var(--muted)}.onboardingProgress span.active{background:rgba(94,200,255,.16);color:#dff6ff}.onboardingCard{padding:24px;border:1px solid var(--line,#29495e);border-radius:18px;background:rgba(255,255,255,.025)}.onboardingCard label{display:block;font-weight:700;margin:13px 0 6px}.onboardingCard input,.onboardingCard select{width:100%}.onboardingFacts{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:18px 0}.onboardingFacts>div{padding:16px;border:1px solid var(--line,#29495e);border-radius:14px}.onboardingFacts b,.onboardingFacts span{display:block}.onboardingFacts span{color:var(--muted);margin-top:5px}@media(max-width:700px){.onboardingProgress{grid-template-columns:1fr}.onboardingProgress span:not(.active){display:none}.onboardingFacts{grid-template-columns:1fr}}
 
-/* v31.1.2 Personal Media Setup 2.0 */
+/* v31.1.3 Personal Media Setup 2.0 */
 .onboardingChoiceGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:20px 0}.onboardingChoice{display:flex;flex-direction:column;gap:6px;padding:18px;border:1px solid var(--line,#29495e);border-radius:16px;background:rgba(255,255,255,.025);cursor:pointer}.onboardingChoice input{width:auto;align-self:flex-start;transform:scale(1.2)}.onboardingChoice span{color:var(--muted)}.obGroupList{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;max-height:360px;overflow:auto;margin:16px 0;padding-right:6px}.obGroupList label{display:block;padding:10px 12px;border:1px solid var(--line,#29495e);border-radius:12px}.emptyHomeHero{max-width:900px;margin:5vh auto}.danger{color:#ffb7b7}@media(max-width:760px){.onboardingChoiceGrid{grid-template-columns:1fr}}
 
 
@@ -1391,3 +1391,30 @@ body.cinemaMode .sidebar,body.cinemaMode .topbar{opacity:0;pointer-events:none;t
 @media (pointer:coarse){button,.btn,[tabindex]{min-height:48px}.navItem{min-height:52px}}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important}}
 :focus-visible{outline:3px solid currentColor;outline-offset:3px}
+
+
+/* v31.1.3 onboarding action/layout fix */
+.onboardingChoice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.onboardingChoiceText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.onboardingChoiceText > b,
+.onboardingChoiceText > span {
+  display: block;
+}
+.onboardingChoiceText > span {
+  opacity: .78;
+  font-weight: 400;
+}
+.onboardingActions {
+  margin-top: 16px;
+  gap: 10px;
+  flex-wrap: wrap;
+}

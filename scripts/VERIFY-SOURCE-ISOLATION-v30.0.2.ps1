@@ -13,4 +13,4 @@ $markers=@(
 )
 foreach($m in $markers){if(-not $p.Contains($m)){throw "Missing isolation marker: $m"}}
 if(-not $j.Contains('openSourceSharing')){throw "Admin sharing UI missing"}
-Write-Host "v31.1.2 source isolation markers verified." -ForegroundColor Green
+Write-Host "v31.1.3 source isolation markers verified." -ForegroundColor Green

@@ -1,4 +1,4 @@
-# v31.1.2 — Account Source Isolation
+# v31.1.3 — Account Source Isolation
 
 IPTV, Plex and Jellyfin sources are no longer treated as globally shared resources.
 

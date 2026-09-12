@@ -1,4 +1,4 @@
-# v31.1.2 — Multi-device polish
+# v31.1.3 — Multi-device polish
 
 Target devices:
 - Phone (portrait + landscape)

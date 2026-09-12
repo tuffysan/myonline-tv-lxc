@@ -1,4 +1,4 @@
-# v31.1.2 — Performance & Diagnostics
+# v31.1.3 — Performance & Diagnostics
 
 Local performance measurements and diagnostics.
 

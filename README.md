@@ -1,4 +1,4 @@
-# MyOnline TV Web v31.1.2 — Proxmox LXC
+# MyOnline TV Web v31.1.3 — Proxmox LXC
 
 MyOnline TV Web is a self-hosted entertainment appliance for Proxmox VE.
 
@@ -490,8 +490,8 @@ Existing IPTV, Plex/Jellyfin, DVR, duration, Continue Watching, Recently Watched
 - Uses the same responsive mobile/tablet/TV behavior introduced in v0.9.0.
 
 
-## v31.1.2 — First stable milestone
-v31.1.2 is the cumulative first major milestone of MyOnline TV Web.
+## v31.1.3 — First stable milestone
+v31.1.3 is the cumulative first major milestone of MyOnline TV Web.
 
 It contains:
 - IPTV Live TV, EPG Guide, Movies and Series.
@@ -508,7 +508,7 @@ It contains:
 `RELEASE-CHECKLIST.md` is included and should be completed on the target system before declaring the installation the production baseline.
 
 
-## v31.1.2 — DVR & Storage
+## v31.1.3 — DVR & Storage
 
 ### Live TV DVR
 - Live TV channel cards now have a red **Record** button.
@@ -536,7 +536,7 @@ Movie/episode Download now asks for a destination:
 Protected/DRM content is not decrypted or bypassed.
 
 
-## v31.1.2 — Smart DVR
+## v31.1.3 — Smart DVR
 
 - Series recording rules from Guide
 - New-episodes-only flag
@@ -546,7 +546,7 @@ Protected/DRM content is not decrypted or bypassed.
 - DVR rules management in Recordings
 
 
-## v31.1.2 — Unified Library
+## v31.1.3 — Unified Library
 
 - Single Library view across configured media libraries
 - Title-normalized duplicate grouping
@@ -555,7 +555,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Poster and source metadata retained
 
 
-## v31.1.2 — Smart Home
+## v31.1.3 — Smart Home
 
 - Profile-aware Smart Home state
 - Time-aware greeting/status strip
@@ -565,7 +565,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Existing Continue Watching and Recently Watched retained
 
 
-## v31.1.2 — DVR Library
+## v31.1.3 — DVR Library
 
 - Completed recordings grouped into a DVR Library
 - Automatic title-based series grouping
@@ -575,7 +575,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Scheduled/active recording list remains available
 
 
-## v31.1.2 — Search 2.0
+## v31.1.3 — Search 2.0
 
 - One search UI across unified Movies and Series
 - Live TV channel search
@@ -584,7 +584,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Parallel source queries with graceful source failure
 
 
-## v31.1.2 — Multi-room
+## v31.1.3 — Multi-room
 
 - Rooms/devices registry
 - TV/browser device classification
@@ -594,7 +594,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Foundation for Continue on another screen
 
 
-## v31.1.2 — Installable PWA
+## v31.1.3 — Installable PWA
 
 - Installable web app manifest
 - Standalone display mode
@@ -604,7 +604,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Theme metadata for mobile/desktop installation
 
 
-## v31.1.2 — Notifications
+## v31.1.3 — Notifications
 
 - In-app notification center
 - Read/unread state
@@ -613,7 +613,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Persistent notification history
 
 
-## v31.1.2 — Appliance milestone
+## v31.1.3 — Appliance milestone
 
 - Appliance health dashboard
 - Disk usage/free-space status
@@ -623,7 +623,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Cumulative IPTV, Plex/Jellyfin, DVR, PWA, Search and Multi-room features
 
 
-## v31.1.2 — Stability & Diagnostics
+## v31.1.3 — Stability & Diagnostics
 
 - Admin diagnostics center
 - FFmpeg/FFprobe/rclone checks
@@ -633,7 +633,7 @@ Protected/DRM content is not decrypted or bypassed.
 - v2.0.1 navigation hotfix retained
 
 
-## v31.1.2 — DVR 2.0
+## v31.1.3 — DVR 2.0
 
 - DVR status summary
 - Recording conflict detection
@@ -643,7 +643,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Conflict warning in DVR UI
 
 
-## v31.1.2 — Profiles & Sync
+## v31.1.3 — Profiles & Sync
 
 - Server-side per-profile media-state API
 - Resume position and duration fields
@@ -653,7 +653,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Local state remains compatible during migration
 
 
-## v31.1.2 — EPG 2.0
+## v31.1.3 — EPG 2.0
 
 - Guide promoted to EPG 2.0 UX
 - Now/Next calculation helpers
@@ -663,7 +663,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Smart DVR integration retained
 
 
-## v31.1.2 — Player 2.0
+## v31.1.3 — Player 2.0
 
 - Unified Player 2 helper layer
 - Resume-on-metadata support
@@ -673,7 +673,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Existing HLS/FFmpeg playback retained
 
 
-## v31.1.2 — Library 2.0
+## v31.1.3 — Library 2.0
 
 - Library 2.0 presentation
 - Title/year/recently-added sorting
@@ -683,7 +683,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Poster metadata retained
 
 
-## v31.1.2 — Downloads 2.0
+## v31.1.3 — Downloads 2.0
 
 - Cancel action
 - Retry failed/cancelled jobs
@@ -693,7 +693,7 @@ Protected/DRM content is not decrypted or bypassed.
 - No permanent LXC storage requirement retained
 
 
-## v31.1.2 — TV Experience 2.0
+## v31.1.3 — TV Experience 2.0
 
 - Stronger 10-foot typography
 - Larger remote focus targets
@@ -703,7 +703,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Existing spatial rail navigation retained
 
 
-## v31.1.2 — Mobile / PWA 2.0
+## v31.1.3 — Mobile / PWA 2.0
 
 - PWA shortcuts for Live/Guide/DVR
 - Install-app action
@@ -713,7 +713,7 @@ Protected/DRM content is not decrypted or bypassed.
 - Updated service-worker cache version
 
 
-## v31.1.2 — MyOnline TV Platform
+## v31.1.3 — MyOnline TV Platform
 
 - Platform status endpoint and dashboard
 - Cumulative IPTV/EPG/DVR/Storage/Plex/Jellyfin stack

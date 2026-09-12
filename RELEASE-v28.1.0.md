@@ -1,4 +1,4 @@
-# v31.1.2 — Admin 2.0
+# v31.1.3 — Admin 2.0
 
 A full usability redesign of the existing Administration page.
 

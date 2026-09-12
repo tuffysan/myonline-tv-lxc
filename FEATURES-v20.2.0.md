@@ -1,4 +1,4 @@
-# MyOnline TV v31.1.2 — TV Experience
+# MyOnline TV v31.1.3 — TV Experience
 
 This release turns the existing Live TV/EPG capabilities into a denser TV-first experience.
 

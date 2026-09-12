@@ -1,3 +1,3 @@
-# v31.1.2 — Family & Guest
+# v31.1.3 — Family & Guest
 
 Cumulative from v26.7.0. Zero mandatory runtime cost. Capability/helper code is not a production claim until end-to-end verified.

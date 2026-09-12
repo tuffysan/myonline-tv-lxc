@@ -1,4 +1,4 @@
-# v31.1.2 — Mobile Companion & Remote
+# v31.1.3 — Mobile Companion & Remote
 
 Cumulative release based on v29.0.0.
 
