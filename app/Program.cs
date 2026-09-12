@@ -105,7 +105,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/31.2.0");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/34.0.5");
 
 
 
@@ -140,7 +140,7 @@ async Task<JsonElement> GetGithubUpdateInfo(bool force = false)
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(12));
         using var req = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/repos/tuffysan/myonline-tv-lxc/releases/latest");
         req.Headers.Accept.ParseAdd("application/vnd.github+json");
-        req.Headers.UserAgent.ParseAdd("MyOnline-TV-Updater/31.2.0");
+        req.Headers.UserAgent.ParseAdd("MyOnline-TV-Updater/34.0.5");
         using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseContentRead, cts.Token);
         resp.EnsureSuccessStatusCode();
 
@@ -161,7 +161,7 @@ async Task<JsonElement> GetGithubUpdateInfo(bool force = false)
                 using var metaCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
                 var metaUrl = $"https://github.com/tuffysan/myonline-tv-lxc/releases/download/{Uri.EscapeDataString(tag)}/release.json";
                 using var metaReq = new HttpRequestMessage(HttpMethod.Get, metaUrl);
-                metaReq.Headers.UserAgent.ParseAdd("MyOnline-TV-Updater/31.2.0");
+                metaReq.Headers.UserAgent.ParseAdd("MyOnline-TV-Updater/34.0.5");
                 using var metaResp = await http.SendAsync(metaReq, HttpCompletionOption.ResponseContentRead, metaCts.Token);
                 if (metaResp.IsSuccessStatusCode)
                 {
@@ -213,7 +213,7 @@ object? ReadUiUpdateWorkerStatus()
 
 async Task<IResult> BuildUiUpdateStatus(bool force)
 {
-    var current = File.Exists(versionFile) ? File.ReadAllText(versionFile).Trim() : "34.0.4";
+    var current = File.Exists(versionFile) ? File.ReadAllText(versionFile).Trim() : "34.0.5";
     try
     {
         var latest = await GetGithubUpdateInfo(force);
@@ -1001,7 +1001,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "34.0.4",
+    version = "34.0.5",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -1039,8 +1039,8 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = AuthConfigured();
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "34.0.4", checks })
-        : Results.Json(new { status = "not-ready", version = "34.0.4", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "34.0.5", checks })
+        : Results.Json(new { status = "not-ready", version = "34.0.5", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 
@@ -1213,7 +1213,7 @@ app.MapPost("/api/onboarding/restart", (HttpContext ctx) =>
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "34.0.4",
+    version = "34.0.5",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = AuthConfigured(),
@@ -1649,8 +1649,8 @@ app.MapGet("/api/epg/{providerId}", async (string providerId, int? hours, DateTi
 
     try
     {
-        using var stream = await http.GetStreamAsync(epgUrl);
-        var doc = XDocument.Load(stream);
+        var xml = await ProviderTextWithRetry(epgUrl, "application/xml,text/xml,text/plain,*/*", TimeSpan.FromSeconds(60), "epg-xmltv");
+        var doc = XDocument.Parse(xml);
         var anchorTime = start ?? DateTimeOffset.Now;
         var span = Math.Clamp(hours ?? 6, 2, 24);
         var startWindow = anchorTime.AddMinutes(-30);
@@ -3037,7 +3037,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "34.0.4",
+        version = "34.0.5",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -3453,7 +3453,7 @@ app.MapGet("/api/appliance/health", () =>
 {
     var drive=new DriveInfo(Path.GetPathRoot(dataDir)!);
     return Results.Ok(new {
-        version="34.0.4", dataDirectory=dataDir,
+        version="34.0.5", dataDirectory=dataDir,
         storageTargets=LoadStorageTargets().Count,
         dvrRules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count,
         rooms=(Load<List<RoomDevice>>(roomsFile)??new()).Count,
@@ -3572,7 +3572,7 @@ app.MapGet("/api/platform/status", () =>
 {
     var drive=new DriveInfo(Path.GetPathRoot(dataDir)!);
     return Results.Ok(new {
-        version="34.0.4",platform="MyOnline TV Platform",
+        version="34.0.5",platform="MyOnline TV Platform",
         providers=LoadProviders().Count,
         storageTargets=LoadStorageTargets().Count(x=>x.Enabled),
         dvrRules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count(x=>x.Enabled),
@@ -3692,7 +3692,7 @@ app.MapGet("/api/admin/overview",(HttpContext ctx)=>{
  return Results.Ok(new{
    users=users.Count,admins=users.Count(x=>x.Role.Equals("Admin",StringComparison.OrdinalIgnoreCase)&&x.Enabled),iptvProviders=providers.Count,mediaLibraries=libs.Count,
    storageTargets=stores.Count,navigation=LoadNavigationConfig().Items.Count,sourcePolicies=LoadUserSourceAccess().Count,
-   version="34.0.4"
+   version="34.0.5"
  });
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
 
@@ -3700,7 +3700,7 @@ app.MapGet("/api/admin/overview",(HttpContext ctx)=>{
 // v31.2.0 Backup, Restore & Migration
 app.MapGet("/api/system/migration-manifest",(HttpContext ctx)=>{
  var files=Directory.Exists(dataDir)?Directory.GetFiles(dataDir,"*.json").Select(Path.GetFileName).OrderBy(x=>x).ToArray():Array.Empty<string>();
- return Results.Ok(new{version="34.0.4",created=DateTimeOffset.UtcNow,dataDirectory=dataDir,configurationFiles=files,
+ return Results.Ok(new{version="34.0.5",created=DateTimeOffset.UtcNow,dataDirectory=dataDir,configurationFiles=files,
    includes=new[]{"users","profiles","providers","media-libraries","navigation","source-access","user-sources","storage","dvr","preferences"}});
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
 app.MapGet("/api/system/backup-readiness",()=>{
@@ -3722,9 +3722,9 @@ app.MapGet("/api/appliance/readiness",async ()=>{
  checks.Add(new{name="Authentication",ok=LoadUsers().Count>0});
  checks.Add(new{name="Media source",ok=providers.Any()||libs.Any(x=>x.Enabled)});
  await Task.CompletedTask;
- return Results.Ok(new{version="34.0.4",ready=ffmpeg&&ffprobe&&dataWritable&&LoadUsers().Count>0,checks});
+ return Results.Ok(new{version="34.0.5",ready=ffmpeg&&ffprobe&&dataWritable&&LoadUsers().Count>0,checks});
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
-app.MapGet("/api/appliance/version",()=>Results.Ok(new{product="MyOnline TV",version="34.0.4",channel="stable",platform="LXC"}));
+app.MapGet("/api/appliance/version",()=>Results.Ok(new{product="MyOnline TV",version="34.0.5",channel="stable",platform="LXC"}));
 
 
 // v31.2.0 Feature Completion audit
@@ -3846,7 +3846,7 @@ app.MapGet("/api/admin/recovery/capabilities", () => Results.Ok(new {
 }));
 
 app.MapGet("/api/admin/production-readiness", () => Results.Ok(new {
-    version = "34.0.4",
+    version = "34.0.5",
     adminUx = true,
     overview = true,
     sources = true,
@@ -3880,7 +3880,7 @@ app.MapGet("/api/system/self-healing-v27",()=>Results.Ok(SelfHealingV2700.Capabi
 
 app.MapGet("/api/platform/v28/architecture",()=>Results.Ok(ArchitectureV28V2800.Capabilities()));
 
-app.MapGet("/api/platform/release-gate",()=>Results.Ok(new { version="34.0.4", focus="stabilization", zeroMandatoryCost=true })).RequireAuthorization();
+app.MapGet("/api/platform/release-gate",()=>Results.Ok(new { version="34.0.5", focus="stabilization", zeroMandatoryCost=true })).RequireAuthorization();
 
 app.MapGet("/api/playback/engine",()=>Results.Ok(new { version="2.0", live=true, vod=true, unified=true, recordings=true, fallback=true, zeroMandatoryCost=true })).RequireAuthorization();
 
@@ -3920,7 +3920,7 @@ app.MapGet("/api/personal-sources/architecture", (HttpContext ctx) =>
 {
     var username = ctx.User.Identity?.Name ?? "";
     return Results.Ok(new {
-        version = "34.0.4",
+        version = "34.0.5",
         ownership = "per-user",
         authenticatedUser = username,
         crossUserSharing = false,
@@ -3936,7 +3936,7 @@ app.MapGet("/api/home/personal", async (HttpContext ctx) =>
     var providers = LoadProviders().Where(x => CanAccessProvider(ctx, x)).ToList();
     var libraries = LoadMediaLibraries().Where(x => x.Enabled && CanAccessMediaLibrary(ctx, x)).ToList();
     return Results.Ok(new {
-        version = "34.0.4",
+        version = "34.0.5",
         hasIptv = providers.Count > 0,
         hasPlex = libraries.Any(x => x.Type.Equals("plex", StringComparison.OrdinalIgnoreCase)),
         hasJellyfin = libraries.Any(x => x.Type.Equals("jellyfin", StringComparison.OrdinalIgnoreCase)),
@@ -3952,12 +3952,12 @@ app.MapGet("/api/source-doctor/summary", (HttpContext ctx) =>
         .Select(x => new { x.Id, x.Name, type = "iptv", status = "configured" }).ToList();
     var media = LoadMediaLibraries().Where(x => CanAccessMediaLibrary(ctx, x))
         .Select(x => new { x.Id, x.Name, type = x.Type, status = x.Enabled ? "configured" : "disabled" }).ToList();
-    return Results.Ok(new { version="34.0.4", sources = iptv.Cast<object>().Concat(media).ToArray() });
+    return Results.Ok(new { version="34.0.5", sources = iptv.Cast<object>().Concat(media).ToArray() });
 }).RequireAuthorization();
 
 
 app.MapGet("/api/playback/engine-v4", (HttpContext ctx) => Results.Ok(new {
-    version="34.0.4",
+    version="34.0.5",
     strategies=new[]{"direct","hls","ffmpeg-fallback"},
     resume=true,
     liveRecovery=true,
@@ -3969,7 +3969,7 @@ app.MapGet("/api/live/guide-v4", (HttpContext ctx) =>
 {
     var providers = LoadProviders().Where(x => CanAccessProvider(ctx, x)).ToList();
     return Results.Ok(new {
-        version="34.0.4",
+        version="34.0.5",
         providerCount=providers.Count,
         miniGuide=true,
         previousChannel=true,
@@ -3983,7 +3983,7 @@ app.MapGet("/api/unified/v4/status", (HttpContext ctx) =>
 {
     var libs=LoadMediaLibraries().Where(x=>x.Enabled && CanAccessMediaLibrary(ctx,x)).ToList();
     return Results.Ok(new {
-        version="34.0.4",
+        version="34.0.5",
         visibleLibraries=libs.Count,
         dedupeKey="normalized-title+year+media-type",
         sourcePreference=new[]{"local-direct-play","plex","jellyfin","iptv-vod"},
@@ -3993,7 +3993,7 @@ app.MapGet("/api/unified/v4/status", (HttpContext ctx) =>
 
 
 app.MapGet("/api/ui/tv-remote-v4", () => Results.Ok(new {
-    version="34.0.4",
+    version="34.0.5",
     dpad=true,
     restoreFocus=true,
     backNavigation=true,
@@ -4007,7 +4007,7 @@ app.MapGet("/api/platform/v31-gate", (HttpContext ctx) =>
     var providers=LoadProviders().Count(x=>CanAccessProvider(ctx,x));
     var libraries=LoadMediaLibraries().Count(x=>x.Enabled && CanAccessMediaLibrary(ctx,x));
     return Results.Ok(new {
-        version="34.0.4",
+        version="34.0.5",
         edition="Stable Personal Media Edition",
         personalSourceIsolation=true,
         firstLoginGuide=true,
@@ -4021,7 +4021,7 @@ app.MapGet("/api/platform/v31-gate", (HttpContext ctx) =>
 app.MapGet("/api/database/status", () =>
 {
     var counts=LocalDb.Counts(databaseFile);
-    return Results.Ok(new { version="34.0.4", engine="SQLite", wal=true, schema=LocalDb.GetMeta(databaseFile,"schema_version"), counts });
+    return Results.Ok(new { version="34.0.5", engine="SQLite", wal=true, schema=LocalDb.GetMeta(databaseFile,"schema_version"), counts });
 }).RequireAuthorization();
 
 
@@ -4041,7 +4041,7 @@ app.MapPost("/api/admin/update/install", async (HttpContext ctx) =>
 {
     if (!IsAdmin(ctx)) return Results.NotFound();
 
-    var current = File.Exists(versionFile) ? File.ReadAllText(versionFile).Trim() : "34.0.4";
+    var current = File.Exists(versionFile) ? File.ReadAllText(versionFile).Trim() : "34.0.5";
     var latest = await GetGithubUpdateInfo(true);
     var target = latest.TryGetProperty("latestVersion", out var lv) ? lv.GetString() ?? "" : "";
     var tag = latest.TryGetProperty("latestTag", out var lt) ? lt.GetString() ?? "" : "";
@@ -4087,7 +4087,7 @@ app.MapGet("/api/v32/playback-diagnostics", async (HttpContext ctx) =>
     var visibleProviders = LoadProviders().Where(x => CanAccessProvider(ctx, x)).ToList();
     var libraries = LoadMediaLibraries().Where(x => x.Enabled && CanAccessMediaLibrary(ctx, x)).ToList();
     return Results.Ok(new {
-        version = "34.0.4",
+        version = "34.0.5",
         generatedAt = DateTimeOffset.UtcNow,
         providers = visibleProviders.Select(x => new { x.Id, x.Name, x.Type, configured = true }),
         mediaLibraries = libraries.Select(x => new { x.Id, x.Name, x.Type, x.Enabled }),
@@ -4104,6 +4104,15 @@ app.MapGet("/api/v33/tv-experience", () => Results.Ok(ReleaseV3300.Capabilities(
 
 app.MapGet("/api/v34/advanced-features", () => Results.Ok(ReleaseV3400.Capabilities())).RequireAuthorization();
 
+
+app.MapGet("/api/iptv/transport/capabilities", () => Results.Ok(new
+{
+    version = "34.0.5",
+    retry = new { maxAttempts = 3, backoffMs = new[] { 300, 600 }, transientHttp = new[] { 408, 425, 429, 500, 502, 503, 504 } },
+    resilientReads = new[] { "Xtream JSON", "M3U playlist", "XMLTV EPG" },
+    liveChannelCache = new { memory = true, diskFallbackHours = 24, staleWhileRevalidate = true },
+    paidAiRequired = false
+})).RequireAuthorization();
 
 app.Run();
 
@@ -4203,26 +4212,61 @@ async Task RunDownload(DownloadJob job)
     return p is null ? null : (p.Id, p, Connection(p));
 }
 
+bool IsTransientProviderException(Exception ex)
+{
+    if (ex is TaskCanceledException or TimeoutException or IOException) return true;
+    if (ex is HttpRequestException httpEx)
+    {
+        if (!httpEx.StatusCode.HasValue) return true;
+        var status = (int)httpEx.StatusCode.Value;
+        return status is 408 or 425 or 429 || status >= 500;
+    }
+    var baseMessage = ex.GetBaseException().Message;
+    return baseMessage.Contains("ResponseEnded", StringComparison.OrdinalIgnoreCase) ||
+           baseMessage.Contains("response ended prematurely", StringComparison.OrdinalIgnoreCase) ||
+           baseMessage.Contains("connection reset", StringComparison.OrdinalIgnoreCase) ||
+           baseMessage.Contains("unexpected end", StringComparison.OrdinalIgnoreCase);
+}
+
+async Task<string> ProviderTextWithRetry(string url, string accept, TimeSpan timeout, string operation, int maxAttempts = 3)
+{
+    Exception? lastError = null;
+    for (var attempt = 1; attempt <= Math.Max(1, maxAttempts); attempt++)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.TryAddWithoutValidation("Accept", accept);
+            request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/34.0.5");
+            using var cts = new CancellationTokenSource(timeout);
+            using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+            if (!response.IsSuccessStatusCode)
+                throw new HttpRequestException($"Provider returned HTTP {(int)response.StatusCode} {response.ReasonPhrase}".Trim(), null, response.StatusCode);
+            var text = await response.Content.ReadAsStringAsync(cts.Token);
+            if (string.IsNullOrWhiteSpace(text)) throw new IOException($"Provider returned an empty response for {operation}.");
+            return text;
+        }
+        catch (Exception ex) when (IsTransientProviderException(ex))
+        {
+            lastError = ex;
+            RecordError($"iptv-transport:{operation}:attempt-{attempt}", ex);
+            if (attempt >= maxAttempts) break;
+            var delay = TimeSpan.FromMilliseconds(300 * Math.Pow(2, attempt - 1));
+            app.Logger.LogWarning(ex, "Transient IPTV transport failure during {Operation}; retry {NextAttempt}/{MaxAttempts} in {DelayMs} ms.", operation, attempt + 1, maxAttempts, (int)delay.TotalMilliseconds);
+            await Task.Delay(delay);
+        }
+    }
+    throw new HttpRequestException($"IPTV provider transport failed after {maxAttempts} attempts during {operation}: {SafeProviderError(lastError ?? new IOException("Unknown transport error."))}", lastError);
+}
+
 async Task<JsonDocument> XtreamJson(ProviderConnection c, string action, TimeSpan timeout, (string Key, string Value)? extra = null)
 {
     var url = BuildXtreamPlayerApiUrl(c, action, extra);
-    using var request = new HttpRequestMessage(HttpMethod.Get, url);
-    request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/28.0.0");
-    using var cts = new CancellationTokenSource(timeout);
-    using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
-    if (!response.IsSuccessStatusCode)
-        throw new HttpRequestException($"Provider returned HTTP {(int)response.StatusCode} {response.ReasonPhrase}".Trim());
-    var text = await response.Content.ReadAsStringAsync(cts.Token);
-    if (string.IsNullOrWhiteSpace(text))
-        throw new InvalidOperationException($"Provider returned an empty response for {action}.");
-    try
-    {
-        return JsonDocument.Parse(text);
-    }
+    var text = await ProviderTextWithRetry(url, "application/json,text/plain,*/*", timeout, action);
+    try { return JsonDocument.Parse(text); }
     catch (JsonException ex)
     {
-        var preview = Regex.Replace(text, @"\\s+", " ").Trim();
+        var preview = Regex.Replace(text, @"\s+", " ").Trim();
         if (preview.Length > 180) preview = preview[..180];
         throw new InvalidOperationException($"Provider returned invalid JSON for {action}: {preview}", ex);
     }
@@ -4273,11 +4317,39 @@ async Task<JsonDocument> CachedXtreamJson(
     return JsonDocument.Parse(json);
 }
 
+string LiveChannelCacheFile(string providerId) => CatalogueCacheFile("live-channels", providerId);
+
+bool TryLoadLiveChannelDiskCache(string providerId, TimeSpan maxAge, out List<LiveChannel> channels)
+{
+    channels = new List<LiveChannel>();
+    try
+    {
+        var path = LiveChannelCacheFile(providerId);
+        if (!File.Exists(path) || DateTimeOffset.UtcNow - new DateTimeOffset(File.GetLastWriteTimeUtc(path), TimeSpan.Zero) > maxAge) return false;
+        channels = JsonSerializer.Deserialize<List<LiveChannel>>(File.ReadAllText(path), jsonOptions) ?? new List<LiveChannel>();
+        return channels.Count > 0;
+    }
+    catch { return false; }
+}
+
+void SaveLiveChannelDiskCache(string providerId, List<LiveChannel> channels)
+{
+    try { Save(LiveChannelCacheFile(providerId), channels); }
+    catch (Exception ex) { app.Logger.LogInformation(ex, "Could not persist Live TV channel cache for provider {ProviderId}.", providerId); }
+}
+
 async Task<List<LiveChannel>> GetCachedChannels(ProviderStored p)
 {
     var now = DateTimeOffset.UtcNow;
     if (channelCache.TryGetValue(p.Id, out var hit) && now - hit.Loaded < TimeSpan.FromMinutes(10))
         return hit.Channels;
+
+    if ((hit is null || hit.Channels.Count == 0) && TryLoadLiveChannelDiskCache(p.Id, TimeSpan.FromHours(24), out var diskChannels))
+    {
+        hit = new ChannelCacheEntry(diskChannels, DateTimeOffset.UtcNow.AddMinutes(-11));
+        channelCache[p.Id] = hit;
+        app.Logger.LogInformation("Loaded {Count} Live TV channels from disk cache for provider {ProviderId}.", diskChannels.Count, p.Id);
+    }
 
     // If stale data exists, serve it immediately and refresh in the background.
     if (hit is not null && hit.Channels.Count > 0)
@@ -4290,6 +4362,7 @@ async Task<List<LiveChannel>> GetCachedChannels(ProviderStored p)
             {
                 var refreshed = await LoadProviderChannels(p);
                 channelCache[p.Id] = new ChannelCacheEntry(refreshed, DateTimeOffset.UtcNow);
+                SaveLiveChannelDiskCache(p.Id, refreshed);
                 app.Logger.LogInformation("Refreshed {Count} cached Live TV channels for provider {ProviderId}.", refreshed.Count, p.Id);
             }
             catch (Exception ex)
@@ -4309,6 +4382,7 @@ async Task<List<LiveChannel>> GetCachedChannels(ProviderStored p)
             return hit.Channels;
         var rows = await LoadProviderChannels(p);
         channelCache[p.Id] = new ChannelCacheEntry(rows, DateTimeOffset.UtcNow);
+        SaveLiveChannelDiskCache(p.Id, rows);
         return rows;
     }
     finally { loadGate.Release(); }
@@ -4372,14 +4446,7 @@ async Task<List<LiveChannel>> LoadXtreamLiveChannels(ProviderConnection c)
 
 async Task<List<LiveChannel>> LoadM3uChannels(string url)
 {
-    using var request = new HttpRequestMessage(HttpMethod.Get, url);
-    request.Headers.TryAddWithoutValidation("Accept", "application/x-mpegURL,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/28.0.0");
-    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-    using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
-    if (!response.IsSuccessStatusCode)
-        throw new HttpRequestException($"Provider returned HTTP {(int)response.StatusCode} {response.ReasonPhrase}".Trim());
-    var text = await response.Content.ReadAsStringAsync(cts.Token);
+    var text = await ProviderTextWithRetry(url, "application/x-mpegURL,text/plain,*/*", TimeSpan.FromSeconds(30), "m3u-playlist");
     if (!text.Contains("#EXTM3U", StringComparison.OrdinalIgnoreCase) && !text.Contains("#EXTINF", StringComparison.OrdinalIgnoreCase))
         throw new InvalidOperationException("Provider response was not an M3U playlist.");
     return ParseM3u(text).Take(20000).Select(ch =>
@@ -4393,7 +4460,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/28.0.0");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/34.0.5");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }

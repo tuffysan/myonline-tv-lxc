@@ -4,7 +4,7 @@ public static class ReleaseV3400
 {
     public static object Capabilities() => new
     {
-        version = "34.0.4",
+        version = "34.0.5",
         milestone = "Advanced Features",
         discovery = new { globalSearch = true, unifiedLibrary = true, smartCollections = true, localRecommendations = true },
         multiDevice = new { rooms = true, handoff = true, remoteControl = true, synchronizedResume = true },

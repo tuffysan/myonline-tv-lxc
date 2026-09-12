@@ -3675,7 +3675,7 @@ function enterGuestMode(){sessionStorage.setItem('myonline-guest','1');currentPr
 async function uiAction(action,{busyText='Working…',errorTitle='Action failed'}={}){
   try{return await action()}catch(e){console.error(errorTitle,e);alert(`${errorTitle}: ${friendlyError(e)}`);throw e}
 }
-window.MyOnlineRelease={version:'34.0.4',qualityGate:'stabilization'};
+window.MyOnlineRelease={version:'34.0.5',qualityGate:'stabilization'};
 
 
 // v28.3 — reusable UI states
@@ -3831,7 +3831,7 @@ function tvHomeJump(section){
 
 
 
-// v34.0.4 — Cleanup release
+// v34.0.5 — Cleanup release
 async function releaseV34Advanced(){return await api('/api/v34/advanced-features')}
 async function advancedPlatformSnapshot(){
   const [advanced,rooms,search,watchlist]=await Promise.all([

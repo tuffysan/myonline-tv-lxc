@@ -1,0 +1,27 @@
+# v3.0.0 target-LXC acceptance checklist
+
+- [ ] PUBLISH.cmd local .NET 10 build passes
+- [ ] GitHub release/action passes
+- [ ] Upgrade CT 145
+- [ ] Ctrl+F5 / PWA cache refresh
+- [ ] Live TV playback
+- [ ] Movie playback
+- [ ] Series/episode playback
+- [ ] Guide/EPG
+- [ ] DVR current recording
+- [ ] DVR scheduled recording
+- [ ] Storage test: mounted path/NAS
+- [ ] Storage test: rclone cloud (if configured)
+- [ ] Device download
+- [ ] Plex
+- [ ] Jellyfin
+- [ ] Library
+- [ ] Search
+- [ ] Profile Sync
+- [ ] Rooms
+- [ ] Alerts
+- [ ] Diagnostics
+- [ ] Appliance
+- [ ] Platform
+- [ ] Mobile/PWA
+- [ ] TV remote navigation
