@@ -105,7 +105,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/34.0.5");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/34.1.0");
 
 
 
@@ -140,7 +140,7 @@ async Task<JsonElement> GetGithubUpdateInfo(bool force = false)
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(12));
         using var req = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/repos/tuffysan/myonline-tv-lxc/releases/latest");
         req.Headers.Accept.ParseAdd("application/vnd.github+json");
-        req.Headers.UserAgent.ParseAdd("MyOnline-TV-Updater/34.0.5");
+        req.Headers.UserAgent.ParseAdd("MyOnline-TV-Updater/34.1.0");
         using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseContentRead, cts.Token);
         resp.EnsureSuccessStatusCode();
 
@@ -161,7 +161,7 @@ async Task<JsonElement> GetGithubUpdateInfo(bool force = false)
                 using var metaCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
                 var metaUrl = $"https://github.com/tuffysan/myonline-tv-lxc/releases/download/{Uri.EscapeDataString(tag)}/release.json";
                 using var metaReq = new HttpRequestMessage(HttpMethod.Get, metaUrl);
-                metaReq.Headers.UserAgent.ParseAdd("MyOnline-TV-Updater/34.0.5");
+                metaReq.Headers.UserAgent.ParseAdd("MyOnline-TV-Updater/34.1.0");
                 using var metaResp = await http.SendAsync(metaReq, HttpCompletionOption.ResponseContentRead, metaCts.Token);
                 if (metaResp.IsSuccessStatusCode)
                 {
@@ -213,7 +213,7 @@ object? ReadUiUpdateWorkerStatus()
 
 async Task<IResult> BuildUiUpdateStatus(bool force)
 {
-    var current = File.Exists(versionFile) ? File.ReadAllText(versionFile).Trim() : "34.0.5";
+    var current = File.Exists(versionFile) ? File.ReadAllText(versionFile).Trim() : "34.1.0";
     try
     {
         var latest = await GetGithubUpdateInfo(force);
@@ -878,6 +878,39 @@ app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// A temporary password cannot be used to access the application API.
+// The only authenticated actions permitted until it is changed are status, logout and change-password.
+app.Use(async (ctx, next) =>
+{
+    if (ctx.User.Identity?.IsAuthenticated == true && ctx.Request.Path.StartsWithSegments("/api"))
+    {
+        var path = ctx.Request.Path.Value ?? "";
+        var allowedWhileChanging =
+            path.Equals("/api/auth/status", StringComparison.OrdinalIgnoreCase) ||
+            path.Equals("/api/auth/logout", StringComparison.OrdinalIgnoreCase) ||
+            path.Equals("/api/auth/change-password", StringComparison.OrdinalIgnoreCase);
+
+        if (!allowedWhileChanging)
+        {
+            var username = ctx.User.Identity?.Name ?? "";
+            var user = LoadUsers().FirstOrDefault(x =>
+                x.Username.Equals(username, StringComparison.OrdinalIgnoreCase));
+            if (user?.RequirePasswordChange == true)
+            {
+                ctx.Response.StatusCode = 428;
+                ctx.Response.ContentType = "application/json";
+                await ctx.Response.WriteAsJsonAsync(new
+                {
+                    error = "password_change_required",
+                    message = "Change the temporary password before continuing."
+                });
+                return;
+            }
+        }
+    }
+    await next();
+});
+
 
 // v31.2.0: enforce source tenancy before source-specific endpoints run.
 // A source can only be consumed by its owner or an explicitly shared user in the same account.
@@ -1001,7 +1034,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "34.0.5",
+    version = "34.1.0",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -1039,8 +1072,8 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = AuthConfigured();
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "34.0.5", checks })
-        : Results.Json(new { status = "not-ready", version = "34.0.5", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "34.1.0", checks })
+        : Results.Json(new { status = "not-ready", version = "34.1.0", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 
@@ -1213,20 +1246,28 @@ app.MapPost("/api/onboarding/restart", (HttpContext ctx) =>
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "34.0.5",
+    version = "34.1.0",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = AuthConfigured(),
     now = DateTimeOffset.UtcNow
 })).AllowAnonymous();
 
-app.MapGet("/api/auth/status", (HttpContext ctx) => Results.Ok(new
+app.MapGet("/api/auth/status", (HttpContext ctx) =>
 {
-    configured = AuthConfigured(),
-    authenticated = ctx.User.Identity?.IsAuthenticated == true,
-    user = ctx.User.Identity?.Name,
-    role = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? ""
-})).AllowAnonymous();
+    var username = ctx.User.Identity?.Name ?? "";
+    var current = string.IsNullOrWhiteSpace(username)
+        ? null
+        : LoadUsers().FirstOrDefault(x => x.Username.Equals(username, StringComparison.OrdinalIgnoreCase));
+    return Results.Ok(new
+    {
+        configured = AuthConfigured(),
+        authenticated = ctx.User.Identity?.IsAuthenticated == true,
+        user = ctx.User.Identity?.Name,
+        role = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "",
+        requirePasswordChange = current?.RequirePasswordChange ?? false
+    });
+}).AllowAnonymous();
 
 app.MapPost("/api/auth/setup", async (SetupRequest req, HttpContext ctx) =>
 {
@@ -1237,7 +1278,7 @@ app.MapPost("/api/auth/setup", async (SetupRequest req, HttpContext ctx) =>
         PasswordCredential.Create(username, req.Password), username);
     Save(usersFile, new List<AppUser> { user });
     await SignIn(ctx, user.Username, user.Role);
-    return Results.Ok(new { user = user.Username, role = user.Role });
+    return Results.Ok(new { user = user.Username, role = user.Role, requirePasswordChange = user.RequirePasswordChange });
 }).AllowAnonymous();
 
 app.MapPost("/api/auth/login", async (LoginRequest req, HttpContext ctx) =>
@@ -1252,7 +1293,7 @@ app.MapPost("/api/auth/login", async (LoginRequest req, HttpContext ctx) =>
     }
 
     await SignIn(ctx, user.Username, user.Role);
-    return Results.Ok(new { user = user.Username, role = user.Role });
+    return Results.Ok(new { user = user.Username, role = user.Role, requirePasswordChange = user.RequirePasswordChange });
 }).AllowAnonymous();
 
 app.MapPost("/api/auth/logout", async (HttpContext ctx) =>
@@ -1260,6 +1301,64 @@ app.MapPost("/api/auth/logout", async (HttpContext ctx) =>
     await ctx.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     return Results.Ok();
 }).RequireAuthorization();
+
+app.MapPost("/api/auth/change-password", (ChangePasswordRequest req, HttpContext ctx) =>
+{
+    var username = ctx.User.Identity?.Name ?? "";
+    var users = LoadUsers();
+    var idx = users.FindIndex(x => x.Username.Equals(username, StringComparison.OrdinalIgnoreCase));
+    if (idx < 0) return Results.NotFound();
+
+    var user = users[idx];
+    if (!user.Credential.Verify(user.Username, req.CurrentPassword ?? ""))
+        return Results.BadRequest("Current password is incorrect.");
+    if (!ValidPassword(req.NewPassword))
+        return Results.BadRequest("New password must be at least 10 characters.");
+    if (string.Equals(req.CurrentPassword, req.NewPassword, StringComparison.Ordinal))
+        return Results.BadRequest("New password must be different from the current password.");
+
+    users[idx] = user with
+    {
+        Credential = PasswordCredential.Create(user.Username, req.NewPassword!),
+        RequirePasswordChange = false
+    };
+    Save(usersFile, users);
+    return Results.Ok(new { changed = true, requirePasswordChange = false });
+}).RequireAuthorization();
+
+app.MapPost("/api/admin/password/generate", () =>
+{
+    // Plaintext is returned once to the administrator and is never persisted here.
+    return Results.Ok(new { password = GenerateSecurePassword(18), length = 18 });
+}).RequireAuthorization(p => p.RequireRole("Admin"));
+
+app.MapPost("/api/admin/users/{id}/reset-password", (string id, HttpContext ctx) =>
+{
+    var users = LoadUsers();
+    var idx = users.FindIndex(x => x.Id == id);
+    if (idx < 0) return Results.NotFound();
+
+    var user = users[idx];
+    if (user.Username.Equals(ctx.User.Identity?.Name ?? "", StringComparison.OrdinalIgnoreCase))
+        return Results.BadRequest("Use Edit account to change the password for the account you are currently signed in with.");
+
+    var generated = GenerateSecurePassword(18);
+    users[idx] = user with
+    {
+        Credential = PasswordCredential.Create(user.Username, generated),
+        RequirePasswordChange = true
+    };
+    Save(usersFile, users);
+
+    // The generated password is deliberately returned only in this response.
+    return Results.Ok(new
+    {
+        user = user.Username,
+        password = generated,
+        requirePasswordChange = true,
+        showOnce = true
+    });
+}).RequireAuthorization(p => p.RequireRole("Admin"));
 
 app.MapGet("/api/admin/users", () =>
 {
@@ -1277,6 +1376,7 @@ app.MapGet("/api/admin/users", () =>
                 x.Username,
                 x.Role,
                 x.Enabled,
+                x.RequirePasswordChange,
                 profileId = profile?.Id,
                 profileName = profile?.Name ?? x.Username
             };
@@ -1323,7 +1423,12 @@ app.MapPost("/api/admin/users", (UserInput input, HttpContext ctx) =>
     var accountOwner = existing?.AccountOwnerUsername;
     if (string.IsNullOrWhiteSpace(accountOwner))
         accountOwner = AccountOwnerFor(creator);
-    var updated = new AppUser(id, username, role, input.Enabled, credential, accountOwner);
+    var updated = new AppUser(
+        id, username, role, input.Enabled, credential, accountOwner,
+        existing?.OnboardingCompleted ?? false,
+        existing?.OnboardingSkipped ?? false,
+        existing?.OnboardingNeverShow ?? false,
+        input.RequirePasswordChange);
     var candidate = users.Where(x => x.Id != id).Append(updated).ToList();
     if (!HasEnabledAdmin(candidate))
         return Results.BadRequest("At least one enabled administrator account is required.");
@@ -1372,6 +1477,7 @@ app.MapPost("/api/admin/users", (UserInput input, HttpContext ctx) =>
         updated.Username,
         updated.Role,
         updated.Enabled,
+        updated.RequirePasswordChange,
         profileId = personal?.Id,
         profileName = personal?.Name ?? updated.Username
     });
@@ -3037,7 +3143,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "34.0.5",
+        version = "34.1.0",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -3453,7 +3559,7 @@ app.MapGet("/api/appliance/health", () =>
 {
     var drive=new DriveInfo(Path.GetPathRoot(dataDir)!);
     return Results.Ok(new {
-        version="34.0.5", dataDirectory=dataDir,
+        version="34.1.0", dataDirectory=dataDir,
         storageTargets=LoadStorageTargets().Count,
         dvrRules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count,
         rooms=(Load<List<RoomDevice>>(roomsFile)??new()).Count,
@@ -3572,7 +3678,7 @@ app.MapGet("/api/platform/status", () =>
 {
     var drive=new DriveInfo(Path.GetPathRoot(dataDir)!);
     return Results.Ok(new {
-        version="34.0.5",platform="MyOnline TV Platform",
+        version="34.1.0",platform="MyOnline TV Platform",
         providers=LoadProviders().Count,
         storageTargets=LoadStorageTargets().Count(x=>x.Enabled),
         dvrRules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count(x=>x.Enabled),
@@ -3692,7 +3798,7 @@ app.MapGet("/api/admin/overview",(HttpContext ctx)=>{
  return Results.Ok(new{
    users=users.Count,admins=users.Count(x=>x.Role.Equals("Admin",StringComparison.OrdinalIgnoreCase)&&x.Enabled),iptvProviders=providers.Count,mediaLibraries=libs.Count,
    storageTargets=stores.Count,navigation=LoadNavigationConfig().Items.Count,sourcePolicies=LoadUserSourceAccess().Count,
-   version="34.0.5"
+   version="34.1.0"
  });
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
 
@@ -3700,7 +3806,7 @@ app.MapGet("/api/admin/overview",(HttpContext ctx)=>{
 // v31.2.0 Backup, Restore & Migration
 app.MapGet("/api/system/migration-manifest",(HttpContext ctx)=>{
  var files=Directory.Exists(dataDir)?Directory.GetFiles(dataDir,"*.json").Select(Path.GetFileName).OrderBy(x=>x).ToArray():Array.Empty<string>();
- return Results.Ok(new{version="34.0.5",created=DateTimeOffset.UtcNow,dataDirectory=dataDir,configurationFiles=files,
+ return Results.Ok(new{version="34.1.0",created=DateTimeOffset.UtcNow,dataDirectory=dataDir,configurationFiles=files,
    includes=new[]{"users","profiles","providers","media-libraries","navigation","source-access","user-sources","storage","dvr","preferences"}});
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
 app.MapGet("/api/system/backup-readiness",()=>{
@@ -3722,9 +3828,9 @@ app.MapGet("/api/appliance/readiness",async ()=>{
  checks.Add(new{name="Authentication",ok=LoadUsers().Count>0});
  checks.Add(new{name="Media source",ok=providers.Any()||libs.Any(x=>x.Enabled)});
  await Task.CompletedTask;
- return Results.Ok(new{version="34.0.5",ready=ffmpeg&&ffprobe&&dataWritable&&LoadUsers().Count>0,checks});
+ return Results.Ok(new{version="34.1.0",ready=ffmpeg&&ffprobe&&dataWritable&&LoadUsers().Count>0,checks});
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
-app.MapGet("/api/appliance/version",()=>Results.Ok(new{product="MyOnline TV",version="34.0.5",channel="stable",platform="LXC"}));
+app.MapGet("/api/appliance/version",()=>Results.Ok(new{product="MyOnline TV",version="34.1.0",channel="stable",platform="LXC"}));
 
 
 // v31.2.0 Feature Completion audit
@@ -3846,7 +3952,7 @@ app.MapGet("/api/admin/recovery/capabilities", () => Results.Ok(new {
 }));
 
 app.MapGet("/api/admin/production-readiness", () => Results.Ok(new {
-    version = "34.0.5",
+    version = "34.1.0",
     adminUx = true,
     overview = true,
     sources = true,
@@ -3880,7 +3986,7 @@ app.MapGet("/api/system/self-healing-v27",()=>Results.Ok(SelfHealingV2700.Capabi
 
 app.MapGet("/api/platform/v28/architecture",()=>Results.Ok(ArchitectureV28V2800.Capabilities()));
 
-app.MapGet("/api/platform/release-gate",()=>Results.Ok(new { version="34.0.5", focus="stabilization", zeroMandatoryCost=true })).RequireAuthorization();
+app.MapGet("/api/platform/release-gate",()=>Results.Ok(new { version="34.1.0", focus="stabilization", zeroMandatoryCost=true })).RequireAuthorization();
 
 app.MapGet("/api/playback/engine",()=>Results.Ok(new { version="2.0", live=true, vod=true, unified=true, recordings=true, fallback=true, zeroMandatoryCost=true })).RequireAuthorization();
 
@@ -3920,7 +4026,7 @@ app.MapGet("/api/personal-sources/architecture", (HttpContext ctx) =>
 {
     var username = ctx.User.Identity?.Name ?? "";
     return Results.Ok(new {
-        version = "34.0.5",
+        version = "34.1.0",
         ownership = "per-user",
         authenticatedUser = username,
         crossUserSharing = false,
@@ -3936,7 +4042,7 @@ app.MapGet("/api/home/personal", async (HttpContext ctx) =>
     var providers = LoadProviders().Where(x => CanAccessProvider(ctx, x)).ToList();
     var libraries = LoadMediaLibraries().Where(x => x.Enabled && CanAccessMediaLibrary(ctx, x)).ToList();
     return Results.Ok(new {
-        version = "34.0.5",
+        version = "34.1.0",
         hasIptv = providers.Count > 0,
         hasPlex = libraries.Any(x => x.Type.Equals("plex", StringComparison.OrdinalIgnoreCase)),
         hasJellyfin = libraries.Any(x => x.Type.Equals("jellyfin", StringComparison.OrdinalIgnoreCase)),
@@ -3952,12 +4058,12 @@ app.MapGet("/api/source-doctor/summary", (HttpContext ctx) =>
         .Select(x => new { x.Id, x.Name, type = "iptv", status = "configured" }).ToList();
     var media = LoadMediaLibraries().Where(x => CanAccessMediaLibrary(ctx, x))
         .Select(x => new { x.Id, x.Name, type = x.Type, status = x.Enabled ? "configured" : "disabled" }).ToList();
-    return Results.Ok(new { version="34.0.5", sources = iptv.Cast<object>().Concat(media).ToArray() });
+    return Results.Ok(new { version="34.1.0", sources = iptv.Cast<object>().Concat(media).ToArray() });
 }).RequireAuthorization();
 
 
 app.MapGet("/api/playback/engine-v4", (HttpContext ctx) => Results.Ok(new {
-    version="34.0.5",
+    version="34.1.0",
     strategies=new[]{"direct","hls","ffmpeg-fallback"},
     resume=true,
     liveRecovery=true,
@@ -3969,7 +4075,7 @@ app.MapGet("/api/live/guide-v4", (HttpContext ctx) =>
 {
     var providers = LoadProviders().Where(x => CanAccessProvider(ctx, x)).ToList();
     return Results.Ok(new {
-        version="34.0.5",
+        version="34.1.0",
         providerCount=providers.Count,
         miniGuide=true,
         previousChannel=true,
@@ -3983,7 +4089,7 @@ app.MapGet("/api/unified/v4/status", (HttpContext ctx) =>
 {
     var libs=LoadMediaLibraries().Where(x=>x.Enabled && CanAccessMediaLibrary(ctx,x)).ToList();
     return Results.Ok(new {
-        version="34.0.5",
+        version="34.1.0",
         visibleLibraries=libs.Count,
         dedupeKey="normalized-title+year+media-type",
         sourcePreference=new[]{"local-direct-play","plex","jellyfin","iptv-vod"},
@@ -3993,7 +4099,7 @@ app.MapGet("/api/unified/v4/status", (HttpContext ctx) =>
 
 
 app.MapGet("/api/ui/tv-remote-v4", () => Results.Ok(new {
-    version="34.0.5",
+    version="34.1.0",
     dpad=true,
     restoreFocus=true,
     backNavigation=true,
@@ -4007,7 +4113,7 @@ app.MapGet("/api/platform/v31-gate", (HttpContext ctx) =>
     var providers=LoadProviders().Count(x=>CanAccessProvider(ctx,x));
     var libraries=LoadMediaLibraries().Count(x=>x.Enabled && CanAccessMediaLibrary(ctx,x));
     return Results.Ok(new {
-        version="34.0.5",
+        version="34.1.0",
         edition="Stable Personal Media Edition",
         personalSourceIsolation=true,
         firstLoginGuide=true,
@@ -4021,7 +4127,7 @@ app.MapGet("/api/platform/v31-gate", (HttpContext ctx) =>
 app.MapGet("/api/database/status", () =>
 {
     var counts=LocalDb.Counts(databaseFile);
-    return Results.Ok(new { version="34.0.5", engine="SQLite", wal=true, schema=LocalDb.GetMeta(databaseFile,"schema_version"), counts });
+    return Results.Ok(new { version="34.1.0", engine="SQLite", wal=true, schema=LocalDb.GetMeta(databaseFile,"schema_version"), counts });
 }).RequireAuthorization();
 
 
@@ -4041,7 +4147,7 @@ app.MapPost("/api/admin/update/install", async (HttpContext ctx) =>
 {
     if (!IsAdmin(ctx)) return Results.NotFound();
 
-    var current = File.Exists(versionFile) ? File.ReadAllText(versionFile).Trim() : "34.0.5";
+    var current = File.Exists(versionFile) ? File.ReadAllText(versionFile).Trim() : "34.1.0";
     var latest = await GetGithubUpdateInfo(true);
     var target = latest.TryGetProperty("latestVersion", out var lv) ? lv.GetString() ?? "" : "";
     var tag = latest.TryGetProperty("latestTag", out var lt) ? lt.GetString() ?? "" : "";
@@ -4087,7 +4193,7 @@ app.MapGet("/api/v32/playback-diagnostics", async (HttpContext ctx) =>
     var visibleProviders = LoadProviders().Where(x => CanAccessProvider(ctx, x)).ToList();
     var libraries = LoadMediaLibraries().Where(x => x.Enabled && CanAccessMediaLibrary(ctx, x)).ToList();
     return Results.Ok(new {
-        version = "34.0.5",
+        version = "34.1.0",
         generatedAt = DateTimeOffset.UtcNow,
         providers = visibleProviders.Select(x => new { x.Id, x.Name, x.Type, configured = true }),
         mediaLibraries = libraries.Select(x => new { x.Id, x.Name, x.Type, x.Enabled }),
@@ -4107,7 +4213,7 @@ app.MapGet("/api/v34/advanced-features", () => Results.Ok(ReleaseV3400.Capabilit
 
 app.MapGet("/api/iptv/transport/capabilities", () => Results.Ok(new
 {
-    version = "34.0.5",
+    version = "34.1.0",
     retry = new { maxAttempts = 3, backoffMs = new[] { 300, 600 }, transientHttp = new[] { 408, 425, 429, 500, 502, 503, 504 } },
     resilientReads = new[] { "Xtream JSON", "M3U playlist", "XMLTV EPG" },
     liveChannelCache = new { memory = true, diskFallbackHours = 24, staleWhileRevalidate = true },
@@ -4237,7 +4343,7 @@ async Task<string> ProviderTextWithRetry(string url, string accept, TimeSpan tim
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.TryAddWithoutValidation("Accept", accept);
-            request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/34.0.5");
+            request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/34.1.0");
             using var cts = new CancellationTokenSource(timeout);
             using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
             if (!response.IsSuccessStatusCode)
@@ -4460,7 +4566,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/34.0.5");
+    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/34.1.0");
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }
@@ -4508,6 +4614,37 @@ static async Task SignIn(HttpContext ctx, string username, string role)
     var identity = new System.Security.Claims.ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
     await ctx.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
         new System.Security.Claims.ClaimsPrincipal(identity));
+}
+
+static string GenerateSecurePassword(int length = 18)
+{
+    if (length < 12) length = 12;
+
+    const string upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+    const string lower = "abcdefghijkmnopqrstuvwxyz";
+    const string digits = "23456789";
+    const string symbols = "!@#$%&*?";
+    const string all = upper + lower + digits + symbols;
+
+    var chars = new List<char>(length)
+    {
+        upper[RandomNumberGenerator.GetInt32(upper.Length)],
+        lower[RandomNumberGenerator.GetInt32(lower.Length)],
+        digits[RandomNumberGenerator.GetInt32(digits.Length)],
+        symbols[RandomNumberGenerator.GetInt32(symbols.Length)]
+    };
+
+    while (chars.Count < length)
+        chars.Add(all[RandomNumberGenerator.GetInt32(all.Length)]);
+
+    // Fisher-Yates shuffle using a cryptographically secure RNG.
+    for (var i = chars.Count - 1; i > 0; i--)
+    {
+        var j = RandomNumberGenerator.GetInt32(i + 1);
+        (chars[i], chars[j]) = (chars[j], chars[i]);
+    }
+
+    return new string(chars.ToArray());
 }
 
 static bool ValidPassword(string? password) => !string.IsNullOrWhiteSpace(password) && password.Length >= 10;
@@ -4740,8 +4877,9 @@ record GroupVisibilityRequest(string Group, bool Hidden);
 record ChannelPreferenceRequest(string ChannelKey, bool Hidden, string? Alias);
 record SetupRequest(string? Username, string Password);
 record LoginRequest(string Username, string Password);
-record AppUser(string Id, string Username, string Role, bool Enabled, PasswordCredential Credential, string? AccountOwnerUsername = null, bool OnboardingCompleted = false, bool OnboardingSkipped = false, bool OnboardingNeverShow = false);
-record UserInput(string? Id, string? Username, string? Password, string? Role, bool Enabled);
+record ChangePasswordRequest(string? CurrentPassword, string? NewPassword);
+record AppUser(string Id, string Username, string Role, bool Enabled, PasswordCredential Credential, string? AccountOwnerUsername = null, bool OnboardingCompleted = false, bool OnboardingSkipped = false, bool OnboardingNeverShow = false, bool RequirePasswordChange = false);
+record UserInput(string? Id, string? Username, string? Password, string? Role, bool Enabled, bool RequirePasswordChange = false);
 record UserProfileAccess(string[] AllowedProfileIds, string DefaultProfileId);
 record ProfilePolicy(bool Live, bool Movies, bool Series, bool Downloads, string[] AllowedProviderIds, PasswordCredential? PinCredential);
 record ProfilePolicyInput(bool Live, bool Movies, bool Series, bool Downloads, string[]? AllowedProviderIds, string? Pin, bool ClearPin = false);

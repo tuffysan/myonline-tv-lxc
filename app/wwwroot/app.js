@@ -152,6 +152,18 @@ async function saveNavigationManager(){
  applyNavigationConfig();await adminView();
 }
 function moveNavigationItem(id,d){const box=$('#navigationManager'),r=box?.querySelector(`[data-nav-id="${CSS.escape(id)}"]`);if(!r)return;const n=d<0?r.previousElementSibling:r.nextElementSibling;if(!n)return;if(d<0)box.insertBefore(r,n);else box.insertBefore(n,r)}
+function browserSecurePassword(length=18){
+  const upper='ABCDEFGHJKLMNPQRSTUVWXYZ',lower='abcdefghijkmnopqrstuvwxyz',digits='23456789',symbols='!@#$%&*?',all=upper+lower+digits+symbols;
+  const pick=set=>{const a=new Uint32Array(1);crypto.getRandomValues(a);return set[a[0]%set.length]};
+  const out=[pick(upper),pick(lower),pick(digits),pick(symbols)];while(out.length<length)out.push(pick(all));
+  for(let i=out.length-1;i>0;i--){const a=new Uint32Array(1);crypto.getRandomValues(a);const j=a[0]%(i+1);[out[i],out[j]]=[out[j],out[i]]}
+  return out.join('');
+}
+async function copyText(text,message='Copied to clipboard.') {
+  if(!text)return;
+  try{await navigator.clipboard.writeText(text);alert(message)}catch{prompt('Copy this value:',text)}
+}
+
 async function authGate(state){
   const st=state||await fetch('/api/auth/status',{credentials:'same-origin'}).then(r=>r.json());
   $('#app').classList.add('hidden');$('#auth').classList.remove('hidden');
@@ -159,8 +171,12 @@ async function authGate(state){
     $('#auth').innerHTML=`<div class="authCard"><h1>Set up MyOnline TV</h1><p>Create the administrator account for this server.</p>
       <label>Username</label><input id=su value=admin autocomplete=username>
       <label>Password</label><input id=sp type=password autocomplete=new-password>
+      <div class=row><button type=button id=setupGenerate class=btn>Generate password</button><button type=button id=setupCopy class=btn>Copy</button><button type=button id=setupShow class=btn>Show</button></div>
       <label>Confirm password</label><input id=sp2 type=password autocomplete=new-password>
       <button id=setup class=btn>Create administrator</button><div id=authmsg></div></div>`;
+    $('#setupGenerate').onclick=()=>{const pw=browserSecurePassword(18);$('#sp').value=pw;$('#sp2').value=pw;$('#sp').type='text';$('#sp2').type='text';$('#authmsg').textContent='Generated 18-character password. Copy it before continuing.'};
+    $('#setupCopy').onclick=()=>copyText($('#sp').value,'Administrator password copied.');
+    $('#setupShow').onclick=()=>{const show=$('#sp').type==='password';$('#sp').type=show?'text':'password';$('#sp2').type=show?'text':'password';$('#setupShow').textContent=show?'Hide':'Show'};
     $('#setup').onclick=async()=>{
       const p=$('#sp').value;if(p!==$('#sp2').value){$('#authmsg').textContent='Passwords do not match.';return}
       try{const r=await jpost('/api/auth/setup',{username:$('#su').value,password:p});await enterApp({authenticated:true,user:r.user,role:r.role})}
@@ -237,10 +253,28 @@ function obNext(){window._ob.index++;obRenderCurrent()}
 async function obReview(){obProgress(['Choose','Connect','Review'],2);const h=$('#onboardingBody');let summary=null;try{summary=await api('/api/onboarding/summary')}catch{}const i=summary?.iptv?.length??window._ob.counts.iptv,p=summary?.plex?.length??window._ob.counts.plex,j=summary?.jellyfin?.length??window._ob.counts.jellyfin;h.innerHTML=`<h2>Setup summary</h2><p>These are your private sources. No other MyOnline TV user can use them.</p><div class=onboardingFacts><div><b>IPTV</b><span>${i} connected</span></div><div><b>Plex</b><span>${p} connected</span></div><div><b>Jellyfin</b><span>${j} connected</span></div></div><div id=obMsg class=muted></div><div class=row><button class=btn onclick=finishOnboarding()>${window._ob.manual?'Done':'Finish setup'}</button><button class=btn onclick=obChooseServices()>Add another</button></div>`}
 async function finishOnboarding(){try{const st=await api('/api/onboarding/status');if(!st.completed)await api('/api/onboarding/complete',{method:'POST'});providers=await api('/api/providers');mediaLibraries=await api('/api/media-libraries');renderMediaLibraryNav();if(!currentProvider&&providers.length)currentProvider=providers[0].id;show(window._ob?.manual?'sources':'home')}catch(e){$('#obMsg').textContent=friendlyError(e)}}
 
+async function forcePasswordChangeGate(st){
+  $('#app').classList.add('hidden');$('#auth').classList.remove('hidden');
+  $('#auth').innerHTML=`<div class="authCard"><h1>Change temporary password</h1><p>Your administrator requires you to choose a new password before using MyOnline TV.</p>
+    <label>Current / temporary password</label><input id=fpcCurrent type=password autocomplete=current-password>
+    <label>New password</label><input id=fpcNew type=password autocomplete=new-password>
+    <label>Confirm new password</label><input id=fpcNew2 type=password autocomplete=new-password>
+    <button id=fpcSave class=btn>Change password</button><button id=fpcLogout class=btn>Sign out</button><div id=authmsg></div></div>`;
+  const save=async()=>{
+    const n=$('#fpcNew').value;if(n!==$('#fpcNew2').value){$('#authmsg').textContent='New passwords do not match.';return}
+    try{await jpost('/api/auth/change-password',{currentPassword:$('#fpcCurrent').value,newPassword:n});await enterApp({...st,requirePasswordChange:false})}
+    catch(e){$('#authmsg').textContent=friendlyError(e)}
+  };
+  $('#fpcSave').onclick=save;$('#fpcNew2').onkeydown=e=>{if(e.key==='Enter')save()};
+  $('#fpcLogout').onclick=async()=>{await api('/api/auth/logout',{method:'POST'});await authGate()};
+  setTimeout(()=>$('#fpcCurrent')?.focus(),30);
+}
+
 async function enterApp(st){
   $('#auth').classList.add('hidden');$('#app').classList.remove('hidden');
   authState={user:st.user||'',role:st.role||''};
-  if(!authState.role){const a=await fetch('/api/auth/status',{credentials:'same-origin'}).then(r=>r.json());authState={user:a.user||authState.user,role:a.role||''}}
+  if(!authState.role||st.requirePasswordChange===undefined){const a=await fetch('/api/auth/status',{credentials:'same-origin'}).then(r=>r.json());authState={user:a.user||authState.user,role:a.role||''};st={...st,requirePasswordChange:a.requirePasswordChange===true}}
+  if(st.requirePasswordChange===true){await forcePasswordChangeGate(st);return}
   document.querySelectorAll('[data-admin-only]').forEach(x=>x.classList.toggle('hidden',authState.role!=='Admin'));
   $('#userBadge').textContent=authState.user||'user';
   const s=await api('/api/status');$('#status').textContent=`${s.version} · ${s.platform}`;
@@ -1831,10 +1865,10 @@ async function adminView(){
         <div class="admin2UserList">${users.map(u=>{const ua=accessCfg.userAccess[u.username]||{allowedProfileIds:profiles.map(p=>p.id),defaultProfileId:profiles[0]?.id||'default'};return `
           <div class="admin2UserRow">
             <div class="admin2Avatar">${esc((u.username||'?').slice(0,1).toUpperCase())}</div>
-            <div><b>${esc(u.username)}</b><small>${esc(u.role)} · ${u.enabled?'Enabled':'Disabled'} · Profile: ${esc(u.profileName||u.username)}</small></div>
-            ${status(u.enabled,u.enabled?'Active':'Disabled')}
+            <div><b>${esc(u.username)}</b><small>${esc(u.role)} · ${u.enabled?'Enabled':'Disabled'}${u.requirePasswordChange?' · Password change required':''} · Profile: ${esc(u.profileName||u.username)}</small></div>
+            ${status(u.enabled,u.requirePasswordChange?'Temporary password':u.enabled?'Active':'Disabled')}
             <select multiple id="ua-${u.id}" title="Allowed profiles">${profiles.map(p=>`<option value="${p.id}" ${ua.allowedProfileIds.includes(p.id)?'selected':''}>${esc(p.name)}</option>`).join('')}</select>
-            <div class=admin2Actions><button class=btn onclick="saveUserAccess('${escAttr(u.id)}','${escAttr(u.username)}')">Save access</button><button class=btn onclick="editUser('${escAttr(u.id)}')">Edit account</button><button class=btn onclick="editProfile('${escAttr(u.profileId||'')}')">Edit profile</button><button class="btn danger" onclick="deleteUser('${escAttr(u.id)}','${escAttr(u.username)}')">Remove</button></div>
+            <div class=admin2Actions><button class=btn onclick="saveUserAccess('${escAttr(u.id)}','${escAttr(u.username)}')">Save access</button><button class=btn onclick="editUser('${escAttr(u.id)}')">Edit account</button>${u.username.toLowerCase()!==(authState.user||'').toLowerCase()?`<button class=btn onclick="resetUserPassword('${escAttr(u.id)}','${escAttr(u.username)}')">Reset password</button>`:''}<button class=btn onclick="editProfile('${escAttr(u.profileId||'')}')">Edit profile</button><button class="btn danger" onclick="deleteUser('${escAttr(u.id)}','${escAttr(u.username)}')">Remove</button></div>
           </div>`}).join('')}</div>
       </div>
 
@@ -1844,9 +1878,10 @@ async function adminView(){
           <div class=formGrid>
             <div class=field><label>Username</label><input id=auser autocomplete=off></div>
             <div class=field><label>Role</label><select id=arole><option value=User>User</option><option value=Admin>Admin</option></select></div>
-            <div class=field><label>Password</label><input id=apass type=password autocomplete=new-password placeholder="Required for new user"></div>
-            <div class=field><label>Status</label><label class=checkline><input id=aenabled type=checkbox checked> Enabled</label></div>
+            <div class=field><label>Password</label><input id=apass type=password autocomplete=new-password placeholder="Required for new user"><div class=row><button type=button class=btn id=generateUserPassword>Generate</button><button type=button class=btn id=copyUserPassword>Copy</button><button type=button class=btn id=showUserPassword>Show</button></div></div>
+            <div class=field><label>Status</label><label class=checkline><input id=aenabled type=checkbox checked> Enabled</label><label class=checkline><input id=arequirechange type=checkbox checked> Require password change on next login</label></div>
           </div>
+          <div id=generatedPasswordNotice class=muted></div>
           <div class=row><button class=btn id=saveUser>Add user</button><button class=btn id=cancelUser disabled>Cancel edit</button></div>
         </div>
       </details>
@@ -1949,6 +1984,9 @@ async function adminView(){
   $('#stsave').onclick=saveStorageTarget;$('#stcancel').onclick=()=>adminView();
   $('#mlsave').onclick=saveMediaLibrary;$('#mlcancel').onclick=()=>{editingMediaLibraryId=null;adminView()};
   $('#saveUser').onclick=saveAdminUser;
+  $('#generateUserPassword').onclick=generateUserPassword;
+  $('#copyUserPassword').onclick=()=>copyText($('#apass').value,'Password copied.');
+  $('#showUserPassword').onclick=()=>{const f=$('#apass'),show=f.type==='password';f.type=show?'text':'password';$('#showUserPassword').textContent=show?'Hide':'Show'};
   $('#cancelUser').onclick=()=>{editingUserId=null;openUserEditor()};
   $('#savep').onclick=saveProvider;
   $('#cancelProvider').onclick=()=>{editingProviderId=null;adminView()};
@@ -1988,8 +2026,10 @@ function openUserEditor(){
   $('#auser').value='';
   $('#arole').value='User';
   $('#aenabled').checked=true;
-  $('#apass').value='';
+  $('#arequirechange').checked=true;
+  $('#apass').value='';$('#apass').type='password';
   $('#apass').placeholder='Required for new user';
+  if($('#generatedPasswordNotice'))$('#generatedPasswordNotice').textContent='';
   $('#saveUser').textContent='Add user';
   $('#cancelUser').disabled=true;
   setTimeout(()=>$('#auser')?.focus(),40);
@@ -2046,14 +2086,35 @@ async function editUser(id){
   editingUserId=id;
   selectAdminSection('users');
   const d=$('#userEditor');if(d)d.open=true;
-  $('#auser').value=u.username;$('#arole').value=u.role;$('#aenabled').checked=u.enabled;$('#apass').value='';
+  $('#auser').value=u.username;$('#arole').value=u.role;$('#aenabled').checked=u.enabled;$('#arequirechange').checked=u.requirePasswordChange===true;$('#apass').value='';$('#apass').type='password';
   $('#apass').placeholder='Leave blank to keep current password';
+  if($('#generatedPasswordNotice'))$('#generatedPasswordNotice').textContent='';
   $('#saveUser').textContent='Save user';$('#cancelUser').disabled=false;$('#auser').focus();
+}
+
+async function generateUserPassword(){
+  try{
+    const r=await jpost('/api/admin/password/generate',{});
+    $('#apass').value=r.password||'';$('#apass').type='text';$('#arequirechange').checked=true;
+    $('#showUserPassword').textContent='Hide';
+    if($('#generatedPasswordNotice'))$('#generatedPasswordNotice').textContent='Generated password is shown once here. Copy it before saving or leaving this form.';
+    $('#apass').focus();$('#apass').select();
+  }catch(e){alert(friendlyError(e))}
+}
+
+async function resetUserPassword(id,username){
+  if(!confirm(`Reset password for ${username}? A new temporary password will be generated and the user must change it at next login.`))return;
+  try{
+    const r=await jpost('/api/admin/users/'+encodeURIComponent(id)+'/reset-password',{});
+    try{await navigator.clipboard.writeText(r.password||'')}catch{}
+    prompt(`Temporary password for ${username} (shown once; it has also been copied when clipboard access is available):`,r.password||'');
+    await adminView();selectAdminSection('users');
+  }catch(e){alert(friendlyError(e))}
 }
 
 async function saveAdminUser(){
   try{
-    const body={id:editingUserId||'',username:$('#auser').value,password:$('#apass').value,role:$('#arole').value,enabled:$('#aenabled').checked};
+    const body={id:editingUserId||'',username:$('#auser').value,password:$('#apass').value,role:$('#arole').value,enabled:$('#aenabled').checked,requirePasswordChange:$('#arequirechange').checked};
     await jpost('/api/admin/users',body);editingUserId=null;await adminView();
   }catch(e){alert(friendlyError(e))}
 }
@@ -3675,7 +3736,7 @@ function enterGuestMode(){sessionStorage.setItem('myonline-guest','1');currentPr
 async function uiAction(action,{busyText='Working…',errorTitle='Action failed'}={}){
   try{return await action()}catch(e){console.error(errorTitle,e);alert(`${errorTitle}: ${friendlyError(e)}`);throw e}
 }
-window.MyOnlineRelease={version:'34.0.5',qualityGate:'stabilization'};
+window.MyOnlineRelease={version:'34.1.0',qualityGate:'stabilization'};
 
 
 // v28.3 — reusable UI states
@@ -3831,7 +3892,7 @@ function tvHomeJump(section){
 
 
 
-// v34.0.5 — Cleanup release
+// v34.1.0 — Cleanup release
 async function releaseV34Advanced(){return await api('/api/v34/advanced-features')}
 async function advancedPlatformSnapshot(){
   const [advanced,rooms,search,watchlist]=await Promise.all([
