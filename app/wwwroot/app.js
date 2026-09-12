@@ -1,4 +1,4 @@
-const $=s=>document.querySelector(s), content=$('#content'), title=$('#title');
+﻿const $=s=>document.querySelector(s), content=$('#content'), title=$('#title');
 let providers=[], currentProvider=null, channels=[], epg=[], fav=new Set(), hls=null, currentView='home', profiles=[], currentProfile=localStorage.getItem('myonline-profile')||'default', channelPrefs={hiddenGroups:[],hiddenChannels:[],aliases:{}}, authState={user:'',role:''}, accessState={allowedProfileIds:[],defaultProfileId:'default',policies:{}}, mediaLibraries=[];
 
 async function api(url,opt={}){
@@ -3675,7 +3675,7 @@ function enterGuestMode(){sessionStorage.setItem('myonline-guest','1');currentPr
 async function uiAction(action,{busyText='Working…',errorTitle='Action failed'}={}){
   try{return await action()}catch(e){console.error(errorTitle,e);alert(`${errorTitle}: ${friendlyError(e)}`);throw e}
 }
-window.MyOnlineRelease={version:'31.2.0',qualityGate:'stabilization'};
+window.MyOnlineRelease={version:'34.0.4',qualityGate:'stabilization'};
 
 
 // v28.3 — reusable UI states
@@ -3793,3 +3793,53 @@ document.addEventListener('change',e=>{
     if(name && !name.value.trim()) name.value=e.target.value||'';
   }
 });
+
+
+// v32.0.0 — Playback & Stability
+async function releaseV32Status(){return await api('/api/v32/playback-stability')}
+async function playbackDiagnosticSnapshot(){
+  const [release,providers,diag]=await Promise.all([
+    api('/api/v32/playback-stability'),
+    api('/api/providers/health').catch(e=>({error:friendlyError(e)})),
+    api('/api/diagnostics').catch(e=>({error:friendlyError(e)}))
+  ]);
+  return {generatedAt:new Date().toISOString(),release,providers,diagnostics:diag};
+}
+async function copyPlaybackDiagnostics(){
+  try{
+    const snapshot=await playbackDiagnosticSnapshot();
+    await navigator.clipboard.writeText(JSON.stringify(snapshot,null,2));
+    alert('Playback diagnostics copied.');
+  }catch(e){alert(friendlyError(e))}
+}
+
+
+
+// v33.0.0 — TV Experience
+async function releaseV33Experience(){return await api('/api/v33/tv-experience')}
+function tvFocusRing(root=document){
+  const nodes=[...root.querySelectorAll('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),[tabindex="0"]')]
+    .filter(x=>x.offsetParent!==null);
+  return {nodes,first:()=>nodes[0]?.focus(),last:()=>nodes.at(-1)?.focus()};
+}
+function tvHomeJump(section){
+  const map={continue:'.continueRow',live:'.liveNowRail',new:'.posterRail',favourites:'.mediaFavStar'};
+  const el=document.querySelector(map[section]||section);
+  if(el){el.scrollIntoView({block:'center',behavior:'smooth'});el.querySelector?.('button,a,[tabindex="0"]')?.focus();return true}
+  return false;
+}
+
+
+
+// v34.0.4 — Cleanup release
+async function releaseV34Advanced(){return await api('/api/v34/advanced-features')}
+async function advancedPlatformSnapshot(){
+  const [advanced,rooms,search,watchlist]=await Promise.all([
+    api('/api/v34/advanced-features'),
+    api('/api/rooms/capabilities').catch(()=>null),
+    api('/api/search/v4/capabilities').catch(()=>null),
+    api('/api/watchlist/capabilities').catch(()=>null)
+  ]);
+  return {advanced,rooms,search,watchlist};
+}
+

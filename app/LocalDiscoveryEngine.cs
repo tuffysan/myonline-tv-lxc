@@ -1,4 +1,4 @@
-namespace MyOnlineTV.Web;
+﻿namespace MyOnlineTV.Web;
 public sealed record DiscoverySignal(string MediaId,string Genre,double Weight,DateTimeOffset At);
 public sealed record DiscoveryCandidate(string MediaId,IReadOnlyList<string> Genres,double Popularity);
 public sealed class LocalDiscoveryEngine {
@@ -9,5 +9,5 @@ public sealed class LocalDiscoveryEngine {
      .OrderByDescending(x=>x.Score).Take(Math.Max(1,count)).Select(x=>x.MediaId).ToArray();
  }
 }
-public enum AiProviderMode { Disabled, LocalOptional, ExternalOptional }
-public sealed record AiFeatureOptions(AiProviderMode Mode=AiProviderMode.Disabled,string? Endpoint=null,string? Model=null,int MonthlyBudgetSek=0);
+public enum AiProviderMode { Disabled, LocalOnly }
+public sealed record AiFeatureOptions(AiProviderMode Mode=AiProviderMode.LocalOnly);
