@@ -1,4 +1,4 @@
-# v31.1.0 — Stable Personal Media Edition
+# v31.1.2 — Stable Personal Media Edition
 
 - Adds the v31 production gate and Stable Personal Media Edition marker.
 - Preserves zero mandatory runtime cost.

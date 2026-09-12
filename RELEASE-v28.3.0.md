@@ -1,4 +1,4 @@
-# v31.1.0 — Error, Loading & Empty States
+# v31.1.2 — Error, Loading & Empty States
 
 Cumulative release based on v28.2.0.
 

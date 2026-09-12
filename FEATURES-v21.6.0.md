@@ -1,4 +1,4 @@
-# v31.1.0 — Catch-up
+# v31.1.2 — Catch-up
 
 Provider-capability-gated Start Over/Catch-up decision engine.
 

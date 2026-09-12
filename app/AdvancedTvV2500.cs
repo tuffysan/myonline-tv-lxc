@@ -2,7 +2,7 @@ public static class AdvancedTvV2500
 {
     public static object Capabilities() => new
     {
-        version = "31.1.0",
+        version = "31.1.2",
         feature = "Advanced TV Platform",
         localFirst = true,
         mandatoryRuntimeCostSek = 0,

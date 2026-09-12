@@ -1,4 +1,4 @@
-# v31.1.0 — Admin Production Edition
+# v31.1.2 — Admin Production Edition
 
 The Admin redesign is consolidated into a production-oriented release.
 

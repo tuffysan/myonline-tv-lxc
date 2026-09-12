@@ -1,4 +1,4 @@
-# v31.1.0 — Search & Home
+# v31.1.2 — Search & Home
 - Keeps the v20.2 Home “On TV now” rail and Continue Watching.
 - Adds a reusable server-side GlobalSearchIndex with deterministic local ranking.
 - Adds local client search aggregation over channels, Continue Watching and favourites.

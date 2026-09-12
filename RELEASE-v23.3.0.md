@@ -1,4 +1,4 @@
-# v31.1.0 — Live TV 4.0
+# v31.1.2 — Live TV 4.0
 
 TV-first zapping, Now/Next and previous-channel capabilities.
 

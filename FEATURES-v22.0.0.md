@@ -1,4 +1,4 @@
-# v31.1.0 — Stable Platform
+# v31.1.2 — Stable Platform
 
 Feature freeze, zero-cost policy and release-gate evaluator for stable promotion.
 

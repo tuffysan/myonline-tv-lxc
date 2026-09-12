@@ -2,7 +2,7 @@ public static class UnifiedLibrary4V2340
 {
     public static object Capabilities() => new
     {
-        version = "31.1.0",
+        version = "31.1.2",
         feature = "Unified Library 4.0",
         localFirst = true,
         mandatoryRuntimeCostSek = 0,

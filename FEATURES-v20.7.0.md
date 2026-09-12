@@ -1,4 +1,4 @@
-# v31.1.0 — Performance
+# v31.1.2 — Performance
 
 Local cache policy, bounded parallelism and fast-home performance diagnostics.
 

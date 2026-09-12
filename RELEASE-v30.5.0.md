@@ -1,4 +1,4 @@
-# v31.1.0 — Source Doctor
+# v31.1.2 — Source Doctor
 
 - Adds a Source Doctor summary for the current user's own sources.
 - Provides a stable surface for connection health and repair UI.

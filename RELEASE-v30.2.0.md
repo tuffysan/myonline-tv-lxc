@@ -1,4 +1,4 @@
-# v31.1.0 — Personal Media Setup 2.0
+# v31.1.2 — Personal Media Setup 2.0
 
 ## User experience
 - First-login guide begins with **What do you want to use?** and only shows selected services.

@@ -2,7 +2,7 @@ public static class MediaIndexV2320
 {
     public static object Capabilities() => new
     {
-        version = "31.1.0",
+        version = "31.1.2",
         feature = "Server Media Index",
         localFirst = true,
         mandatoryRuntimeCostSek = 0,

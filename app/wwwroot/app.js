@@ -1403,7 +1403,7 @@ async function sourcesView(){
   providers=await api('/api/providers').catch(()=>[]);mediaLibraries=await api('/api/media-libraries').catch(()=>[]);
   const cards=[...providers.map(x=>({...x,kind:'iptv'})),...mediaLibraries.map(x=>({...x,kind:x.type}))];
   content.innerHTML=`<div class=hero><span class=kicker>PERSONAL SOURCES</span><h2>My Sources</h2><p class=muted>Every connection on this page belongs only to <b>${esc(authState.user)}</b>. There is no source sharing between users.</p><div class=row><button class=btn onclick="firstLoginGuide({sources:{iptv:${providers.length},plex:${mediaLibraries.filter(x=>x.type==='plex').length},jellyfin:${mediaLibraries.filter(x=>x.type==='jellyfin').length}}},true)">Run setup guide</button></div></div>
-   <div class=grid>${cards.map(x=>`<article class=card><span class=kicker>${esc(String(x.kind).toUpperCase())}</span><h3>${esc(x.name)}</h3><p class=muted>${esc(x.host||'Personal source')}</p><div class=row>${x.kind==='iptv'?`<button class=btn onclick="testProvider('${escAttr(x.id)}',this)">Test connection</button><button class=btn onclick="editProvider('${escAttr(x.id)}')">Edit</button><button class="btn danger" onclick="removeProvider('${escAttr(x.id)}')">Remove</button>`:`<button class=btn onclick="testMediaLibrary('${escAttr(x.id)}')">Test connection</button><button class=btn onclick="editMediaLibrary('${escAttr(x.id)}')">Edit</button><button class=btn onclick="chooseMediaLibraries('${escAttr(x.id)}')">Libraries</button><button class="btn danger" onclick="removeMediaLibrary('${escAttr(x.id)}')">Remove</button>`}</div><div id="${x.kind==='iptv'?'ptest-':'mlstat-'}${escAttr(x.id)}" class=muted></div></article>`).join('')||`<div class=card><h3>No personal sources yet</h3><p>Use the setup guide to connect IPTV, Plex or Jellyfin.</p><button class=btn onclick="firstLoginGuide({sources:{iptv:0,plex:0,jellyfin:0}},true)">Start setup</button></div>`}</div>`;
+   <div class=grid>${cards.map(x=>`<article class=card><span class=kicker>${esc(String(x.kind).toUpperCase())}</span><h3>${esc(x.name)}</h3><p class=muted>${esc(x.host||'Personal source')}</p><div class=row>${x.kind==='iptv'?`<button class=btn onclick="testProvider('${escAttr(x.id)}',this)">Test connection</button><button class=btn onclick="editProvider('${escAttr(x.id)}')">Edit</button><button class="btn danger" onclick="removeProvider('${escAttr(x.id)}')">Remove</button>`:`<button class=btn onclick="testMediaLibrary('${escAttr(x.id)}')">Test connection</button><button class=btn onclick="editMediaLibrary('${escAttr(x.id)}')">Edit</button><button class=btn onclick="chooseMediaLibraries('${escAttr(x.id)}')">Libraries</button><button class="btn danger" onclick="removeMediaLibrary('${escAttr(x.id)}')">Remove</button>`}</div><div id="${x.kind==='iptv'?'ptest-':'mlstat-'}${escAttr(x.id)}" class=muted></div></article>`).join('')||`<div class=card><h3>No personal sources yet</h3><p>Use the setup guide to connect IPTV, Plex or Jellyfin.</p><button class=btn onclick="firstLoginGuide({sources:{iptv:0,plex:0,jellyfin:0}},true)">Start setup</button><button class="btn btnSecondary" onclick="skipOnboarding()">Skip for now</button><button class="btn btnGhost" onclick="neverShowOnboarding()">Never show this guide again</button></div>`}</div>`;
 }
 
 async function systemView(){
@@ -1479,7 +1479,7 @@ async function featureCompletionView(){
     const groups=[...new Set(features.map(x=>x.area))];
     content.innerHTML=`
       <div class=hero>
-        <span class=kicker>v31.1.0 FEATURE COMPLETION</span>
+        <span class=kicker>v31.1.2 FEATURE COMPLETION</span>
         <h2>Feature Completion audit</h2>
         <p class=muted>This page distinguishes working features from partial implementations, foundations and missing functionality. It intentionally does not count a contract/model as a finished feature.</p>
       </div>
@@ -1546,7 +1546,7 @@ async function adminView(){
   <div class="admin2Shell">
     <div class="admin2Hero">
       <div>
-        <span class="admin2Kicker">MYONLINE TV v31.1.0</span>
+        <span class="admin2Kicker">MYONLINE TV v31.1.2</span>
         <h1>Administration</h1>
         <p>Everything needed to configure, monitor and maintain your media center — without one endless settings page.</p>
       </div>
@@ -3103,8 +3103,8 @@ window.MyOnlineOperations={
 };
 
 
-// v31.1.0 Native Client Generation
-window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'31.1.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
+// v31.1.2 Native Client Generation
+window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'31.1.2',generation:6,experience:'Server + Web/PWA + Native Client API'};
 window.MyOnlineClientBridge={
  version:1,
  capabilities(){return {sourceEngine:true,player:true,live:true,guide:true,library:true,dvr:true,profiles:true,rooms:true,remote:true}},
@@ -3112,7 +3112,7 @@ window.MyOnlineClientBridge={
 };
 
 
-// v31.1.0 — Performance Engine
+// v31.1.2 — Performance Engine
 const perfCache=new Map();
 function perfCacheGet(key,maxAgeMs){
   const x=perfCache.get(key);
@@ -3149,7 +3149,7 @@ document.addEventListener('pointerover',e=>{
 },{passive:true});
 
 
-// v31.1.0 — Live TV 3.0
+// v31.1.2 — Live TV 3.0
 let liveNumberBuffer='',liveNumberTimer=null;
 function showLiveZapOverlay(c){
   let box=$('#liveZapOverlay');
@@ -3178,7 +3178,7 @@ document.addEventListener('keydown',e=>{
 });
 
 
-// v31.1.0 — Guide 3.0
+// v31.1.2 — Guide 3.0
 function scrollGuideToNow(){
   const wrap=document.querySelector('.timelineWrap');
   const line=document.querySelector('.programLane .nowLine');
@@ -3194,7 +3194,7 @@ function guideKeyboard(e){
 document.addEventListener('keydown',guideKeyboard);
 
 
-// v31.1.0 — Unified Library End-to-End
+// v31.1.2 — Unified Library End-to-End
 function unifiedSourceScore(s){
   let score=0;
   if(s.poster)score+=2;
@@ -3212,7 +3212,7 @@ async function playBestUnified(group){
 }
 
 
-// v31.1.0 — Unified Playback Engine
+// v31.1.2 — Unified Playback Engine
 async function tryUnifiedPlaybackSource(item){
   const parts=String(item?.id||'').split(':');
   if(parts.length<3)throw new Error('Invalid unified media source.');
@@ -3236,7 +3236,7 @@ async function playUnifiedWithFallback(group){
 }
 
 
-// v31.1.0 — Home 3.0
+// v31.1.2 — Home 3.0
 const HOME3_DEFAULT=['continue','live','next','recordings','favourites','new'];
 function home3Key(){return `myonline-home3:${currentProfile||'default'}`}
 function getHome3Order(){try{return JSON.parse(localStorage.getItem(home3Key())||'null')||HOME3_DEFAULT}catch{return HOME3_DEFAULT}}
@@ -3251,7 +3251,7 @@ function home3Customize(){
 }
 
 
-// v31.1.0 — Search 3.0
+// v31.1.2 — Search 3.0
 function searchHistoryKey(){return `myonline-search-history:${currentProfile||'default'}`}
 function rememberSearch(q){
   q=String(q||'').trim();if(q.length<2)return;
@@ -3266,7 +3266,7 @@ document.addEventListener('keydown',e=>{
 });
 
 
-// v31.1.0 — DVR End-to-End
+// v31.1.2 — DVR End-to-End
 async function dvrHealthPanel(){
   const [status,conflicts,upcoming]=await Promise.all([
     api('/api/dvr/status').catch(()=>null),
@@ -3285,9 +3285,9 @@ async function showDvrOperations(){
 }
 
 
-// v31.1.0 — Production Edition
+// v31.1.2 — Production Edition
 window.MyOnlineTvProduction={
-  version:'31.1.0',
+  version:'31.1.2',
   clientMode:()=>document.body.dataset.clientMode||'unknown',
   runtimeSummary:()=>({
     online:navigator.onLine,
@@ -3299,25 +3299,25 @@ window.MyOnlineTvProduction={
 };
 
 
-// v31.1.0 performance diagnostics
+// v31.1.2 performance diagnostics
 window.MyOnlinePerf={samples:[],mark(name,start){this.samples.push({name,ms:Math.round(performance.now()-start),at:Date.now()});this.samples=this.samples.slice(-200)},snapshot(){return [...this.samples]}};
 
 
-// v31.1.0 Live TV 4.0 state
+// v31.1.2 Live TV 4.0 state
 let livePreviousChannelKey=null,liveCurrentChannelKey=null;
 function rememberLiveTune(key){if(key&&key!==liveCurrentChannelKey){livePreviousChannelKey=liveCurrentChannelKey;liveCurrentChannelKey=key}}
 function previousLiveChannel(){const c=channels.find(x=>x.key===livePreviousChannelKey);if(c)return playLive(c.key,c.name)}
 
 
-// v31.1.0 local phone remote client
+// v31.1.2 local phone remote client
 async function remoteCommand(deviceId,command,value=null){return api('/api/devices/'+encodeURIComponent(deviceId)+'/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command,value})})}
 
 
-// v31.1.0 provider/device capability gate
+// v31.1.2 provider/device capability gate
 async function advancedTvCapabilities(){try{return await api('/api/platform/v25/capabilities',{timeoutMs:5000,attempts:1})}catch{return {productionVerified:false}}}
 
 
-// v31.1.0 — Admin UX Foundation
+// v31.1.2 — Admin UX Foundation
 window.AdminUx = {
   sections: [
     {id:'overview',label:'Overview'},
@@ -3344,7 +3344,7 @@ document.addEventListener('click',e=>{
 });
 
 
-// v31.1.0 — Admin Overview & Health
+// v31.1.2 — Admin Overview & Health
 async function renderAdminOverviewV2(target){
   const host=typeof target==='string'?document.querySelector(target):target;
   if(!host)return;
@@ -3363,7 +3363,7 @@ async function renderAdminOverviewV2(target){
 }
 
 
-// v31.1.0 — Admin Sources
+// v31.1.2 — Admin Sources
 function adminSourceCard(s){
   return `<article class="adminCard adminSourceCard">
     <div class="adminCardHead"><div><h3>${esc(s.name||s.type||'Source')}</h3><small>${esc(s.detail||'')}</small></div>${AdminUx.statusBadge(s.status||'unknown',s.statusText||s.status||'Unknown')}</div>
@@ -3373,7 +3373,7 @@ function adminSourceCard(s){
 }
 
 
-// v31.1.0 — Admin DVR & Storage
+// v31.1.2 — Admin DVR & Storage
 function adminDvrSummary(x){
   return `<div class="adminCardGrid">
     ${[['Active',x.active],['Upcoming',x.upcoming],['Failed',x.failed],['Conflicts',x.conflicts]].map(([k,v])=>`<article class="adminCard adminMetric"><b>${Number(v||0)}</b><small>${k}</small></article>`).join('')}
@@ -3385,7 +3385,7 @@ function adminStorageBar(used,total){
 }
 
 
-// v31.1.0 — Admin Users & Devices
+// v31.1.2 — Admin Users & Devices
 function adminUserRow(u){
   return `<div class="adminListRow"><div><b>${esc(u.name||u.username||'User')}</b><small>${esc((u.roles||[]).join(', '))}</small></div><div>${AdminUx.statusBadge(u.enabled===false?'warning':'ok',u.enabled===false?'Disabled':'Enabled')}<button class="btn" data-user-edit="${escAttr(u.id||'')}">Edit</button></div></div>`;
 }
@@ -3394,7 +3394,7 @@ function adminDeviceRow(d){
 }
 
 
-// v31.1.0 — Admin Diagnostics
+// v31.1.2 — Admin Diagnostics
 function diagnosticGrade(ms){
   return ms<500?['excellent','Excellent']:ms<1000?['good','Good']:ms<2000?['warning','Slow']:['error','Very slow'];
 }
@@ -3405,7 +3405,7 @@ function diagnosticTimingRow(name,ms){
 }
 
 
-// v31.1.0 — Backup, Update & Recovery
+// v31.1.2 — Backup, Update & Recovery
 function adminRecoveryCard(x){
   return `<article class="adminCard">
     <div class="adminCardHead"><div><h3>Backup & Recovery</h3><small>Safe update workflow</small></div>${AdminUx.statusBadge(x?.healthy?'ok':'warning',x?.healthy?'Ready':'Check required')}</div>
@@ -3415,35 +3415,35 @@ function adminRecoveryCard(x){
 }
 
 
-// v31.1.0 — Mobile Admin
+// v31.1.2 — Mobile Admin
 function adminMobileClass(){
   document.documentElement.classList.toggle('adminCompact',matchMedia('(max-width:720px)').matches);
 }
 addEventListener('resize',adminMobileClass,{passive:true});adminMobileClass();
 
 
-// v31.1.0 Stream Doctor
+// v31.1.2 Stream Doctor
 function streamDoctorMetric(label,value,state='ok'){return `<div class="streamDoctorRow"><span>${esc(label)}</span><b class="${state}">${esc(String(value))}</b></div>`}
 function renderStreamDoctor(x){return `<section class="card streamDoctor"><h3>Stream Doctor</h3>${streamDoctorMetric('Provider',x.provider||'Unknown',x.providerOk?'ok':'error')}${streamDoctorMetric('Codec',x.codec||'—')}${streamDoctorMetric('Resolution',x.resolution||'—')}${streamDoctorMetric('Bitrate',x.bitrate||'—')}${streamDoctorMetric('FPS',x.fps||'—')}${streamDoctorMetric('Buffer',x.buffer||'—')}${streamDoctorMetric('Playback mode',x.mode||'—')}</section>`}
 
 
-// v31.1.0 Notification Center
+// v31.1.2 Notification Center
 const NotificationCenter={key:'myonline-notifications',all(){try{return JSON.parse(localStorage.getItem(this.key)||'[]')}catch{return[]}},push(n){const a=this.all();a.unshift({id:String(Date.now())+Math.random(),at:Date.now(),read:false,...n});localStorage.setItem(this.key,JSON.stringify(a.slice(0,100)));return a[0]},read(id){localStorage.setItem(this.key,JSON.stringify(this.all().map(x=>x.id===id?{...x,read:true}:x)))}};
 
 
-// v31.1.0 What's On Tonight
+// v31.1.2 What's On Tonight
 function tonightFilter(rows,kind='all'){const now=new Date();return (rows||[]).filter(x=>{const d=new Date(x.start||x.startTime);return d.toDateString()===now.toDateString()&&d.getHours()>=17&&(kind==='all'||String(x.category||x.kind||'').toLowerCase().includes(kind))}).sort((a,b)=>new Date(a.start||a.startTime)-new Date(b.start||b.startTime))}
 
 
-// v31.1.0 Unified Watchlist
+// v31.1.2 Unified Watchlist
 const UnifiedWatchlist={key(){return `myonline-watchlist:${currentProfile||'default'}`},all(){try{return JSON.parse(localStorage.getItem(this.key())||'[]')}catch{return[]}},toggle(item){let a=this.all();const i=a.findIndex(x=>x.id===item.id);if(i>=0)a.splice(i,1);else a.unshift(item);localStorage.setItem(this.key(),JSON.stringify(a.slice(0,500)));return i<0}};
 
 
-// v31.1.0 Sports Hub
+// v31.1.2 Sports Hub
 function sportsMatches(rows,teams=[]){const n=teams.map(x=>String(x).toLowerCase()).filter(Boolean);return (rows||[]).filter(x=>{const t=String(x.title||'').toLowerCase();return n.some(q=>t.includes(q))||/(football|soccer|hockey|champions league|premier league|allsvenskan|match)/i.test(t)})}
 
 
-// v31.1.0 Guest Mode
+// v31.1.2 Guest Mode
 function enterGuestMode(){sessionStorage.setItem('myonline-guest','1');currentProfile='guest';show('home')} function isGuestMode(){return sessionStorage.getItem('myonline-guest')==='1'}
 
 
@@ -3451,7 +3451,7 @@ function enterGuestMode(){sessionStorage.setItem('myonline-guest','1');currentPr
 async function uiAction(action,{busyText='Working…',errorTitle='Action failed'}={}){
   try{return await action()}catch(e){console.error(errorTitle,e);alert(`${errorTitle}: ${friendlyError(e)}`);throw e}
 }
-window.MyOnlineRelease={version:'31.1.0',qualityGate:'stabilization'};
+window.MyOnlineRelease={version:'31.1.2',qualityGate:'stabilization'};
 
 
 // v28.3 — reusable UI states
@@ -3524,4 +3524,41 @@ function dedupeUnifiedMedia(items){
   const map=new Map();
   for(const x of (items||[])){const k=unifiedMediaKey(x);if(!map.has(k))map.set(k,x)}
   return [...map.values()];
+}
+
+
+async function skipOnboarding(){
+  try{
+    await api('/api/onboarding/skip',{method:'POST'});
+    providers=await api('/api/providers').catch(()=>[]);
+    mediaLibraries=await api('/api/media-libraries').catch(()=>[]);
+    renderMediaLibraryNav();
+    if(!currentProvider&&providers.length)currentProvider=providers[0].id;
+    show('home');
+  }catch(e){
+    const target=document.querySelector('#onboardingBody');
+    if(target) target.insertAdjacentHTML('beforeend',`<div class=error>${friendlyError(e)}</div>`);
+  }
+}
+
+async function neverShowOnboarding(){
+  try{
+    await api('/api/onboarding/never-show',{method:'POST'});
+    providers=await api('/api/providers').catch(()=>[]);
+    mediaLibraries=await api('/api/media-libraries').catch(()=>[]);
+    renderMediaLibraryNav();
+    if(!currentProvider&&providers.length)currentProvider=providers[0].id;
+    show('home');
+  }catch(e){
+    const target=document.querySelector('#onboardingBody');
+    if(target) target.insertAdjacentHTML('beforeend',`<div class=error>${friendlyError(e)}</div>`);
+  }
+}
+
+async function restartOnboarding(){
+  try{
+    await api('/api/onboarding/restart',{method:'POST'});
+    const state=await api('/api/onboarding/status');
+    await firstLoginGuide(state);
+  }catch(e){console.error(e)}
 }

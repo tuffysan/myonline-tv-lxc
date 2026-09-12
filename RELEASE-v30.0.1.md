@@ -1,4 +1,4 @@
-# v31.1.0 — Update Safety Hotfix
+# v31.1.2 — Update Safety Hotfix
 
 This patch hardens the Proxmox/LXC updater.
 

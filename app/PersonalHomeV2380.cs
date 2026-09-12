@@ -2,7 +2,7 @@ public static class PersonalHomeV2380
 {
     public static object Capabilities() => new
     {
-        version = "31.1.0",
+        version = "31.1.2",
         feature = "Personal Home",
         localFirst = true,
         mandatoryRuntimeCostSek = 0,

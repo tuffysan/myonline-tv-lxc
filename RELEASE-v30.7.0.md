@@ -1,4 +1,4 @@
-# v31.1.0 — Live TV & Guide 4.0
+# v31.1.2 — Live TV & Guide 4.0
 
 - Adds the Live TV/Guide 4.0 capability contract for mini-guide, previous channel, numeric selection and D-pad navigation.
 - Adds stronger TV focus treatment.
