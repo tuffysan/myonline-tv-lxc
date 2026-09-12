@@ -1,0 +1,31 @@
+name: MyOnlineTV
+options:
+  bundleIdPrefix: ink.nilsson
+  deploymentTarget:
+    tvOS: "17.0"
+settings:
+  base:
+    SWIFT_VERSION: 5.0
+    MARKETING_VERSION: 34.2.0
+    CURRENT_PROJECT_VERSION: 1
+targets:
+  MyOnlineTV:
+    type: application
+    platform: tvOS
+    sources:
+      - MyOnlineTV
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ink.nilsson.myonlinetv
+        PRODUCT_NAME: MyOnlineTV
+        INFOPLIST_KEY_CFBundleDisplayName: MyOnline TV
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: "App Icon & Top Shelf Image"
+        CODE_SIGN_STYLE: Automatic
+    info:
+      path: MyOnlineTV/Info.plist
+      properties:
+        CFBundleDisplayName: MyOnline TV
+        UILaunchScreen: {}
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: false

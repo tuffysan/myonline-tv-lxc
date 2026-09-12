@@ -17,6 +17,7 @@ This README is intentionally version-independent. Release-specific history belon
 - Continue watching
 - Multi-device and multi-room support
 - Android TV client
+- Apple TV client (native tvOS / SwiftUI)
 - Progressive Web App
 - Administration and health checks
 - Backup, update and rollback support
@@ -29,6 +30,7 @@ This README is intentionally version-independent. Release-specific history belon
 .
 ├── app/                    Main ASP.NET Core application
 ├── clients/android-tv/     Android TV client
+├── clients/apple-tv/       Apple TV / tvOS client
 ├── docs/                   Maintained technical documentation
 ├── scripts/                Install/update/operations scripts
 ├── install-lxc.sh

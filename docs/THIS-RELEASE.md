@@ -1,12 +1,9 @@
 # Current release
 
-**Version:** 34.1.2
+**Version:** 34.2.0
 
-## IPTV source editing and visibility
+## Apple TV client
 
-- Fixes IPTV Edit from My Sources.
-- Adds a dedicated source editor.
-- Hide Live TV groups/channels.
-- Hide Movie categories/titles.
-- Hide Series categories/titles.
-- Visibility is persisted server-side per personal IPTV provider.
+Adds a native tvOS client under `clients/apple-tv/` using SwiftUI and AVPlayer.
+
+The client reuses the existing MyOnlineTV backend, accounts, per-user IPTV sources and catalogue visibility rules. It supports login, mandatory password change, onboarding handoff, Live TV, Movies, Series and native playback.

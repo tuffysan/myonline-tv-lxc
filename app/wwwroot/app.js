@@ -3970,7 +3970,7 @@ function tvHomeJump(section){
 
 
 
-// v34.1.2 — Cleanup release
+// v34.2.0 — Cleanup release
 async function releaseV34Advanced(){return await api('/api/v34/advanced-features')}
 async function advancedPlatformSnapshot(){
   const [advanced,rooms,search,watchlist]=await Promise.all([

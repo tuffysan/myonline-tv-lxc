@@ -1,3 +1,9 @@
+# v34.2.0
+
+- Added native Apple TV / tvOS client with SwiftUI and AVPlayer.
+- Uses existing MyOnlineTV accounts, per-user sources and server-side IPTV visibility filtering.
+- Added login, mandatory password change, onboarding handoff, Live TV, Movies, Series and playback.
+
 # v34.1.2
 
 - Fix: Edit IPTV from My Sources no longer crashes with `Cannot set properties of null (setting value)`.
