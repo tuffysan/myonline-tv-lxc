@@ -1,4 +1,4 @@
-﻿const $=s=>document.querySelector(s), content=$('#content'), title=$('#title');
+const $=s=>document.querySelector(s), content=$('#content'), title=$('#title');
 let providers=[], currentProvider=null, channels=[], epg=[], fav=new Set(), hls=null, currentView='home', profiles=[], currentProfile=localStorage.getItem('myonline-profile')||'default', channelPrefs={hiddenGroups:[],hiddenChannels:[],aliases:{}}, authState={user:'',role:''}, accessState={allowedProfileIds:[],defaultProfileId:'default',policies:{}}, mediaLibraries=[];
 
 async function api(url,opt={}){
@@ -262,7 +262,7 @@ async function forcePasswordChangeGate(st){
     <button id=fpcSave class=btn>Change password</button><button id=fpcLogout class=btn>Sign out</button><div id=authmsg></div></div>`;
   const save=async()=>{
     const n=$('#fpcNew').value;if(n!==$('#fpcNew2').value){$('#authmsg').textContent='New passwords do not match.';return}
-    try{await jpost('/api/auth/change-password',{currentPassword:$('#fpcCurrent').value,newPassword:n});await enterApp({...st,requirePasswordChange:false})}
+    try{await jpost('/api/auth/change-password',{currentPassword:$('#fpcCurrent').value,newPassword:n});const a=await fetch('/api/auth/status',{credentials:'same-origin'}).then(r=>r.json());await enterApp({...st,...a,requirePasswordChange:false})}
     catch(e){$('#authmsg').textContent=friendlyError(e)}
   };
   $('#fpcSave').onclick=save;$('#fpcNew2').onkeydown=e=>{if(e.key==='Enter')save()};
@@ -273,8 +273,16 @@ async function forcePasswordChangeGate(st){
 async function enterApp(st){
   $('#auth').classList.add('hidden');$('#app').classList.remove('hidden');
   authState={user:st.user||'',role:st.role||''};
-  if(!authState.role||st.requirePasswordChange===undefined){const a=await fetch('/api/auth/status',{credentials:'same-origin'}).then(r=>r.json());authState={user:a.user||authState.user,role:a.role||''};st={...st,requirePasswordChange:a.requirePasswordChange===true}}
+  if(!authState.role||st.requirePasswordChange===undefined){const a=await fetch('/api/auth/status',{credentials:'same-origin'}).then(r=>r.json());authState={user:a.user||authState.user,role:a.role||''};st={...st,requirePasswordChange:a.requirePasswordChange===true,onboardingRequired:a.onboardingRequired===true}}
   if(st.requirePasswordChange===true){await forcePasswordChangeGate(st);return}
+  // New users go straight into setup before Home/providers/navigation are loaded.
+  // If a temporary password is required, setup starts immediately after that mandatory change.
+  if(st.onboardingRequired===true){
+    document.querySelectorAll('[data-admin-only]').forEach(x=>x.classList.toggle('hidden',authState.role!=='Admin'));
+    $('#userBadge').textContent=authState.user||'user';
+    const onboarding=await api('/api/onboarding/status').catch(()=>({required:true,sources:{iptv:0,plex:0,jellyfin:0}}));
+    if(onboarding.required){await firstLoginGuide(onboarding);return}
+  }
   document.querySelectorAll('[data-admin-only]').forEach(x=>x.classList.toggle('hidden',authState.role!=='Admin'));
   $('#userBadge').textContent=authState.user||'user';
   const s=await api('/api/status');$('#status').textContent=`${s.version} · ${s.platform}`;
@@ -2129,6 +2137,8 @@ async function editProvider(id){
   try{
     const p=await api('/api/providers/'+encodeURIComponent(id)+'/edit');
     editingProviderId=id;
+    // My Sources has no Admin editor controls. Open its dedicated IPTV editor instead.
+    if(currentView==='sources'||!$('#pname')){await openPersonalIptvEditor(id,p);return}
     $('#pid').value=p.id;$('#pname').value=p.name;$('#ptype').value=p.type;
     $('#purl').value=p.playlistUrl||'';$('#pepg').value=p.epgUrl||'';$('#pbase').value=p.baseUrl||'';
     $('#puser').value=p.username||'';$('#ppass').value='';
@@ -2137,6 +2147,74 @@ async function editProvider(id){
     $('#pname').scrollIntoView({behavior:'smooth',block:'center'});$('#pname').focus();
   }catch(e){alert(friendlyError(e))}
 }
+
+let personalSourceEditorProviderId=null;
+let cataloguePrefs={hiddenVodCategories:[],hiddenVodItems:[],hiddenSeriesCategories:[],hiddenSeriesItems:[]};
+
+async function openPersonalIptvEditor(id,prefetched=null){
+  try{
+    const p=prefetched||await api('/api/providers/'+encodeURIComponent(id)+'/edit');
+    personalSourceEditorProviderId=id;currentProvider=id;
+    content.innerHTML=`<div class=hero><span class=kicker>IPTV SOURCE</span><h2>Edit ${esc(p.name)}</h2><p class=muted>Change the connection and choose exactly which Live TV groups/channels, Movies and Series are visible.</p><div class=row><button class=btn onclick="sourcesView()">← My Sources</button></div></div>
+    <div class="sourceEditTabs">
+      <button class="btn active" data-source-tab=connection onclick="showPersonalSourceTab('connection',this)">Connection</button>
+      <button class=btn data-source-tab=live onclick="showPersonalSourceTab('live',this)">Live TV</button>
+      ${p.type==='xtream'?`<button class=btn data-source-tab=vod onclick="showPersonalSourceTab('vod',this)">Movies</button><button class=btn data-source-tab=series onclick="showPersonalSourceTab('series',this)">Series</button>`:''}
+    </div>
+    <section id=personalSourcePanel class=card></section>`;
+    window._personalProvider=p;showPersonalSourceTab('connection',document.querySelector('[data-source-tab=connection]'));
+  }catch(e){alert(friendlyError(e))}
+}
+
+async function showPersonalSourceTab(tab,button){
+  document.querySelectorAll('[data-source-tab]').forEach(x=>x.classList.toggle('active',x===button));
+  const p=window._personalProvider,box=$('#personalSourcePanel');if(!p||!box)return;
+  if(tab==='connection'){
+    box.innerHTML=`<h3>Connection</h3><div class=grid2><div class=field><label>Name</label><input id=srcName value="${escAttr(p.name)}"></div><div class=field><label>Type</label><select id=srcType disabled><option>${esc(p.type)}</option></select></div></div>
+      ${p.type==='m3u'?`<div class=field><label>M3U URL</label><input id=srcPlaylist value="${escAttr(p.playlistUrl||'')}"></div><div class=field><label>EPG URL</label><input id=srcEpg value="${escAttr(p.epgUrl||'')}"></div>`:`<div class=field><label>Xtream server URL</label><input id=srcBase value="${escAttr(p.baseUrl||'')}"></div><div class=grid2><div class=field><label>Username</label><input id=srcUser value="${escAttr(p.username||'')}"></div><div class=field><label>Password</label><input id=srcPass type=password placeholder="${p.passwordStored?'Leave blank to keep existing password':'Password'}"></div></div>`}
+      <div class=row><button class=btn onclick=savePersonalIptvConnection()>Save connection</button><button class=btn onclick="testProvider('${escAttr(p.id)}',this)">Test connection</button></div><div id="ptest-${escAttr(p.id)}" class=muted></div>`;
+    return;
+  }
+  if(tab==='live'){await renderPersonalLiveVisibility();return}
+  if(tab==='vod'||tab==='series'){await renderPersonalCatalogueVisibility(tab);return}
+}
+
+async function savePersonalIptvConnection(){
+  const p=window._personalProvider;if(!p)return;
+  const body={id:p.id,name:$('#srcName').value,type:p.type,playlistUrl:p.type==='m3u'?$('#srcPlaylist').value:'',epgUrl:p.type==='m3u'?$('#srcEpg').value:'',baseUrl:p.type==='xtream'?$('#srcBase').value:'',username:p.type==='xtream'?$('#srcUser').value:'',password:p.type==='xtream'?$('#srcPass').value:'',keepExistingConnection:false,keepExistingPassword:p.type==='xtream'&&!$('#srcPass').value};
+  try{await jpost('/api/providers',body);window._personalProvider=await api('/api/providers/'+encodeURIComponent(p.id)+'/edit');alert('IPTV source saved.')}catch(e){alert(friendlyError(e))}
+}
+
+async function renderPersonalLiveVisibility(){
+  const box=$('#personalSourcePanel');box.innerHTML='<p class=muted>Loading Live TV groups and channels…</p>';
+  try{currentProvider=personalSourceEditorProviderId;await loadChannelPrefs();const all=await api('/api/channels/'+encodeURIComponent(currentProvider));const groups=[...new Set(all.map(c=>c.group).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+    box.innerHTML=`<div class=sectionHead><div><h3>Live TV visibility</h3><p class=muted>Hidden groups and channels disappear from Live TV and Guide.</p></div><button class=btn onclick=resetPersonalLiveVisibility()>Reset</button></div><h4>Groups</h4><div class=manageList>${groups.map(g=>`<label><input type=checkbox ${channelPrefs.hiddenGroups.includes(g)?'checked':''} onchange='setPersonalLiveGroup(${JSON.stringify(g)},this.checked)'> Hide ${esc(g)}</label>`).join('')||'<span class=muted>No groups found.</span>'}</div><h4>Channels</h4><input id=sourceLiveSearch placeholder="Search channels" oninput=filterPersonalLiveChannels(this.value)><div id=sourceLiveChannels class=manageList>${all.map(c=>personalLiveChannelRow(c)).join('')}</div>`;window._personalLiveChannels=all;
+  }catch(e){box.innerHTML=errorCard(e)}
+}
+function personalLiveChannelRow(c){return `<div class=manageChannel data-source-search="${escAttr((c.name+' '+(c.group||'')).toLowerCase())}"><label><input type=checkbox ${channelPrefs.hiddenChannels.includes(c.key)?'checked':''} onchange='setPersonalLiveChannel(${JSON.stringify(c.key)},this.checked)'> Hide</label><span><b>${esc(c.name)}</b><small>${esc(c.group||'')}</small></span></div>`}
+function filterPersonalLiveChannels(q){q=(q||'').toLowerCase();document.querySelectorAll('#sourceLiveChannels [data-source-search]').forEach(x=>x.style.display=x.dataset.sourceSearch.includes(q)?'':'none')}
+async function setPersonalLiveGroup(group,hidden){await jpost('/api/channel-preferences/'+encodeURIComponent(personalSourceEditorProviderId)+'/group',{group,hidden});await loadChannelPrefs()}
+async function setPersonalLiveChannel(key,hidden){await jpost('/api/channel-preferences/'+encodeURIComponent(personalSourceEditorProviderId)+'/channel',{channelKey:key,hidden,alias:channelPrefs.aliases?.[key]??null});await loadChannelPrefs()}
+async function resetPersonalLiveVisibility(){if(!confirm('Show all Live TV groups and channels again?'))return;await api('/api/channel-preferences/'+encodeURIComponent(personalSourceEditorProviderId)+'/reset',{method:'POST'});await renderPersonalLiveVisibility()}
+
+async function loadCataloguePrefs(){
+  try{cataloguePrefs=await api('/api/catalogue-preferences/'+encodeURIComponent(personalSourceEditorProviderId))}catch{cataloguePrefs={}}
+  cataloguePrefs.hiddenVodCategories=cataloguePrefs.hiddenVodCategories||[];cataloguePrefs.hiddenVodItems=cataloguePrefs.hiddenVodItems||[];cataloguePrefs.hiddenSeriesCategories=cataloguePrefs.hiddenSeriesCategories||[];cataloguePrefs.hiddenSeriesItems=cataloguePrefs.hiddenSeriesItems||[];
+}
+async function renderPersonalCatalogueVisibility(kind){
+  const box=$('#personalSourcePanel'),label=kind==='vod'?'Movies':'Series';box.innerHTML=`<p class=muted>Loading ${label.toLowerCase()} groups…</p>`;
+  try{await loadCataloguePrefs();const cats=await api(`/api/${kind}/${encodeURIComponent(personalSourceEditorProviderId)}/categories?includeHidden=true`,{timeoutMs:30000});const hidden=kind==='vod'?cataloguePrefs.hiddenVodCategories:cataloguePrefs.hiddenSeriesCategories;
+    box.innerHTML=`<div class=sectionHead><div><h3>${label} visibility</h3><p class=muted>Hide whole groups/categories or individual ${label.toLowerCase()}. Hidden content is removed from normal browsing and search lists that use the IPTV catalogue.</p></div><button class=btn onclick="resetPersonalCatalogueVisibility('${kind}')">Reset</button></div><h4>Groups / categories</h4><div class=manageList>${cats.map(c=>`<label><input type=checkbox ${hidden.includes(c.id)?'checked':''} onchange='setCatalogueCategory(${JSON.stringify(kind)},${JSON.stringify(c.id)},this.checked)'> Hide ${esc(c.name)}</label>`).join('')||'<span class=muted>No categories found.</span>'}</div><h4>${label}</h4><div class=row><select id=sourceCatalogueCategory onchange="loadPersonalCatalogueItems('${kind}',this.value)"><option value="">Choose group/category…</option>${cats.map(c=>`<option value="${escAttr(c.id)}">${esc(c.name)}</option>`).join('')}</select></div><div id=sourceCatalogueItems class=manageList><span class=muted>Choose a group to manage individual titles.</span></div>`;
+  }catch(e){box.innerHTML=errorCard(e)}
+}
+async function loadPersonalCatalogueItems(kind,categoryId){
+  const box=$('#sourceCatalogueItems');if(!box)return;if(!categoryId){box.innerHTML='<span class=muted>Choose a group to manage individual titles.</span>';return}box.innerHTML='<span class=muted>Loading…</span>';
+  try{await loadCataloguePrefs();const rows=await api(`/api/${kind}/${encodeURIComponent(personalSourceEditorProviderId)}/items?categoryId=${encodeURIComponent(categoryId)}&includeHidden=true`,{timeoutMs:120000,attempts:1});const hidden=kind==='vod'?cataloguePrefs.hiddenVodItems:cataloguePrefs.hiddenSeriesItems;box.innerHTML=`<input id=sourceCatalogueSearch placeholder="Search" oninput=filterPersonalCatalogueItems(this.value)>`+rows.map(x=>`<div class=manageChannel data-source-search="${escAttr((x.name||'').toLowerCase())}"><label><input type=checkbox ${hidden.includes(String(x.id))?'checked':''} onchange='setCatalogueItem(${JSON.stringify(kind)},${JSON.stringify(String(x.id))},this.checked)'> Hide</label><span><b>${esc(x.name)}</b><small>${esc(x.year||'')}</small></span></div>`).join('')||'<span class=muted>No titles found.</span>';}catch(e){box.innerHTML=errorCard(e)}
+}
+function filterPersonalCatalogueItems(q){q=(q||'').toLowerCase();document.querySelectorAll('#sourceCatalogueItems [data-source-search]').forEach(x=>x.style.display=x.dataset.sourceSearch.includes(q)?'':'none')}
+async function setCatalogueCategory(kind,categoryId,hidden){await jpost('/api/catalogue-preferences/'+encodeURIComponent(personalSourceEditorProviderId)+'/category',{kind,categoryId,hidden});await loadCataloguePrefs()}
+async function setCatalogueItem(kind,itemId,hidden){await jpost('/api/catalogue-preferences/'+encodeURIComponent(personalSourceEditorProviderId)+'/item',{kind,itemId,hidden});await loadCataloguePrefs()}
+async function resetPersonalCatalogueVisibility(kind){if(!confirm(`Show all ${kind==='vod'?'movies':'series'} again?`))return;await jpost('/api/catalogue-preferences/'+encodeURIComponent(personalSourceEditorProviderId)+'/reset',{kind});await renderPersonalCatalogueVisibility(kind)}
 
 async function saveProvider(){
   const p={id:editingProviderId||'',name:$('#pname').value,type:$('#ptype').value,playlistUrl:$('#purl').value,epgUrl:$('#pepg').value,baseUrl:$('#pbase').value,username:$('#puser').value,password:$('#ppass').value,keepExistingConnection:false,keepExistingPassword:!!editingProviderId&&!$('#ppass').value};
@@ -3892,7 +3970,7 @@ function tvHomeJump(section){
 
 
 
-// v34.1.0 — Cleanup release
+// v34.1.2 — Cleanup release
 async function releaseV34Advanced(){return await api('/api/v34/advanced-features')}
 async function advancedPlatformSnapshot(){
   const [advanced,rooms,search,watchlist]=await Promise.all([

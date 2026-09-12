@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.HttpOverrides;
 using System.Net;
 using System.Collections.Concurrent;
 using System.Diagnostics;
@@ -67,6 +67,7 @@ var providersFile = Path.Combine(dataDir, "providers.json");
 var favouritesFile = Path.Combine(dataDir, "favourites.json");
 var continueFile = Path.Combine(dataDir, "continue-watching.json");
 var channelPreferencesFile = Path.Combine(dataDir, "channel-preferences.json");
+var cataloguePreferencesFile = Path.Combine(dataDir, "catalogue-preferences.json");
 var profilesFile = Path.Combine(dataDir, "profiles.json");
 var adminFile = Path.Combine(dataDir, "admin.json");
 var usersFile = Path.Combine(dataDir, "users.json");
@@ -648,6 +649,29 @@ ChannelPreferences PreferencesFor(string providerId)
         : new ChannelPreferences(new(StringComparer.OrdinalIgnoreCase), new(StringComparer.OrdinalIgnoreCase), new(StringComparer.OrdinalIgnoreCase));
 }
 
+Dictionary<string, CataloguePreferences> LoadCataloguePreferences() =>
+    Load<Dictionary<string, CataloguePreferences>>(cataloguePreferencesFile) ?? new(StringComparer.OrdinalIgnoreCase);
+
+CataloguePreferences CataloguePreferencesFor(string providerId)
+{
+    var all = LoadCataloguePreferences();
+    if (all.TryGetValue(providerId, out var pref) && pref is not null)
+    {
+        pref.HiddenVodCategories ??= new(StringComparer.OrdinalIgnoreCase);
+        pref.HiddenVodItems ??= new(StringComparer.OrdinalIgnoreCase);
+        pref.HiddenSeriesCategories ??= new(StringComparer.OrdinalIgnoreCase);
+        pref.HiddenSeriesItems ??= new(StringComparer.OrdinalIgnoreCase);
+        return pref;
+    }
+    return new CataloguePreferences();
+}
+
+bool CanManageProviderId(HttpContext ctx, string providerId)
+{
+    var p = LoadProviders().FirstOrDefault(x => x.Id == providerId);
+    return p is not null && CanManageProvider(ctx, p);
+}
+
 
 List<StorageTarget> LoadStorageTargets() => Load<List<StorageTarget>>(storageTargetsFile) ?? new();
 
@@ -1034,7 +1058,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "34.1.0",
+    version = "34.1.2",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -1072,8 +1096,8 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = AuthConfigured();
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "34.1.0", checks })
-        : Results.Json(new { status = "not-ready", version = "34.1.0", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "34.1.2", checks })
+        : Results.Json(new { status = "not-ready", version = "34.1.2", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 
@@ -1246,7 +1270,7 @@ app.MapPost("/api/onboarding/restart", (HttpContext ctx) =>
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "34.1.0",
+    version = "34.1.2",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = AuthConfigured(),
@@ -1265,7 +1289,11 @@ app.MapGet("/api/auth/status", (HttpContext ctx) =>
         authenticated = ctx.User.Identity?.IsAuthenticated == true,
         user = ctx.User.Identity?.Name,
         role = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "",
-        requirePasswordChange = current?.RequirePasswordChange ?? false
+        requirePasswordChange = current?.RequirePasswordChange ?? false,
+        onboardingRequired = current is not null &&
+            !current.OnboardingCompleted &&
+            !current.OnboardingSkipped &&
+            !current.OnboardingNeverShow
     });
 }).AllowAnonymous();
 
@@ -1278,7 +1306,13 @@ app.MapPost("/api/auth/setup", async (SetupRequest req, HttpContext ctx) =>
         PasswordCredential.Create(username, req.Password), username);
     Save(usersFile, new List<AppUser> { user });
     await SignIn(ctx, user.Username, user.Role);
-    return Results.Ok(new { user = user.Username, role = user.Role, requirePasswordChange = user.RequirePasswordChange });
+    return Results.Ok(new
+    {
+        user = user.Username,
+        role = user.Role,
+        requirePasswordChange = user.RequirePasswordChange,
+        onboardingRequired = !user.OnboardingCompleted && !user.OnboardingSkipped && !user.OnboardingNeverShow
+    });
 }).AllowAnonymous();
 
 app.MapPost("/api/auth/login", async (LoginRequest req, HttpContext ctx) =>
@@ -1293,7 +1327,13 @@ app.MapPost("/api/auth/login", async (LoginRequest req, HttpContext ctx) =>
     }
 
     await SignIn(ctx, user.Username, user.Role);
-    return Results.Ok(new { user = user.Username, role = user.Role, requirePasswordChange = user.RequirePasswordChange });
+    return Results.Ok(new
+    {
+        user = user.Username,
+        role = user.Role,
+        requirePasswordChange = user.RequirePasswordChange,
+        onboardingRequired = !user.OnboardingCompleted && !user.OnboardingSkipped && !user.OnboardingNeverShow
+    });
 }).AllowAnonymous();
 
 app.MapPost("/api/auth/logout", async (HttpContext ctx) =>
@@ -1423,11 +1463,13 @@ app.MapPost("/api/admin/users", (UserInput input, HttpContext ctx) =>
     var accountOwner = existing?.AccountOwnerUsername;
     if (string.IsNullOrWhiteSpace(accountOwner))
         accountOwner = AccountOwnerFor(creator);
+    // A newly created account must always enter Personal Media Setup on its first usable login.
+    // Existing accounts keep their own onboarding state when edited.
     var updated = new AppUser(
         id, username, role, input.Enabled, credential, accountOwner,
-        existing?.OnboardingCompleted ?? false,
-        existing?.OnboardingSkipped ?? false,
-        existing?.OnboardingNeverShow ?? false,
+        existing is null ? false : existing.OnboardingCompleted,
+        existing is null ? false : existing.OnboardingSkipped,
+        existing is null ? false : existing.OnboardingNeverShow,
         input.RequirePasswordChange);
     var candidate = users.Where(x => x.Id != id).Append(updated).ToList();
     if (!HasEnabledAdmin(candidate))
@@ -1794,19 +1836,23 @@ app.MapPost("/api/catalogue-cache/clear/{providerId}", (string providerId) =>
     return Results.Ok(new { cleared = true, providerId });
 }).RequireAuthorization();
 
-app.MapGet("/api/vod/{providerId}/categories", async (string providerId) =>
+app.MapGet("/api/vod/{providerId}/categories", async (string providerId, HttpContext ctx, bool includeHidden = false) =>
 {
     var resolved = ResolveXtream(providerId);
     if (resolved is null) return Results.NotFound();
+    if (!CanManageProviderId(ctx, providerId)) return Results.Forbid();
     try
     {
         using var doc = await CachedXtreamJson(vodCategoryCache, providerId, resolved.Value.Connection,
             "get_vod_categories", TimeSpan.FromSeconds(12));
-        return Results.Ok(doc.RootElement.EnumerateArray().Select(x => new
+        var pref = CataloguePreferencesFor(providerId);
+        var rows = doc.RootElement.EnumerateArray().Select(x => new
         {
             id = JsonString(x, "category_id"),
             name = JsonString(x, "category_name")
-        }).ToList());
+        }).ToList();
+        if (!includeHidden) rows = rows.Where(x => !pref.HiddenVodCategories.Contains(x.id)).ToList();
+        return Results.Ok(rows);
     }
     catch (Exception ex)
     {
@@ -1815,12 +1861,16 @@ app.MapGet("/api/vod/{providerId}/categories", async (string providerId) =>
     }
 }).RequireAuthorization();
 
-app.MapGet("/api/vod/{providerId}/items", async (string providerId, string? categoryId) =>
+app.MapGet("/api/vod/{providerId}/items", async (string providerId, string? categoryId, HttpContext ctx, bool includeHidden = false) =>
 {
     var resolved = ResolveXtream(providerId);
     if (resolved is null) return Results.NotFound();
+    if (!CanManageProviderId(ctx, providerId)) return Results.Forbid();
     try
     {
+        var pref = CataloguePreferencesFor(providerId);
+        if (!includeHidden && !string.IsNullOrWhiteSpace(categoryId) && pref.HiddenVodCategories.Contains(categoryId!))
+            return Results.Ok(Array.Empty<object>());
         (string Key, string Value)? extra = string.IsNullOrWhiteSpace(categoryId) ? null : ("category_id", categoryId!);
         var cacheKey = providerId + ":" + (categoryId ?? "");
         var vodSw = Stopwatch.StartNew();
@@ -1833,6 +1883,7 @@ app.MapGet("/api/vod/{providerId}/items", async (string providerId, string? cate
         foreach (var x in doc.RootElement.EnumerateArray().Take(5000))
         {
             var id = JsonString(x, "stream_id");
+            if (!includeHidden && pref.HiddenVodItems.Contains(id)) continue;
             var ext = JsonString(x, "container_extension");
             var source = BuildXtreamMovieUrl(resolved.Value.Connection, id, ext);
             rows.Add(new
@@ -1858,19 +1909,23 @@ app.MapGet("/api/vod/{providerId}/items", async (string providerId, string? cate
     }
 }).RequireAuthorization();
 
-app.MapGet("/api/series/{providerId}/categories", async (string providerId) =>
+app.MapGet("/api/series/{providerId}/categories", async (string providerId, HttpContext ctx, bool includeHidden = false) =>
 {
     var resolved = ResolveXtream(providerId);
     if (resolved is null) return Results.NotFound();
+    if (!CanManageProviderId(ctx, providerId)) return Results.Forbid();
     try
     {
         using var doc = await CachedXtreamJson(seriesCategoryCache, providerId, resolved.Value.Connection,
             "get_series_categories", TimeSpan.FromSeconds(12));
-        return Results.Ok(doc.RootElement.EnumerateArray().Select(x => new
+        var pref = CataloguePreferencesFor(providerId);
+        var rows = doc.RootElement.EnumerateArray().Select(x => new
         {
             id = JsonString(x, "category_id"),
             name = JsonString(x, "category_name")
-        }).ToList());
+        }).ToList();
+        if (!includeHidden) rows = rows.Where(x => !pref.HiddenSeriesCategories.Contains(x.id)).ToList();
+        return Results.Ok(rows);
     }
     catch (Exception ex)
     {
@@ -1879,12 +1934,16 @@ app.MapGet("/api/series/{providerId}/categories", async (string providerId) =>
     }
 }).RequireAuthorization();
 
-app.MapGet("/api/series/{providerId}/items", async (string providerId, string? categoryId) =>
+app.MapGet("/api/series/{providerId}/items", async (string providerId, string? categoryId, HttpContext ctx, bool includeHidden = false) =>
 {
     var resolved = ResolveXtream(providerId);
     if (resolved is null) return Results.NotFound();
+    if (!CanManageProviderId(ctx, providerId)) return Results.Forbid();
     try
     {
+        var pref = CataloguePreferencesFor(providerId);
+        if (!includeHidden && !string.IsNullOrWhiteSpace(categoryId) && pref.HiddenSeriesCategories.Contains(categoryId!))
+            return Results.Ok(Array.Empty<object>());
         (string Key, string Value)? extra = string.IsNullOrWhiteSpace(categoryId) ? null : ("category_id", categoryId!);
         var cacheKey = providerId + ":" + (categoryId ?? "");
         using var doc = await CachedXtreamJson(seriesItemCache, cacheKey, resolved.Value.Connection,
@@ -1899,6 +1958,7 @@ app.MapGet("/api/series/{providerId}/items", async (string providerId, string? c
             genre = JsonString(x, "genre"),
             poster = JsonString(x, "cover")
         }).ToList();
+        if (!includeHidden) rows = rows.Where(x => !pref.HiddenSeriesItems.Contains(x.id)).ToList();
         return Results.Ok(rows);
     }
     catch (Exception ex)
@@ -2594,6 +2654,50 @@ app.MapPost("/api/channel-preferences/{providerId}/reset", (string providerId) =
     var all = LoadChannelPreferences(); all.Remove(providerId); Save(channelPreferencesFile, all); return Results.NoContent();
 }).RequireAuthorization();
 
+app.MapGet("/api/catalogue-preferences/{providerId}", (string providerId, HttpContext ctx) =>
+{
+    if (!CanManageProviderId(ctx, providerId)) return Results.Forbid();
+    return Results.Ok(CataloguePreferencesFor(providerId));
+}).RequireAuthorization();
+
+app.MapPost("/api/catalogue-preferences/{providerId}/category", (string providerId, CatalogueCategoryVisibilityRequest req, HttpContext ctx) =>
+{
+    if (!CanManageProviderId(ctx, providerId)) return Results.Forbid();
+    var kind = (req.Kind ?? "").Trim().ToLowerInvariant();
+    if (kind is not ("vod" or "series")) return Results.BadRequest("Kind must be vod or series.");
+    var all = LoadCataloguePreferences();
+    var pref = all.TryGetValue(providerId, out var existing) && existing is not null ? existing : new CataloguePreferences();
+    var set = kind == "vod" ? pref.HiddenVodCategories : pref.HiddenSeriesCategories;
+    if (req.Hidden) set.Add(req.CategoryId); else set.Remove(req.CategoryId);
+    all[providerId] = pref; Save(cataloguePreferencesFile, all);
+    return Results.Ok(pref);
+}).RequireAuthorization();
+
+app.MapPost("/api/catalogue-preferences/{providerId}/item", (string providerId, CatalogueItemVisibilityRequest req, HttpContext ctx) =>
+{
+    if (!CanManageProviderId(ctx, providerId)) return Results.Forbid();
+    var kind = (req.Kind ?? "").Trim().ToLowerInvariant();
+    if (kind is not ("vod" or "series")) return Results.BadRequest("Kind must be vod or series.");
+    var all = LoadCataloguePreferences();
+    var pref = all.TryGetValue(providerId, out var existing) && existing is not null ? existing : new CataloguePreferences();
+    var set = kind == "vod" ? pref.HiddenVodItems : pref.HiddenSeriesItems;
+    if (req.Hidden) set.Add(req.ItemId); else set.Remove(req.ItemId);
+    all[providerId] = pref; Save(cataloguePreferencesFile, all);
+    return Results.Ok(pref);
+}).RequireAuthorization();
+
+app.MapPost("/api/catalogue-preferences/{providerId}/reset", (string providerId, CatalogueResetRequest req, HttpContext ctx) =>
+{
+    if (!CanManageProviderId(ctx, providerId)) return Results.Forbid();
+    var all = LoadCataloguePreferences();
+    if (!all.TryGetValue(providerId, out var pref) || pref is null) return Results.NoContent();
+    var kind = (req.Kind ?? "all").Trim().ToLowerInvariant();
+    if (kind is "vod" or "all") { pref.HiddenVodCategories.Clear(); pref.HiddenVodItems.Clear(); }
+    if (kind is "series" or "all") { pref.HiddenSeriesCategories.Clear(); pref.HiddenSeriesItems.Clear(); }
+    all[providerId] = pref; Save(cataloguePreferencesFile, all);
+    return Results.NoContent();
+}).RequireAuthorization();
+
 app.MapGet("/api/favourites", () => Results.Ok(LoadFavourites())).RequireAuthorization();
 app.MapPost("/api/favourites/{id}", (string id) =>
 {
@@ -3143,7 +3247,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "34.1.0",
+        version = "34.1.2",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -3226,7 +3330,7 @@ app.MapPost("/api/system/backup", () =>
         foreach (var name in new[]
         {
             "admin.json", "secrets.key", "providers.json", "favourites.json",
-            "continue-watching.json", "channel-preferences.json", "profiles.json", "version", "release.json"
+            "continue-watching.json", "channel-preferences.json", "catalogue-preferences.json", "profiles.json", "version", "release.json"
         })
         {
             var source = Path.Combine(dataDir, name);
@@ -3267,7 +3371,7 @@ app.MapPost("/api/system/restore/{fileName}", (string fileName) =>
     using var archive = ZipFile.OpenRead(file);
     var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "providers.json", "favourites.json", "continue-watching.json", "channel-preferences.json", "profiles.json", "users.json", "admin.json", "profile-access.json", "profile-policies.json", "media-libraries.json"
+        "providers.json", "favourites.json", "continue-watching.json", "channel-preferences.json", "catalogue-preferences.json", "profiles.json", "users.json", "admin.json", "profile-access.json", "profile-policies.json", "media-libraries.json"
     };
     foreach (var entry in archive.Entries.Where(e => allowed.Contains(e.FullName)))
     {
@@ -3952,7 +4056,7 @@ app.MapGet("/api/admin/recovery/capabilities", () => Results.Ok(new {
 }));
 
 app.MapGet("/api/admin/production-readiness", () => Results.Ok(new {
-    version = "34.1.0",
+    version = "34.1.2",
     adminUx = true,
     overview = true,
     sources = true,
@@ -4026,7 +4130,7 @@ app.MapGet("/api/personal-sources/architecture", (HttpContext ctx) =>
 {
     var username = ctx.User.Identity?.Name ?? "";
     return Results.Ok(new {
-        version = "34.1.0",
+        version = "34.1.2",
         ownership = "per-user",
         authenticatedUser = username,
         crossUserSharing = false,
@@ -4042,7 +4146,7 @@ app.MapGet("/api/home/personal", async (HttpContext ctx) =>
     var providers = LoadProviders().Where(x => CanAccessProvider(ctx, x)).ToList();
     var libraries = LoadMediaLibraries().Where(x => x.Enabled && CanAccessMediaLibrary(ctx, x)).ToList();
     return Results.Ok(new {
-        version = "34.1.0",
+        version = "34.1.2",
         hasIptv = providers.Count > 0,
         hasPlex = libraries.Any(x => x.Type.Equals("plex", StringComparison.OrdinalIgnoreCase)),
         hasJellyfin = libraries.Any(x => x.Type.Equals("jellyfin", StringComparison.OrdinalIgnoreCase)),
@@ -4193,7 +4297,7 @@ app.MapGet("/api/v32/playback-diagnostics", async (HttpContext ctx) =>
     var visibleProviders = LoadProviders().Where(x => CanAccessProvider(ctx, x)).ToList();
     var libraries = LoadMediaLibraries().Where(x => x.Enabled && CanAccessMediaLibrary(ctx, x)).ToList();
     return Results.Ok(new {
-        version = "34.1.0",
+        version = "34.1.2",
         generatedAt = DateTimeOffset.UtcNow,
         providers = visibleProviders.Select(x => new { x.Id, x.Name, x.Type, configured = true }),
         mediaLibraries = libraries.Select(x => new { x.Id, x.Name, x.Type, x.Enabled }),
@@ -4213,7 +4317,7 @@ app.MapGet("/api/v34/advanced-features", () => Results.Ok(ReleaseV3400.Capabilit
 
 app.MapGet("/api/iptv/transport/capabilities", () => Results.Ok(new
 {
-    version = "34.1.0",
+    version = "34.1.2",
     retry = new { maxAttempts = 3, backoffMs = new[] { 300, 600 }, transientHttp = new[] { 408, 425, 429, 500, 502, 503, 504 } },
     resilientReads = new[] { "Xtream JSON", "M3U playlist", "XMLTV EPG" },
     liveChannelCache = new { memory = true, diskFallbackHours = 24, staleWhileRevalidate = true },
@@ -4871,6 +4975,16 @@ record ChannelCacheEntry(List<LiveChannel> Channels, DateTimeOffset Loaded);
 record ContinueItem(string Id, string Title, string Url, double PositionSeconds, DateTimeOffset Updated, string? Poster = null, double? DurationSeconds = null);
 record ContinuePosterUpdate(string? Poster);
 record ChannelPreferences(HashSet<string> HiddenGroups, HashSet<string> HiddenChannels, Dictionary<string,string> Aliases);
+sealed class CataloguePreferences
+{
+    public HashSet<string> HiddenVodCategories { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public HashSet<string> HiddenVodItems { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public HashSet<string> HiddenSeriesCategories { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public HashSet<string> HiddenSeriesItems { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+}
+record CatalogueCategoryVisibilityRequest(string? Kind, string CategoryId, bool Hidden);
+record CatalogueItemVisibilityRequest(string? Kind, string ItemId, bool Hidden);
+record CatalogueResetRequest(string? Kind);
 record ViewerProfile(string Id, string Name, bool IsKids, string Icon, string? OwnerUsername = null);
 record ViewerProfileInput(string? Id, string? Name, bool IsKids, string? Icon, string? OwnerUsername = null);
 record GroupVisibilityRequest(string Group, bool Hidden);

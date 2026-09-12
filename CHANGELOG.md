@@ -1,3 +1,19 @@
+# v34.1.2
+
+- Fix: Edit IPTV from My Sources no longer crashes with `Cannot set properties of null (setting value)`.
+- Added dedicated personal IPTV source editor with Connection, Live TV, Movies and Series tabs.
+- Live TV: hide/show complete groups and individual channels.
+- Movies: hide/show Xtream categories and individual movies.
+- Series: hide/show Xtream categories and individual series.
+- Hidden IPTV catalogue content is filtered by the server during normal browsing.
+- Added reset controls for Live TV, Movies and Series visibility.
+
+# v34.1.1
+
+- Fix: Personal Media Setup now opens automatically on a new user's first usable login.
+- Fix: forced temporary-password change continues directly into setup.
+- Fix: newly created accounts always receive a clean onboarding state.
+
 ## v31.2.0 — GitHub UI Updater
 - Visible update-available indicator for administrators.
 - New Admin → System → System Update page.

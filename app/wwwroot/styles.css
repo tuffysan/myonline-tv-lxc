@@ -1461,3 +1461,7 @@ body.cinemaMode .sidebar,body.cinemaMode .topbar{opacity:0;pointer-events:none;t
   .admin2UserRow{grid-template-columns:auto 1fr}
   .admin2UserRow > select[multiple],.admin2UserRow .admin2Actions{grid-column:1 / -1;width:100%}
 }
+
+
+/* v34.1.2 personal IPTV source editor */
+.sourceEditTabs{display:flex;gap:.55rem;flex-wrap:wrap;margin:0 0 1rem}.sourceEditTabs .active{outline:2px solid currentColor}.manageChannel span{display:flex;flex-direction:column;gap:.15rem}.manageChannel small{opacity:.7}.sourceEditTabs+.card{min-height:240px}.manageList{max-height:520px;overflow:auto}.manageList>label{display:block;padding:.45rem 0}.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}@media(max-width:720px){.grid2{grid-template-columns:1fr}}

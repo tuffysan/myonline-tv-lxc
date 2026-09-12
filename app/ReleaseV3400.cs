@@ -1,4 +1,4 @@
-﻿namespace MyOnlineTV;
+namespace MyOnlineTV;
 
 public static class ReleaseV3400
 {
