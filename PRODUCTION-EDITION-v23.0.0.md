@@ -1,6 +1,6 @@
-# v31.1.3 — Production Edition
+# v31.2.0 — Production Edition
 
-v31.1.3 is a stabilization release. It introduces no mandatory cloud or paid service.
+v31.2.0 is a stabilization release. It introduces no mandatory cloud or paid service.
 
 ## Promotion checklist
 - PUBLISH.cmd / .NET 10 build passes.

@@ -1,4 +1,4 @@
-# v31.1.3 — Home 3.0
+# v31.2.0 — Home 3.0
 
 Local Home rail composer for Continue Watching, Live, DVR and recommendations.
 

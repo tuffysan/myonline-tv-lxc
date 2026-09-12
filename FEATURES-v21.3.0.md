@@ -1,4 +1,4 @@
-# v31.1.3 — Android TV Product
+# v31.2.0 — Android TV Product
 
 Android-TV product contract, playback readiness policy and D-pad UX checklist.
 

@@ -1,4 +1,4 @@
-# v31.1.3 — Architecture & Cleanup
+# v31.2.0 — Architecture & Cleanup
 
 Current runtime layers:
 1. Web/PWA and Android TV clients

@@ -245,6 +245,7 @@ async function enterApp(st){
   $('#userBadge').textContent=authState.user||'user';
   const s=await api('/api/status');$('#status').textContent=`${s.version} · ${s.platform}`;
   const brandVersion=$('#brandVersion');if(brandVersion)brandVersion.textContent=`Web v${s.version} · Unified Media Center`;
+  if(authState.role==='Admin')checkUiUpdate(false).catch(()=>{});
   providers=await api('/api/providers');fav=new Set(await api('/api/favourites'));profiles=await api('/api/profiles');try{sourceAccess=await api('/api/source-access/me')}catch{sourceAccess={adminIptv:true,adminPlex:true,adminJellyfin:true}};try{mediaLibraries=await api('/api/media-libraries')}catch{mediaLibraries=[]}try{accessState=await api('/api/access/me')}catch{accessState={allowedProfileIds:profiles.map(p=>p.id),defaultProfileId:profiles[0]?.id||'default',policies:{}}}profiles=profiles.filter(p=>authState.role==='Admin'||(accessState.allowedProfileIds||[]).includes(p.id));if(!profiles.some(p=>p.id===currentProfile))currentProfile=accessState.defaultProfileId||profiles[0]?.id||'default';applyPermissions();renderMediaLibraryNav();renderProfileBadge();
   if(!currentProvider&&providers.length)currentProvider=providers[0].id;
   updateResponsiveMode();
@@ -277,7 +278,7 @@ async function show(v){
   currentView=v;destroyPlayer();
   renderMobileNavigation();
   const moreSheet=$('#mobileMoreSheet');if(moreSheet){moreSheet.classList.add('hidden');moreSheet.setAttribute('aria-hidden','true');document.body.classList.remove('mobileSheetOpen')}
-  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'Recordings',platform:'Platform','profile-sync':'Profile Sync',diagnostics:'Diagnostics',appliance:'Appliance',notifications:'Notifications',rooms:'Rooms',library:'Library',search:'Search',sources:'My Sources',system:'System',completion:'Feature Completion',admin:'Admin'})[v]||v;
+  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'Recordings',platform:'Platform','profile-sync':'Profile Sync',diagnostics:'Diagnostics',appliance:'Appliance',notifications:'Notifications',rooms:'Rooms',library:'Library',search:'Search',sources:'My Sources',system:'System',completion:'Feature Completion',update:'System Update',admin:'Admin'})[v]||v;
   if(v==='home')await home();
   if(v==='live')await live();
   if(v==='guide')await guide();
@@ -298,6 +299,7 @@ async function show(v){
   if(v==='sources')await sourcesView();
   if(v==='system')await systemView();
   if(v==='completion')await featureCompletionView();
+  if(v==='update')await updateView();
   if(v==='admin')await adminView();
 }
 
@@ -1500,7 +1502,7 @@ async function featureCompletionView(){
     const groups=[...new Set(features.map(x=>x.area))];
     content.innerHTML=`
       <div class=hero>
-        <span class=kicker>v31.1.3 FEATURE COMPLETION</span>
+        <span class=kicker>v31.2.0 FEATURE COMPLETION</span>
         <h2>Feature Completion audit</h2>
         <p class=muted>This page distinguishes working features from partial implementations, foundations and missing functionality. It intentionally does not count a contract/model as a finished feature.</p>
       </div>
@@ -1529,6 +1531,135 @@ async function featureCompletionView(){
     `;
   }catch(e){content.innerHTML=errorCard(e)}
 }
+
+
+let uiUpdateStatus=null;
+let uiUpdatePollTimer=null;
+
+function renderUpdateIndicator(status){
+  const b=$('#updateIndicator');
+  if(!b)return;
+  const showIt=authState.role==='Admin' && !!status?.updateAvailable;
+  b.classList.toggle('hidden',!showIt);
+  if(showIt){
+    b.textContent=`↑ Update v${status.latestVersion} available`;
+    b.classList.toggle('ready',!!status.uiInstallable&&!!status.workerReady);
+  }
+}
+
+async function checkUiUpdate(force=false){
+  if(authState.role!=='Admin')return null;
+  const status=await api(force?'/api/admin/update/check':'/api/admin/update/status',{
+    method:force?'POST':'GET',timeoutMs:15000,attempts:1
+  });
+  uiUpdateStatus=status;
+  renderUpdateIndicator(status);
+  return status;
+}
+
+function updateStateLabel(worker){
+  const state=String(worker?.state||'').toLowerCase();
+  if(!state)return '';
+  return ({queued:'Queued',downloading:'Downloading',installing:'Installing',completed:'Completed',failed:'Failed',idle:'Idle'})[state]||state;
+}
+
+async function updateView(){
+  if(authState.role!=='Admin'){content.innerHTML='<div class=card>Administrator access is required.</div>';return}
+  content.innerHTML=`<div class="updatePage"><div class=updateHero><div><span class=admin2Kicker>SYSTEM UPDATE</span><h1>MyOnline TV Update</h1><p>Checking GitHub for the latest stable release…</p></div></div><div class=card>Loading…</div></div>`;
+  let st;
+  try{st=await checkUiUpdate(false)}catch(e){content.innerHTML=errorCard(e);return}
+  renderUpdateView(st);
+}
+
+function renderUpdateView(st){
+  const worker=st?.worker||{};
+  const workerState=updateStateLabel(worker);
+  const available=!!st?.updateAvailable;
+  const installable=available&&!!st?.uiInstallable&&!!st?.workerReady;
+  const checkError=st?.error?`<div class="updateNotice error">${esc(st.error)}</div>`:'';
+  const compat=!st?.uiInstallable&&available?`<div class="updateNotice warning">${esc(st.compatibilityMessage||'This release requires the terminal/Proxmox updater.')}</div>`:'';
+  const bridge=!st?.workerReady?`<div class="updateNotice warning">The secure update worker is not installed. Run the normal Proxmox updater once, then UI updates become available.</div>`:'';
+  const progress=workerState?`<div class="updateProgress ${String(worker.state||'').toLowerCase()}"><b>${esc(workerState)}</b><span>${esc(worker.message||'')}</span>${worker.targetVersion?`<small>Target v${esc(worker.targetVersion)}</small>`:''}</div>`:'';
+
+  content.innerHTML=`<div class="updatePage">
+    <div class=updateHero>
+      <div><span class=admin2Kicker>SYSTEM UPDATE</span><h1>MyOnline TV Update</h1><p>Update safely from the latest verified GitHub Release.</p></div>
+      <button class="btn btnSecondary" onclick="refreshUpdateView()">Check again</button>
+    </div>
+    ${checkError}${compat}${bridge}
+    <div class=updateVersionGrid>
+      <div class=updateVersionCard><small>Installed</small><b>v${esc(st.currentVersion||'?')}</b><span>Current running version</span></div>
+      <div class="updateVersionCard ${available?'available':''}"><small>GitHub stable</small><b>${st.latestVersion?'v'+esc(st.latestVersion):'Unknown'}</b><span>${available?'A newer version is available':'You are up to date'}</span></div>
+    </div>
+    ${progress}
+    <div class=card>
+      <h3>${available?'Update available':'No update available'}</h3>
+      <p>${available?`GitHub has <b>v${esc(st.latestVersion)}</b>. The updater downloads the signed release assets, verifies SHA-256, creates a backup, installs the release, restarts the service and rolls back automatically if health checks fail.`:'Your installed version matches the latest stable GitHub release.'}</p>
+      <div class=row>
+        ${available?`<button class="btn updateInstallBtn" ${installable?'':'disabled'} onclick="installUiUpdate()">Install v${esc(st.latestVersion)}</button>`:''}
+        ${st.releaseUrl?`<button class="btn btnSecondary" onclick="window.open('${escAttr(st.releaseUrl)}','_blank','noopener')">View GitHub release</button>`:''}
+      </div>
+      ${available&&!installable?'<p class=muted>UI installation is disabled until the release and local worker both pass the safety checks above.</p>':''}
+    </div>
+    <div class=card><h3>Safety</h3><div class=updateSafetyGrid>
+      <span>✓ Admin-only action</span><span>✓ Release metadata validation</span><span>✓ SHA-256 verification</span>
+      <span>✓ Pre-update data backup</span><span>✓ Health/readiness verification</span><span>✓ Automatic binary rollback</span>
+    </div></div>
+  </div>`;
+}
+
+async function refreshUpdateView(){
+  try{
+    const st=await checkUiUpdate(true);
+    renderUpdateView(st);
+  }catch(e){alert(friendlyError(e))}
+}
+
+async function installUiUpdate(){
+  const st=uiUpdateStatus||await checkUiUpdate(true);
+  if(!st?.updateAvailable)return;
+  if(!confirm(`Install MyOnline TV v${st.latestVersion} now?\n\nThe web app will restart and can be unavailable for a short time.`))return;
+  try{
+    const accepted=await api('/api/admin/update/install',{method:'POST',timeoutMs:20000,attempts:1});
+    const target=accepted.targetVersion||st.latestVersion;
+    content.innerHTML=`<div class="updatePage"><div class=updateHero><div><span class=admin2Kicker>SYSTEM UPDATE</span><h1>Installing v${esc(target)}</h1><p>The service will restart automatically. Keep this page open.</p></div></div><div class="updateProgress installing"><b>Update queued</b><span>${esc(accepted.message||'Preparing update…')}</span></div></div>`;
+    pollUiUpdate(target);
+  }catch(e){alert(friendlyError(e));await updateView()}
+}
+
+function pollUiUpdate(target){
+  if(uiUpdatePollTimer)clearTimeout(uiUpdatePollTimer);
+  const started=Date.now();
+  const poll=async()=>{
+    if(Date.now()-started>5*60*1000){
+      if(currentView==='update')content.insertAdjacentHTML('beforeend','<div class="updateNotice warning">Update polling timed out. Refresh the page and check System Update.</div>');
+      return;
+    }
+    try{
+      const r=await fetch('/api/admin/update/status',{credentials:'same-origin',cache:'no-store'});
+      if(r.ok){
+        const st=await r.json();
+        uiUpdateStatus=st;renderUpdateIndicator(st);
+        if(st.currentVersion===target){
+          content.innerHTML=`<div class="updatePage"><div class="updateSuccess"><b>✓ MyOnline TV v${esc(target)} is running</b><span>Update completed successfully. Reloading…</span></div></div>`;
+          setTimeout(()=>location.reload(),1800);
+          return;
+        }
+        if(String(st.worker?.state||'').toLowerCase()==='failed'){
+          renderUpdateView(st);return;
+        }
+        if(currentView==='update')renderUpdateView(st);
+      }else if(currentView==='update'){
+        content.innerHTML=`<div class="updatePage"><div class="updateProgress installing"><b>Restarting service…</b><span>Waiting for MyOnline TV to come back online.</span></div></div>`;
+      }
+    }catch{
+      if(currentView==='update')content.innerHTML=`<div class="updatePage"><div class="updateProgress installing"><b>Restarting service…</b><span>Connection temporarily unavailable. Reconnecting automatically.</span></div></div>`;
+    }
+    uiUpdatePollTimer=setTimeout(poll,2500);
+  };
+  poll();
+}
+
 
 async function adminView(){
   if(authState.role!=='Admin'){content.innerHTML='<div class=card>Administrator access is required.</div>';return}
@@ -1567,7 +1698,7 @@ async function adminView(){
   <div class="admin2Shell">
     <div class="admin2Hero">
       <div>
-        <span class="admin2Kicker">MYONLINE TV v31.1.3</span>
+        <span class="admin2Kicker">MYONLINE TV v31.2.0</span>
         <h1>Administration</h1>
         <p>Everything needed to configure, monitor and maintain your media center — without one endless settings page.</p>
       </div>
@@ -1609,7 +1740,7 @@ async function adminView(){
           <div class="admin2QuickGrid">
             <button type=button onclick="selectAdminSection('sources');document.querySelector('#pname')?.focus()">＋ Add IPTV</button>
             <button type=button onclick="selectAdminSection('sources');document.querySelector('#mlname')?.focus()">＋ Add library</button>
-            <button type=button onclick="selectAdminSection('users');document.querySelector('#auser')?.focus()">＋ Add user</button>
+            <button type=button onclick="openUserEditor()">＋ Add user</button>
             <button type=button onclick="show('diagnostics')">⌁ Diagnostics</button>
             <button type=button onclick="show('appliance')">▣ Backup</button>
             <button type=button onclick="selectAdminSection('navigation')">☰ Menu layout</button>
@@ -1696,18 +1827,18 @@ async function adminView(){
       <div class="admin2SectionHead"><div><h2>Users & profiles</h2><p>Accounts control sign-in; viewer profiles control the viewing experience.</p></div></div>
 
       <div class="admin2Card">
-        <div class="admin2CardHead"><div><h3>User accounts</h3><p>Manage sign-in accounts, roles and allowed profiles.</p></div><button class=btn onclick="document.querySelector('#auser')?.focus()">Add user</button></div>
+        <div class="admin2CardHead"><div><h3>User accounts</h3><p>Create, edit, disable and remove sign-in accounts. Every user gets a personal viewer profile automatically.</p></div><button class=btn onclick="openUserEditor()">Add user</button></div>
         <div class="admin2UserList">${users.map(u=>{const ua=accessCfg.userAccess[u.username]||{allowedProfileIds:profiles.map(p=>p.id),defaultProfileId:profiles[0]?.id||'default'};return `
           <div class="admin2UserRow">
             <div class="admin2Avatar">${esc((u.username||'?').slice(0,1).toUpperCase())}</div>
-            <div><b>${esc(u.username)}</b><small>${esc(u.role)} · ${u.enabled?'Enabled':'Disabled'}</small></div>
+            <div><b>${esc(u.username)}</b><small>${esc(u.role)} · ${u.enabled?'Enabled':'Disabled'} · Profile: ${esc(u.profileName||u.username)}</small></div>
             ${status(u.enabled,u.enabled?'Active':'Disabled')}
             <select multiple id="ua-${u.id}" title="Allowed profiles">${profiles.map(p=>`<option value="${p.id}" ${ua.allowedProfileIds.includes(p.id)?'selected':''}>${esc(p.name)}</option>`).join('')}</select>
-            <div class=admin2Actions><button class=btn onclick="saveUserAccess('${escAttr(u.id)}','${escAttr(u.username)}')">Profiles</button><button class=btn onclick="editUser('${escAttr(u.id)}')">Edit</button><button class="btn danger" onclick="deleteUser('${escAttr(u.id)}','${escAttr(u.username)}')">Remove</button></div>
+            <div class=admin2Actions><button class=btn onclick="saveUserAccess('${escAttr(u.id)}','${escAttr(u.username)}')">Save access</button><button class=btn onclick="editUser('${escAttr(u.id)}')">Edit account</button><button class=btn onclick="editProfile('${escAttr(u.profileId||'')}')">Edit profile</button><button class="btn danger" onclick="deleteUser('${escAttr(u.id)}','${escAttr(u.username)}')">Remove</button></div>
           </div>`}).join('')}</div>
       </div>
 
-      <details class="admin2Editor">
+      <details class="admin2Editor" id=userEditor>
         <summary><span>Add or edit user</span><small>Account, role and password</small></summary>
         <div class="admin2EditorBody">
           <div class=formGrid>
@@ -1723,9 +1854,17 @@ async function adminView(){
       <div id=userSourceAccessEditor class="admin2Card" style="display:none"></div>
 
       <div class="admin2Card">
-        <div class="admin2CardHead"><div><h3>Viewer profiles</h3><p>Profiles keep recommendations, permissions and Kids settings separate.</p></div></div>
-        <div class="admin2ProfileGrid">${profiles.map(p=>`<div class="admin2ProfileCard"><span>${esc(p.icon)}</span><div><b>${esc(p.name)}</b><small>${p.isKids?'Kids profile':'Standard profile'}</small></div><button class="btn danger" onclick="deleteProfile('${escAttr(p.id)}')" ${profiles.length<=1?'disabled':''}>Remove</button></div>`).join('')}</div>
-        <div class="admin2InlineForm"><div class=field><label>Name</label><input id=profileName placeholder="Profile name"></div><div class=field><label>Icon</label><select id=profileIcon><option>👤</option><option>🧑</option><option>👩</option><option>👨</option><option>🧒</option><option>🎬</option></select></div><label class=checkline><input id=profileKids type=checkbox> Kids profile</label><button class=btn id=addProfile>Add profile</button></div>
+        <div class="admin2CardHead"><div><h3>Viewer profiles</h3><p>Each account has its own profile. The profile name defaults to the username but can be changed.</p></div></div>
+        <div class="admin2ProfileGrid">${profiles.map(p=>`<div class="admin2ProfileCard"><span>${esc(p.icon)}</span><div><b>${esc(p.name)}</b><small>${p.ownerUsername?`Owner: ${esc(p.ownerUsername)} · `:''}${p.isKids?'Kids profile':'Standard profile'}</small></div><div class=admin2Actions><button class=btn onclick="editProfile('${escAttr(p.id)}')">Edit</button><button class="btn danger" onclick="deleteProfile('${escAttr(p.id)}')">Remove</button></div></div>`).join('')}</div>
+        <div class="admin2InlineForm" id=profileEditor>
+          <input id=profileId type=hidden>
+          <div class=field><label>Owner</label><select id=profileOwner><option value="">Shared / no owner</option>${users.map(u=>`<option value="${escAttr(u.username)}">${esc(u.username)}</option>`).join('')}</select></div>
+          <div class=field><label>Profile name</label><input id=profileName placeholder="Defaults to username"></div>
+          <div class=field><label>Icon</label><select id=profileIcon><option>👤</option><option>🧑</option><option>👩</option><option>👨</option><option>🧒</option><option>🎬</option></select></div>
+          <label class=checkline><input id=profileKids type=checkbox> Kids profile</label>
+          <button class=btn id=addProfile>Add profile</button>
+          <button class="btn btnSecondary" id=cancelProfile disabled>Cancel edit</button>
+        </div>
       </div>
 
       <div class="admin2Card"><div class="admin2CardHead"><div><h3>Profile permissions</h3><p>Choose media areas, providers and an optional Kids PIN.</p></div></div><div id=permissionMatrix></div></div>
@@ -1780,6 +1919,7 @@ async function adminView(){
         <button onclick="show('diagnostics')"><span>⌁</span><div><b>Diagnostics</b><small>FFmpeg, FFprobe, rclone, storage, providers and disk space.</small></div><i>→</i></button>
         <button onclick="show('appliance')"><span>◫</span><div><b>Backup & recovery</b><small>Health, backup, restore and appliance maintenance.</small></div><i>→</i></button>
         <button onclick="show('completion')"><span>✓</span><div><b>Feature completion</b><small>Audited status of implemented, partial and planned features.</small></div><i>→</i></button>
+        <button onclick="show('update')"><span>↑</span><div><b>System Update</b><small>Check GitHub and install verified updates from the UI.</small></div><i id="adminUpdateArrow">→</i></button>
       </div>
       <div class="admin2Card admin2Security"><div class="admin2CardHead"><div><h3>Security baseline</h3><p>Credentials stay server-side. Passwords are salted and provider secrets are encrypted at rest.</p></div>${status(true,'Secure')}</div></div>
     </section>
@@ -1804,11 +1944,12 @@ async function adminView(){
 
   $('#saveNavigation').onclick=saveNavigationManager;
   $('#manageChannels').onclick=manageChannels;
-  $('#addProfile').onclick=async()=>{try{await jpost('/api/profiles',{id:null,name:$('#profileName').value,isKids:$('#profileKids').checked,icon:$('#profileIcon').value});profiles=await api('/api/profiles');adminView()}catch(e){alert(friendlyError(e))}};
+  $('#addProfile').onclick=saveAdminProfile;
+  $('#cancelProfile').onclick=resetProfileEditor;
   $('#stsave').onclick=saveStorageTarget;$('#stcancel').onclick=()=>adminView();
   $('#mlsave').onclick=saveMediaLibrary;$('#mlcancel').onclick=()=>{editingMediaLibraryId=null;adminView()};
   $('#saveUser').onclick=saveAdminUser;
-  $('#cancelUser').onclick=()=>{editingUserId=null;adminView()};
+  $('#cancelUser').onclick=()=>{editingUserId=null;openUserEditor()};
   $('#savep').onclick=saveProvider;
   $('#cancelProvider').onclick=()=>{editingProviderId=null;adminView()};
 }
@@ -1839,10 +1980,72 @@ async function removeStorageTarget(id){
   try{await api('/api/admin/storage-targets/'+encodeURIComponent(id),{method:'DELETE'});adminView()}catch(e){alert(friendlyError(e))}
 }
 
+
+function openUserEditor(){
+  selectAdminSection('users');
+  const d=$('#userEditor');if(d)d.open=true;
+  editingUserId=null;
+  $('#auser').value='';
+  $('#arole').value='User';
+  $('#aenabled').checked=true;
+  $('#apass').value='';
+  $('#apass').placeholder='Required for new user';
+  $('#saveUser').textContent='Add user';
+  $('#cancelUser').disabled=true;
+  setTimeout(()=>$('#auser')?.focus(),40);
+}
+
+function resetProfileEditor(){
+  $('#profileId').value='';
+  $('#profileOwner').value='';
+  $('#profileName').value='';
+  $('#profileIcon').value='👤';
+  $('#profileKids').checked=false;
+  $('#addProfile').textContent='Add profile';
+  $('#cancelProfile').disabled=true;
+}
+
+async function editProfile(id){
+  if(!id){alert('No personal profile is assigned yet. Reload Admin and try again.');return}
+  const rows=await api('/api/profiles');
+  const p=rows.find(x=>x.id===id);if(!p)return;
+  selectAdminSection('users');
+  $('#profileId').value=p.id||'';
+  $('#profileOwner').value=p.ownerUsername||'';
+  $('#profileName').value=p.name||'';
+  $('#profileIcon').value=p.icon||'👤';
+  $('#profileKids').checked=!!p.isKids;
+  $('#addProfile').textContent='Save profile';
+  $('#cancelProfile').disabled=false;
+  $('#profileEditor')?.scrollIntoView({behavior:'smooth',block:'center'});
+  setTimeout(()=>$('#profileName')?.focus(),40);
+}
+
+async function saveAdminProfile(){
+  const owner=$('#profileOwner').value||'';
+  const typed=($('#profileName').value||'').trim();
+  const name=typed||(owner||'Profile');
+  try{
+    await jpost('/api/profiles',{
+      id:$('#profileId').value||null,
+      name,
+      isKids:$('#profileKids').checked,
+      icon:$('#profileIcon').value,
+      ownerUsername:owner||null
+    });
+    resetProfileEditor();
+    profiles=await api('/api/profiles');
+    await adminView();
+    selectAdminSection('users');
+  }catch(e){alert(friendlyError(e))}
+}
+
 async function editUser(id){
   const users=await api('/api/admin/users');
   const u=users.find(x=>x.id===id);if(!u)return;
   editingUserId=id;
+  selectAdminSection('users');
+  const d=$('#userEditor');if(d)d.open=true;
   $('#auser').value=u.username;$('#arole').value=u.role;$('#aenabled').checked=u.enabled;$('#apass').value='';
   $('#apass').placeholder='Leave blank to keep current password';
   $('#saveUser').textContent='Save user';$('#cancelUser').disabled=false;$('#auser').focus();
@@ -3124,8 +3327,8 @@ window.MyOnlineOperations={
 };
 
 
-// v31.1.3 Native Client Generation
-window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'31.1.3',generation:6,experience:'Server + Web/PWA + Native Client API'};
+// v31.2.0 Native Client Generation
+window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'31.2.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
 window.MyOnlineClientBridge={
  version:1,
  capabilities(){return {sourceEngine:true,player:true,live:true,guide:true,library:true,dvr:true,profiles:true,rooms:true,remote:true}},
@@ -3133,7 +3336,7 @@ window.MyOnlineClientBridge={
 };
 
 
-// v31.1.3 — Performance Engine
+// v31.2.0 — Performance Engine
 const perfCache=new Map();
 function perfCacheGet(key,maxAgeMs){
   const x=perfCache.get(key);
@@ -3170,7 +3373,7 @@ document.addEventListener('pointerover',e=>{
 },{passive:true});
 
 
-// v31.1.3 — Live TV 3.0
+// v31.2.0 — Live TV 3.0
 let liveNumberBuffer='',liveNumberTimer=null;
 function showLiveZapOverlay(c){
   let box=$('#liveZapOverlay');
@@ -3199,7 +3402,7 @@ document.addEventListener('keydown',e=>{
 });
 
 
-// v31.1.3 — Guide 3.0
+// v31.2.0 — Guide 3.0
 function scrollGuideToNow(){
   const wrap=document.querySelector('.timelineWrap');
   const line=document.querySelector('.programLane .nowLine');
@@ -3215,7 +3418,7 @@ function guideKeyboard(e){
 document.addEventListener('keydown',guideKeyboard);
 
 
-// v31.1.3 — Unified Library End-to-End
+// v31.2.0 — Unified Library End-to-End
 function unifiedSourceScore(s){
   let score=0;
   if(s.poster)score+=2;
@@ -3233,7 +3436,7 @@ async function playBestUnified(group){
 }
 
 
-// v31.1.3 — Unified Playback Engine
+// v31.2.0 — Unified Playback Engine
 async function tryUnifiedPlaybackSource(item){
   const parts=String(item?.id||'').split(':');
   if(parts.length<3)throw new Error('Invalid unified media source.');
@@ -3257,7 +3460,7 @@ async function playUnifiedWithFallback(group){
 }
 
 
-// v31.1.3 — Home 3.0
+// v31.2.0 — Home 3.0
 const HOME3_DEFAULT=['continue','live','next','recordings','favourites','new'];
 function home3Key(){return `myonline-home3:${currentProfile||'default'}`}
 function getHome3Order(){try{return JSON.parse(localStorage.getItem(home3Key())||'null')||HOME3_DEFAULT}catch{return HOME3_DEFAULT}}
@@ -3272,7 +3475,7 @@ function home3Customize(){
 }
 
 
-// v31.1.3 — Search 3.0
+// v31.2.0 — Search 3.0
 function searchHistoryKey(){return `myonline-search-history:${currentProfile||'default'}`}
 function rememberSearch(q){
   q=String(q||'').trim();if(q.length<2)return;
@@ -3287,7 +3490,7 @@ document.addEventListener('keydown',e=>{
 });
 
 
-// v31.1.3 — DVR End-to-End
+// v31.2.0 — DVR End-to-End
 async function dvrHealthPanel(){
   const [status,conflicts,upcoming]=await Promise.all([
     api('/api/dvr/status').catch(()=>null),
@@ -3306,9 +3509,9 @@ async function showDvrOperations(){
 }
 
 
-// v31.1.3 — Production Edition
+// v31.2.0 — Production Edition
 window.MyOnlineTvProduction={
-  version:'31.1.3',
+  version:'31.2.0',
   clientMode:()=>document.body.dataset.clientMode||'unknown',
   runtimeSummary:()=>({
     online:navigator.onLine,
@@ -3320,25 +3523,25 @@ window.MyOnlineTvProduction={
 };
 
 
-// v31.1.3 performance diagnostics
+// v31.2.0 performance diagnostics
 window.MyOnlinePerf={samples:[],mark(name,start){this.samples.push({name,ms:Math.round(performance.now()-start),at:Date.now()});this.samples=this.samples.slice(-200)},snapshot(){return [...this.samples]}};
 
 
-// v31.1.3 Live TV 4.0 state
+// v31.2.0 Live TV 4.0 state
 let livePreviousChannelKey=null,liveCurrentChannelKey=null;
 function rememberLiveTune(key){if(key&&key!==liveCurrentChannelKey){livePreviousChannelKey=liveCurrentChannelKey;liveCurrentChannelKey=key}}
 function previousLiveChannel(){const c=channels.find(x=>x.key===livePreviousChannelKey);if(c)return playLive(c.key,c.name)}
 
 
-// v31.1.3 local phone remote client
+// v31.2.0 local phone remote client
 async function remoteCommand(deviceId,command,value=null){return api('/api/devices/'+encodeURIComponent(deviceId)+'/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command,value})})}
 
 
-// v31.1.3 provider/device capability gate
+// v31.2.0 provider/device capability gate
 async function advancedTvCapabilities(){try{return await api('/api/platform/v25/capabilities',{timeoutMs:5000,attempts:1})}catch{return {productionVerified:false}}}
 
 
-// v31.1.3 — Admin UX Foundation
+// v31.2.0 — Admin UX Foundation
 window.AdminUx = {
   sections: [
     {id:'overview',label:'Overview'},
@@ -3365,7 +3568,7 @@ document.addEventListener('click',e=>{
 });
 
 
-// v31.1.3 — Admin Overview & Health
+// v31.2.0 — Admin Overview & Health
 async function renderAdminOverviewV2(target){
   const host=typeof target==='string'?document.querySelector(target):target;
   if(!host)return;
@@ -3384,7 +3587,7 @@ async function renderAdminOverviewV2(target){
 }
 
 
-// v31.1.3 — Admin Sources
+// v31.2.0 — Admin Sources
 function adminSourceCard(s){
   return `<article class="adminCard adminSourceCard">
     <div class="adminCardHead"><div><h3>${esc(s.name||s.type||'Source')}</h3><small>${esc(s.detail||'')}</small></div>${AdminUx.statusBadge(s.status||'unknown',s.statusText||s.status||'Unknown')}</div>
@@ -3394,7 +3597,7 @@ function adminSourceCard(s){
 }
 
 
-// v31.1.3 — Admin DVR & Storage
+// v31.2.0 — Admin DVR & Storage
 function adminDvrSummary(x){
   return `<div class="adminCardGrid">
     ${[['Active',x.active],['Upcoming',x.upcoming],['Failed',x.failed],['Conflicts',x.conflicts]].map(([k,v])=>`<article class="adminCard adminMetric"><b>${Number(v||0)}</b><small>${k}</small></article>`).join('')}
@@ -3406,7 +3609,7 @@ function adminStorageBar(used,total){
 }
 
 
-// v31.1.3 — Admin Users & Devices
+// v31.2.0 — Admin Users & Devices
 function adminUserRow(u){
   return `<div class="adminListRow"><div><b>${esc(u.name||u.username||'User')}</b><small>${esc((u.roles||[]).join(', '))}</small></div><div>${AdminUx.statusBadge(u.enabled===false?'warning':'ok',u.enabled===false?'Disabled':'Enabled')}<button class="btn" data-user-edit="${escAttr(u.id||'')}">Edit</button></div></div>`;
 }
@@ -3415,7 +3618,7 @@ function adminDeviceRow(d){
 }
 
 
-// v31.1.3 — Admin Diagnostics
+// v31.2.0 — Admin Diagnostics
 function diagnosticGrade(ms){
   return ms<500?['excellent','Excellent']:ms<1000?['good','Good']:ms<2000?['warning','Slow']:['error','Very slow'];
 }
@@ -3426,7 +3629,7 @@ function diagnosticTimingRow(name,ms){
 }
 
 
-// v31.1.3 — Backup, Update & Recovery
+// v31.2.0 — Backup, Update & Recovery
 function adminRecoveryCard(x){
   return `<article class="adminCard">
     <div class="adminCardHead"><div><h3>Backup & Recovery</h3><small>Safe update workflow</small></div>${AdminUx.statusBadge(x?.healthy?'ok':'warning',x?.healthy?'Ready':'Check required')}</div>
@@ -3436,35 +3639,35 @@ function adminRecoveryCard(x){
 }
 
 
-// v31.1.3 — Mobile Admin
+// v31.2.0 — Mobile Admin
 function adminMobileClass(){
   document.documentElement.classList.toggle('adminCompact',matchMedia('(max-width:720px)').matches);
 }
 addEventListener('resize',adminMobileClass,{passive:true});adminMobileClass();
 
 
-// v31.1.3 Stream Doctor
+// v31.2.0 Stream Doctor
 function streamDoctorMetric(label,value,state='ok'){return `<div class="streamDoctorRow"><span>${esc(label)}</span><b class="${state}">${esc(String(value))}</b></div>`}
 function renderStreamDoctor(x){return `<section class="card streamDoctor"><h3>Stream Doctor</h3>${streamDoctorMetric('Provider',x.provider||'Unknown',x.providerOk?'ok':'error')}${streamDoctorMetric('Codec',x.codec||'—')}${streamDoctorMetric('Resolution',x.resolution||'—')}${streamDoctorMetric('Bitrate',x.bitrate||'—')}${streamDoctorMetric('FPS',x.fps||'—')}${streamDoctorMetric('Buffer',x.buffer||'—')}${streamDoctorMetric('Playback mode',x.mode||'—')}</section>`}
 
 
-// v31.1.3 Notification Center
+// v31.2.0 Notification Center
 const NotificationCenter={key:'myonline-notifications',all(){try{return JSON.parse(localStorage.getItem(this.key)||'[]')}catch{return[]}},push(n){const a=this.all();a.unshift({id:String(Date.now())+Math.random(),at:Date.now(),read:false,...n});localStorage.setItem(this.key,JSON.stringify(a.slice(0,100)));return a[0]},read(id){localStorage.setItem(this.key,JSON.stringify(this.all().map(x=>x.id===id?{...x,read:true}:x)))}};
 
 
-// v31.1.3 What's On Tonight
+// v31.2.0 What's On Tonight
 function tonightFilter(rows,kind='all'){const now=new Date();return (rows||[]).filter(x=>{const d=new Date(x.start||x.startTime);return d.toDateString()===now.toDateString()&&d.getHours()>=17&&(kind==='all'||String(x.category||x.kind||'').toLowerCase().includes(kind))}).sort((a,b)=>new Date(a.start||a.startTime)-new Date(b.start||b.startTime))}
 
 
-// v31.1.3 Unified Watchlist
+// v31.2.0 Unified Watchlist
 const UnifiedWatchlist={key(){return `myonline-watchlist:${currentProfile||'default'}`},all(){try{return JSON.parse(localStorage.getItem(this.key())||'[]')}catch{return[]}},toggle(item){let a=this.all();const i=a.findIndex(x=>x.id===item.id);if(i>=0)a.splice(i,1);else a.unshift(item);localStorage.setItem(this.key(),JSON.stringify(a.slice(0,500)));return i<0}};
 
 
-// v31.1.3 Sports Hub
+// v31.2.0 Sports Hub
 function sportsMatches(rows,teams=[]){const n=teams.map(x=>String(x).toLowerCase()).filter(Boolean);return (rows||[]).filter(x=>{const t=String(x.title||'').toLowerCase();return n.some(q=>t.includes(q))||/(football|soccer|hockey|champions league|premier league|allsvenskan|match)/i.test(t)})}
 
 
-// v31.1.3 Guest Mode
+// v31.2.0 Guest Mode
 function enterGuestMode(){sessionStorage.setItem('myonline-guest','1');currentProfile='guest';show('home')} function isGuestMode(){return sessionStorage.getItem('myonline-guest')==='1'}
 
 
@@ -3472,7 +3675,7 @@ function enterGuestMode(){sessionStorage.setItem('myonline-guest','1');currentPr
 async function uiAction(action,{busyText='Working…',errorTitle='Action failed'}={}){
   try{return await action()}catch(e){console.error(errorTitle,e);alert(`${errorTitle}: ${friendlyError(e)}`);throw e}
 }
-window.MyOnlineRelease={version:'31.1.3',qualityGate:'stabilization'};
+window.MyOnlineRelease={version:'31.2.0',qualityGate:'stabilization'};
 
 
 // v28.3 — reusable UI states
@@ -3583,3 +3786,10 @@ async function restartOnboarding(){
     await firstLoginGuide(state);
   }catch(e){console.error(e)}
 }
+
+document.addEventListener('change',e=>{
+  if(e.target?.id==='profileOwner'){
+    const name=$('#profileName');
+    if(name && !name.value.trim()) name.value=e.target.value||'';
+  }
+});

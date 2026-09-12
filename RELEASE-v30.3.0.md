@@ -1,4 +1,4 @@
-# v31.1.3 — User & Source Architecture Cleanup
+# v31.2.0 — User & Source Architecture Cleanup
 
 - Formalizes per-user source ownership as the active architecture.
 - Cross-user source sharing is disabled.

@@ -1,7 +1,7 @@
 \
         $ErrorActionPreference="Stop"
         $root=Split-Path -Parent $PSScriptRoot
-        & (Join-Path $PSScriptRoot "VERIFY-v31.1.3.ps1")
+        & (Join-Path $PSScriptRoot "VERIFY-v31.2.0.ps1")
         Write-Host ""
         Write-Host "Runtime sign-off still required:" -ForegroundColor Yellow
         @(

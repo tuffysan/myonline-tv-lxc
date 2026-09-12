@@ -1,4 +1,4 @@
-# v31.1.3 — Notification Center
+# v31.2.0 — Notification Center
 
 Cumulative release based on v29.2.0.
 

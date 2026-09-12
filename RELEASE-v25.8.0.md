@@ -1,4 +1,4 @@
-# v31.1.3 — Mobile Admin
+# v31.2.0 — Mobile Admin
 
 This is a cumulative Admin release based on v25.7.0.
 

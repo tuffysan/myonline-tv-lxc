@@ -1,4 +1,4 @@
-# v31.1.3 — Self-Healing Appliance
+# v31.2.0 — Self-Healing Appliance
 
 Cumulative release based on v29.3.0.
 

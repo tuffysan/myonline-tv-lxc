@@ -185,6 +185,21 @@ UNIT
 pct push "$CTID" /tmp/myonlinetv.service /etc/systemd/system/myonlinetv.service
 rm -f /tmp/myonlinetv.service
 
+
+echo "Installing secure UI update worker..."
+pct push "$CTID" "${REPO_DIR}/scripts/myonlinetv-self-update.sh" /usr/local/sbin/myonlinetv-self-update
+pct push "$CTID" "${REPO_DIR}/scripts/myonlinetv-update.service" /etc/systemd/system/myonlinetv-update.service
+pct push "$CTID" "${REPO_DIR}/scripts/myonlinetv-update.path" /etc/systemd/system/myonlinetv-update.path
+pct exec "$CTID" -- bash -lc '
+set -e
+chmod 700 /usr/local/sbin/myonlinetv-self-update
+chown root:root /usr/local/sbin/myonlinetv-self-update /etc/systemd/system/myonlinetv-update.service /etc/systemd/system/myonlinetv-update.path
+mkdir -p /var/lib/myonlinetv
+chown www-data:www-data /var/lib/myonlinetv
+systemctl daemon-reload
+systemctl enable --now myonlinetv-update.path
+'
+
 echo "Writing installation metadata..."
 pct exec "$CTID" -- bash -lc "
 set -e

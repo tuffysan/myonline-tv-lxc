@@ -100,12 +100,164 @@ var catalogueCacheDir = Path.Combine(dataDir, "catalogue-cache");
 Directory.CreateDirectory(catalogueCacheDir);
 var startedAt = DateTimeOffset.UtcNow;
 
-var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true };
 var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = DecompressionMethods.All })
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/31.1.3");
+http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/31.2.0");
+
+
+
+var updateRequestFile = Path.Combine(dataDir, "update-request");
+var updateStatusFile = Path.Combine(dataDir, "update-status.json");
+var updateCheckGate = new SemaphoreSlim(1, 1);
+DateTimeOffset updateCacheUtc = DateTimeOffset.MinValue;
+JsonElement? updateCache = null;
+
+string NormalizeReleaseVersion(string? value)
+{
+    var v = (value ?? "").Trim();
+    if (v.StartsWith("v", StringComparison.OrdinalIgnoreCase)) v = v[1..];
+    return v;
+}
+
+bool IsNewerRelease(string current, string candidate)
+{
+    var c = NormalizeReleaseVersion(current).Split('-', 2)[0];
+    var n = NormalizeReleaseVersion(candidate).Split('-', 2)[0];
+    return Version.TryParse(c, out var cv) && Version.TryParse(n, out var nv) && nv > cv;
+}
+
+async Task<JsonElement> GetGithubUpdateInfo(bool force = false)
+{
+    await updateCheckGate.WaitAsync();
+    try
+    {
+        if (!force && updateCache.HasValue && DateTimeOffset.UtcNow - updateCacheUtc < TimeSpan.FromMinutes(10))
+            return updateCache.Value;
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+        using var req = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/repos/tuffysan/myonline-tv-lxc/releases/latest");
+        req.Headers.Accept.ParseAdd("application/vnd.github+json");
+        req.Headers.UserAgent.ParseAdd("MyOnline-TV-Updater/31.2.0");
+        using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseContentRead, cts.Token);
+        resp.EnsureSuccessStatusCode();
+
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(cts.Token));
+        var root = doc.RootElement;
+        var tag = root.TryGetProperty("tag_name", out var t) ? t.GetString() ?? "" : "";
+        var latest = NormalizeReleaseVersion(tag);
+        var htmlUrl = root.TryGetProperty("html_url", out var h) ? h.GetString() ?? "" : "";
+        var publishedAt = root.TryGetProperty("published_at", out var p) ? p.GetString() : null;
+        var releaseName = root.TryGetProperty("name", out var n) ? n.GetString() ?? tag : tag;
+
+        bool uiInstallable = false;
+        string compatibilityMessage = "";
+        if (!string.IsNullOrWhiteSpace(tag))
+        {
+            try
+            {
+                using var metaCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                var metaUrl = $"https://github.com/tuffysan/myonline-tv-lxc/releases/download/{Uri.EscapeDataString(tag)}/release.json";
+                using var metaReq = new HttpRequestMessage(HttpMethod.Get, metaUrl);
+                metaReq.Headers.UserAgent.ParseAdd("MyOnline-TV-Updater/31.2.0");
+                using var metaResp = await http.SendAsync(metaReq, HttpCompletionOption.ResponseContentRead, metaCts.Token);
+                if (metaResp.IsSuccessStatusCode)
+                {
+                    using var metaDoc = JsonDocument.Parse(await metaResp.Content.ReadAsStringAsync(metaCts.Token));
+                    var mr = metaDoc.RootElement;
+                    uiInstallable =
+                        mr.TryGetProperty("uiSelfUpdateCompatible", out var compat) && compat.ValueKind == JsonValueKind.True &&
+                        mr.TryGetProperty("uiUpdaterProtocolVersion", out var proto) && proto.TryGetInt32(out var protocol) && protocol == 1;
+                    if (!uiInstallable) compatibilityMessage = "This release requires the terminal/Proxmox updater.";
+                }
+                else compatibilityMessage = "Release metadata could not be verified for UI installation.";
+            }
+            catch
+            {
+                compatibilityMessage = "Release metadata could not be verified for UI installation.";
+            }
+        }
+
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            latestVersion = latest,
+            latestTag = tag,
+            releaseName,
+            htmlUrl,
+            publishedAt,
+            uiInstallable,
+            compatibilityMessage
+        });
+        updateCache = payload;
+        updateCacheUtc = DateTimeOffset.UtcNow;
+        return payload;
+    }
+    finally
+    {
+        updateCheckGate.Release();
+    }
+}
+
+object? ReadUiUpdateWorkerStatus()
+{
+    try
+    {
+        if (!File.Exists(updateStatusFile)) return null;
+        using var doc = JsonDocument.Parse(File.ReadAllText(updateStatusFile));
+        return doc.RootElement.Clone();
+    }
+    catch { return null; }
+}
+
+async Task<IResult> BuildUiUpdateStatus(bool force)
+{
+    var current = File.Exists(versionFile) ? File.ReadAllText(versionFile).Trim() : "31.2.0";
+    try
+    {
+        var latest = await GetGithubUpdateInfo(force);
+        var latestVersion = latest.TryGetProperty("latestVersion", out var lv) ? lv.GetString() ?? "" : "";
+        var tag = latest.TryGetProperty("latestTag", out var lt) ? lt.GetString() ?? "" : "";
+        var uiInstallable = latest.TryGetProperty("uiInstallable", out var ui) && ui.ValueKind == JsonValueKind.True;
+        var releaseName = latest.TryGetProperty("releaseName", out var rn) ? rn.GetString() ?? tag : tag;
+        var htmlUrl = latest.TryGetProperty("htmlUrl", out var hu) ? hu.GetString() ?? "" : "";
+        var publishedAt = latest.TryGetProperty("publishedAt", out var pa) ? pa.GetString() : null;
+        var compatibilityMessage = latest.TryGetProperty("compatibilityMessage", out var cm) ? cm.GetString() ?? "" : "";
+
+        return Results.Ok(new
+        {
+            currentVersion = current,
+            latestVersion,
+            latestTag = tag,
+            releaseName,
+            releaseUrl = htmlUrl,
+            publishedAt,
+            updateAvailable = IsNewerRelease(current, latestVersion),
+            uiInstallable,
+            compatibilityMessage,
+            workerReady = File.Exists("/usr/local/sbin/myonlinetv-self-update"),
+            requestPending = File.Exists(updateRequestFile),
+            worker = ReadUiUpdateWorkerStatus()
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new
+        {
+            currentVersion = current,
+            latestVersion = "",
+            updateAvailable = false,
+            uiInstallable = false,
+            workerReady = File.Exists("/usr/local/sbin/myonlinetv-self-update"),
+            requestPending = File.Exists(updateRequestFile),
+            worker = ReadUiUpdateWorkerStatus(),
+            error = ex.GetBaseException().Message
+        });
+    }
+}
+
+
+var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true };
 
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
@@ -244,11 +396,7 @@ HashSet<string> LoadFavourites() => Load<HashSet<string>>(favouritesFile) ?? new
 List<ContinueItem> LoadContinue() => Load<List<ContinueItem>>(continueFile) ?? new();
 List<ViewerProfile> LoadProfiles()
 {
-    var rows = Load<List<ViewerProfile>>(profilesFile);
-    if (rows is { Count: > 0 }) return rows;
-    var defaults = new List<ViewerProfile> { new("default", "Main", false, "👤") };
-    Save(profilesFile, defaults);
-    return defaults;
+    return Load<List<ViewerProfile>>(profilesFile) ?? new List<ViewerProfile>();
 }
 
 List<AppUser> LoadUsers()
@@ -268,6 +416,115 @@ List<AppUser> LoadUsers()
         return users;
     }
     return new();
+}
+
+
+void EnsureUserProfiles()
+{
+    var users = LoadUsers();
+    if (users.Count == 0) return;
+
+    var profiles = LoadProfiles();
+    var access = LoadProfileAccess();
+    var changedProfiles = false;
+    var changedAccess = false;
+
+    var legacyMain = profiles.FirstOrDefault(p =>
+        p.OwnerUsername is null &&
+        (p.Id.Equals("default", StringComparison.OrdinalIgnoreCase) ||
+         p.Name.Equals("Main", StringComparison.OrdinalIgnoreCase)));
+
+    foreach (var user in users)
+    {
+        ViewerProfile? personal = profiles.FirstOrDefault(p =>
+            p.OwnerUsername?.Equals(user.Username, StringComparison.OrdinalIgnoreCase) == true);
+
+        if (personal is null)
+        {
+            personal = profiles.FirstOrDefault(p =>
+                p.OwnerUsername is null &&
+                p.Name.Equals(user.Username, StringComparison.OrdinalIgnoreCase));
+
+            if (personal is not null)
+            {
+                var i = profiles.FindIndex(p => p.Id == personal.Id);
+                personal = personal with { OwnerUsername = user.Username };
+                profiles[i] = personal;
+                changedProfiles = true;
+            }
+        }
+
+        if (personal is null && users.Count == 1 && legacyMain is not null)
+        {
+            var i = profiles.FindIndex(p => p.Id == legacyMain.Id);
+            personal = legacyMain with { Name = user.Username, OwnerUsername = user.Username };
+            profiles[i] = personal;
+            legacyMain = null;
+            changedProfiles = true;
+        }
+
+        if (personal is null)
+        {
+            personal = new ViewerProfile(
+                "user-" + user.Id,
+                user.Username,
+                false,
+                "👤",
+                user.Username);
+            profiles.Add(personal);
+            changedProfiles = true;
+        }
+
+        if (!access.TryGetValue(user.Username, out var ua))
+        {
+            access[user.Username] = new UserProfileAccess(new[] { personal.Id }, personal.Id);
+            changedAccess = true;
+        }
+        else
+        {
+            var legacyOnly = ua.AllowedProfileIds.Length == 0 ||
+                (ua.AllowedProfileIds.Length == 1 &&
+                 (ua.AllowedProfileIds[0].Equals("default", StringComparison.OrdinalIgnoreCase) ||
+                  (legacyMain is not null &&
+                   ua.AllowedProfileIds[0].Equals(legacyMain.Id, StringComparison.OrdinalIgnoreCase))));
+
+            if (legacyOnly)
+            {
+                access[user.Username] = new UserProfileAccess(new[] { personal.Id }, personal.Id);
+                changedAccess = true;
+            }
+            else if (!ua.AllowedProfileIds.Contains(personal.Id, StringComparer.OrdinalIgnoreCase))
+            {
+                var ids = ua.AllowedProfileIds.Append(personal.Id)
+                    .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                var def = string.IsNullOrWhiteSpace(ua.DefaultProfileId) ? personal.Id : ua.DefaultProfileId;
+                access[user.Username] = new UserProfileAccess(ids, def);
+                changedAccess = true;
+            }
+        }
+    }
+
+    var referenced = access.Values
+        .SelectMany(x => x.AllowedProfileIds)
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    var removedLegacy = profiles.RemoveAll(p =>
+        p.OwnerUsername is null &&
+        (p.Id.Equals("default", StringComparison.OrdinalIgnoreCase) ||
+         p.Name.Equals("Main", StringComparison.OrdinalIgnoreCase)) &&
+        !referenced.Contains(p.Id));
+
+    if (removedLegacy > 0) changedProfiles = true;
+
+    if (changedProfiles) Save(profilesFile, profiles);
+    if (changedAccess) Save(profileAccessFile, access);
+}
+
+ViewerProfile? PersonalProfileFor(string username)
+{
+    EnsureUserProfiles();
+    return LoadProfiles().FirstOrDefault(p =>
+        p.OwnerUsername?.Equals(username, StringComparison.OrdinalIgnoreCase) == true);
 }
 
 bool AuthConfigured() => LoadUsers().Count > 0 || File.Exists(adminFile);
@@ -671,7 +928,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 
-// v31.1.3: enforce source tenancy before source-specific endpoints run.
+// v31.2.0: enforce source tenancy before source-specific endpoints run.
 // A source can only be consumed by its owner or an explicitly shared user in the same account.
 app.Use(async (ctx, next) =>
 {
@@ -793,7 +1050,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "31.1.3",
+    version = "31.2.0",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -831,12 +1088,12 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = AuthConfigured();
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "31.1.3", checks })
-        : Results.Json(new { status = "not-ready", version = "31.1.3", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "31.2.0", checks })
+        : Results.Json(new { status = "not-ready", version = "31.2.0", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 
-// v31.1.3 Personal Media Setup 2.0: validate credentials before persisting them.
+// v31.2.0 Personal Media Setup 2.0: validate credentials before persisting them.
 app.MapPost("/api/onboarding/test/iptv", async (ProviderInput input) =>
 {
     var sw = Stopwatch.StartNew();
@@ -1005,7 +1262,7 @@ app.MapPost("/api/onboarding/restart", (HttpContext ctx) =>
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "31.1.3",
+    version = "31.2.0",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = AuthConfigured(),
@@ -1055,9 +1312,24 @@ app.MapPost("/api/auth/logout", async (HttpContext ctx) =>
 
 app.MapGet("/api/admin/users", () =>
 {
+    EnsureUserProfiles();
+    var profiles = LoadProfiles();
     return Results.Ok(LoadUsers()
         .OrderBy(x => x.Username)
-        .Select(x => new { x.Id, x.Username, x.Role, x.Enabled }));
+        .Select(x =>
+        {
+            var profile = profiles.FirstOrDefault(p =>
+                p.OwnerUsername?.Equals(x.Username, StringComparison.OrdinalIgnoreCase) == true);
+            return new
+            {
+                x.Id,
+                x.Username,
+                x.Role,
+                x.Enabled,
+                profileId = profile?.Id,
+                profileName = profile?.Name ?? x.Username
+            };
+        }));
 }).RequireAuthorization(p => p.RequireRole("Admin"));
 
 app.MapPost("/api/admin/users", (UserInput input, HttpContext ctx) =>
@@ -1105,10 +1377,53 @@ app.MapPost("/api/admin/users", (UserInput input, HttpContext ctx) =>
     if (!HasEnabledAdmin(candidate))
         return Results.BadRequest("At least one enabled administrator account is required.");
 
+    var oldUsername = existing?.Username;
     var idx = users.FindIndex(x => x.Id == id);
     if (idx >= 0) users[idx] = updated; else users.Add(updated);
     Save(usersFile, users);
-    return Results.Ok(new { updated.Id, updated.Username, updated.Role, updated.Enabled });
+
+    EnsureUserProfiles();
+
+    if (existing is not null &&
+        !string.IsNullOrWhiteSpace(oldUsername) &&
+        !oldUsername.Equals(username, StringComparison.OrdinalIgnoreCase))
+    {
+        var profiles = LoadProfiles();
+        var pidx = profiles.FindIndex(p =>
+            p.OwnerUsername?.Equals(oldUsername, StringComparison.OrdinalIgnoreCase) == true);
+
+        if (pidx >= 0)
+        {
+            var p = profiles[pidx];
+            var nextName = p.Name.Equals(oldUsername, StringComparison.OrdinalIgnoreCase)
+                ? username
+                : p.Name;
+            profiles[pidx] = p with { Name = nextName, OwnerUsername = username };
+            Save(profilesFile, profiles);
+        }
+
+        var access = LoadProfileAccess();
+        if (access.TryGetValue(oldUsername, out var oldAccess))
+        {
+            access.Remove(oldUsername);
+            access[username] = oldAccess;
+            Save(profileAccessFile, access);
+        }
+    }
+
+    EnsureUserProfiles();
+    LocalDb.UpsertUser(databaseFile, updated.Id, updated.Username);
+    var personal = PersonalProfileFor(username);
+
+    return Results.Ok(new
+    {
+        updated.Id,
+        updated.Username,
+        updated.Role,
+        updated.Enabled,
+        profileId = personal?.Id,
+        profileName = personal?.Name ?? updated.Username
+    });
 }).RequireAuthorization(p => p.RequireRole("Admin"));
 
 app.MapDelete("/api/admin/users/{id}", (string id, HttpContext ctx) =>
@@ -1125,6 +1440,27 @@ app.MapDelete("/api/admin/users/{id}", (string id, HttpContext ctx) =>
         return Results.BadRequest("The last enabled administrator cannot be deleted.");
 
     Save(usersFile, candidate);
+
+    var profiles = LoadProfiles();
+    var ownedIds = profiles
+        .Where(p => p.OwnerUsername?.Equals(target.Username, StringComparison.OrdinalIgnoreCase) == true)
+        .Select(p => p.Id)
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    if (ownedIds.Count > 0)
+    {
+        profiles.RemoveAll(p => ownedIds.Contains(p.Id));
+        Save(profilesFile, profiles);
+
+        var policies = LoadProfilePolicies();
+        foreach (var pid in ownedIds) policies.Remove(pid);
+        Save(profilePoliciesFile, policies);
+    }
+
+    var access = LoadProfileAccess();
+    access.Remove(target.Username);
+    Save(profileAccessFile, access);
+
     return Results.NoContent();
 }).RequireAuthorization(p => p.RequireRole("Admin"));
 
@@ -2046,6 +2382,7 @@ app.MapGet("/api/access/me", (HttpContext ctx) =>
 
 app.MapGet("/api/admin/profile-access", () =>
 {
+    EnsureUserProfiles();
     return Results.Ok(new { userAccess = LoadProfileAccess(), policies = LoadProfilePolicies() });
 }).RequireAuthorization(p => p.RequireRole("Admin"));
 
@@ -2083,24 +2420,97 @@ app.MapPost("/api/profile/{profileId}/verify-pin", (string profileId, PinRequest
     return Results.Ok(new { valid = policy.PinCredential.Verify(profileId, input.Pin ?? "") });
 }).RequireAuthorization();
 
-app.MapGet("/api/profiles", () => Results.Ok(LoadProfiles())).RequireAuthorization();
+app.MapGet("/api/profiles", () =>
+{
+    EnsureUserProfiles();
+    return Results.Ok(LoadProfiles());
+}).RequireAuthorization();
+
 app.MapPost("/api/profiles", (ViewerProfileInput req) =>
 {
+    EnsureUserProfiles();
     var rows = LoadProfiles();
-    var id = string.IsNullOrWhiteSpace(req.Id) ? Guid.NewGuid().ToString("N") : req.Id;
-    var name = (req.Name ?? "Profile").Trim();
-    if (name.Length == 0) name = "Profile";
+    var id = string.IsNullOrWhiteSpace(req.Id) ? Guid.NewGuid().ToString("N") : req.Id.Trim();
+    var existing = rows.FirstOrDefault(x => x.Id == id);
+
+    var owner = (req.OwnerUsername ?? existing?.OwnerUsername ?? "").Trim();
+    if (!string.IsNullOrWhiteSpace(owner) &&
+        !LoadUsers().Any(x => x.Username.Equals(owner, StringComparison.OrdinalIgnoreCase)))
+        return Results.BadRequest("Profile owner does not exist.");
+
+    var defaultName = string.IsNullOrWhiteSpace(owner) ? "Profile" : owner;
+    var name = (req.Name ?? defaultName).Trim();
+    if (name.Length == 0) name = defaultName;
     if (name.Length > 40) name = name[..40];
+
     var icon = string.IsNullOrWhiteSpace(req.Icon) ? "👤" : req.Icon!;
-    var row = new ViewerProfile(id, name, req.IsKids, icon);
-    rows.RemoveAll(x => x.Id == id); rows.Add(row); Save(profilesFile, rows.Take(12).ToList()); return Results.Ok(row);
-}).RequireAuthorization();
+    var row = new ViewerProfile(id, name, req.IsKids, icon, string.IsNullOrWhiteSpace(owner) ? null : owner);
+
+    rows.RemoveAll(x => x.Id == id);
+    rows.Add(row);
+    Save(profilesFile, rows.Take(24).ToList());
+
+    if (!string.IsNullOrWhiteSpace(owner))
+    {
+        var access = LoadProfileAccess();
+        if (!access.TryGetValue(owner, out var ua))
+            access[owner] = new UserProfileAccess(new[] { id }, id);
+        else if (!ua.AllowedProfileIds.Contains(id, StringComparer.OrdinalIgnoreCase))
+            access[owner] = new UserProfileAccess(
+                ua.AllowedProfileIds.Append(id).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+                string.IsNullOrWhiteSpace(ua.DefaultProfileId) ? id : ua.DefaultProfileId);
+        Save(profileAccessFile, access);
+    }
+
+    return Results.Ok(row);
+}).RequireAuthorization(p => p.RequireRole("Admin"));
+
 app.MapDelete("/api/profiles/{id}", (string id) =>
 {
+    EnsureUserProfiles();
     var rows = LoadProfiles();
-    if (rows.Count <= 1) return Results.BadRequest("At least one profile is required.");
-    rows.RemoveAll(x => x.Id == id); Save(profilesFile, rows); return Results.NoContent();
-}).RequireAuthorization();
+    var target = rows.FirstOrDefault(x => x.Id == id);
+    if (target is null) return Results.NotFound();
+
+    if (!string.IsNullOrWhiteSpace(target.OwnerUsername))
+    {
+        var ownerProfiles = rows.Count(p =>
+            p.OwnerUsername?.Equals(target.OwnerUsername, StringComparison.OrdinalIgnoreCase) == true);
+        if (ownerProfiles <= 1)
+            return Results.BadRequest("A user must keep at least one viewer profile.");
+    }
+
+    rows.RemoveAll(x => x.Id == id);
+    Save(profilesFile, rows);
+
+    var access = LoadProfileAccess();
+    foreach (var user in access.Keys.ToList())
+    {
+        var ua = access[user];
+        var ids = ua.AllowedProfileIds.Where(x => !x.Equals(id, StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (ids.Length == 0)
+        {
+            var replacement = rows.FirstOrDefault(p =>
+                p.OwnerUsername?.Equals(user, StringComparison.OrdinalIgnoreCase) == true);
+            if (replacement is not null) ids = new[] { replacement.Id };
+        }
+
+        if (ids.Length > 0)
+        {
+            var def = ids.Contains(ua.DefaultProfileId, StringComparer.OrdinalIgnoreCase)
+                ? ua.DefaultProfileId
+                : ids[0];
+            access[user] = new UserProfileAccess(ids, def);
+        }
+    }
+    Save(profileAccessFile, access);
+
+    var policies = LoadProfilePolicies();
+    policies.Remove(id);
+    Save(profilePoliciesFile, policies);
+
+    return Results.NoContent();
+}).RequireAuthorization(p => p.RequireRole("Admin"));
 
 app.MapGet("/api/channel-preferences/{providerId}", (string providerId) => Results.Ok(PreferencesFor(providerId))).RequireAuthorization();
 app.MapPost("/api/channel-preferences/{providerId}/group", (string providerId, GroupVisibilityRequest req) =>
@@ -2676,7 +3086,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "31.1.3",
+        version = "31.2.0",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -3092,7 +3502,7 @@ app.MapGet("/api/appliance/health", () =>
 {
     var drive=new DriveInfo(Path.GetPathRoot(dataDir)!);
     return Results.Ok(new {
-        version="31.1.3", dataDirectory=dataDir,
+        version="31.2.0", dataDirectory=dataDir,
         storageTargets=LoadStorageTargets().Count,
         dvrRules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count,
         rooms=(Load<List<RoomDevice>>(roomsFile)??new()).Count,
@@ -3211,7 +3621,7 @@ app.MapGet("/api/platform/status", () =>
 {
     var drive=new DriveInfo(Path.GetPathRoot(dataDir)!);
     return Results.Ok(new {
-        version="31.1.3",platform="MyOnline TV Platform",
+        version="31.2.0",platform="MyOnline TV Platform",
         providers=LoadProviders().Count,
         storageTargets=LoadStorageTargets().Count(x=>x.Enabled),
         dvrRules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count(x=>x.Enabled),
@@ -3224,7 +3634,7 @@ app.MapGet("/api/platform/status", () =>
 
 
 
-// v31.1.3 Source & Access Architecture
+// v31.2.0 Source & Access Architecture
 app.MapGet("/api/sources/effective",(HttpContext ctx)=>{
     var providers=LoadProviders().Where(x=>CanAccessProvider(ctx,x)).ToList();
     var libs=LoadMediaLibraries().Where(x=>x.Enabled&&CanAccessMediaLibrary(ctx,x)).ToList();
@@ -3241,10 +3651,10 @@ app.MapGet("/api/sources/capabilities",(HttpContext ctx)=>Results.Ok(new{
 })).RequireAuthorization();
 
 
-// v31.1.3 Personal Source Isolation: no cross-user source sharing.
+// v31.2.0 Personal Source Isolation: no cross-user source sharing.
 
 
-// v31.1.3 Player 3.0
+// v31.2.0 Player 3.0
 app.MapGet("/api/player/preferences",(HttpContext ctx)=>{
     var all=Load<Dictionary<string,Dictionary<string,object>>>(playerPrefsFile)??new();
     var key=ctx.User.Identity?.Name??"default";
@@ -3259,7 +3669,7 @@ app.MapGet("/api/player/capabilities",()=>Results.Ok(new{
 })).RequireAuthorization();
 
 
-// v31.1.3 DVR 3.0
+// v31.2.0 DVR 3.0
 app.MapGet("/api/dvr/engine",()=>Results.Ok(Load<Dictionary<string,object>>(dvrEngineFile)??new Dictionary<string,object>{
  {"enabled",true},{"maxConcurrent",2},{"defaultPrePaddingMinutes",2},{"defaultPostPaddingMinutes",5},{"conflictPolicy","newest-wins"},{"keepLatest",0}
 })).RequireAuthorization();
@@ -3273,7 +3683,7 @@ app.MapGet("/api/dvr/upcoming",()=>{
 }).RequireAuthorization();
 
 
-// v31.1.3 EPG & Live TV 3.0
+// v31.2.0 EPG & Live TV 3.0
 app.MapGet("/api/epg/preferences",(HttpContext ctx)=>{
  var all=Load<Dictionary<string,Dictionary<string,object>>>(epgPrefsFile)??new();
  var key=ctx.User.Identity?.Name??"default";
@@ -3296,7 +3706,7 @@ app.MapGet("/api/live/now-next",async (HttpContext ctx)=>{
 }).RequireAuthorization();
 
 
-// v31.1.3 Unified Library 3.0
+// v31.2.0 Unified Library 3.0
 app.MapGet("/api/library/preferences",(HttpContext ctx)=>{
  var all=Load<Dictionary<string,Dictionary<string,object>>>(libraryPrefsFile)??new();var key=ctx.User.Identity?.Name??"default";
  return Results.Ok(all.TryGetValue(key,out var v)?v:new Dictionary<string,object>{{"mergeDuplicates",true},{"preferredSource","auto"},{"sort","recent"},{"hideUnavailable",true}});
@@ -3310,7 +3720,7 @@ app.MapGet("/api/library/sources",(HttpContext ctx)=>{
 }).RequireAuthorization();
 
 
-// v31.1.3 Profiles & Household 3.0
+// v31.2.0 Profiles & Household 3.0
 app.MapGet("/api/household/preferences",(HttpContext ctx)=>{
  var all=Load<Dictionary<string,Dictionary<string,object>>>(householdPrefsFile)??new();var key=ctx.User.Identity?.Name??"default";
  return Results.Ok(all.TryGetValue(key,out var v)?v:new Dictionary<string,object>{{"syncWatchState",true},{"syncFavorites",true},{"syncContinueWatching",true},{"handoffEnabled",true}});
@@ -3325,21 +3735,21 @@ app.MapGet("/api/household/sync-status",(HttpContext ctx)=>{
 }).RequireAuthorization();
 
 
-// v31.1.3 Admin 2.0
+// v31.2.0 Admin 2.0
 app.MapGet("/api/admin/overview",(HttpContext ctx)=>{
  var users=LoadUsers();var providers=LoadProviders();var libs=LoadMediaLibraries();var stores=Load<List<StorageTarget>>(storageTargetsFile)??new();
  return Results.Ok(new{
    users=users.Count,admins=users.Count(x=>x.Role.Equals("Admin",StringComparison.OrdinalIgnoreCase)&&x.Enabled),iptvProviders=providers.Count,mediaLibraries=libs.Count,
    storageTargets=stores.Count,navigation=LoadNavigationConfig().Items.Count,sourcePolicies=LoadUserSourceAccess().Count,
-   version="31.1.3"
+   version="31.2.0"
  });
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
 
 
-// v31.1.3 Backup, Restore & Migration
+// v31.2.0 Backup, Restore & Migration
 app.MapGet("/api/system/migration-manifest",(HttpContext ctx)=>{
  var files=Directory.Exists(dataDir)?Directory.GetFiles(dataDir,"*.json").Select(Path.GetFileName).OrderBy(x=>x).ToArray():Array.Empty<string>();
- return Results.Ok(new{version="31.1.3",created=DateTimeOffset.UtcNow,dataDirectory=dataDir,configurationFiles=files,
+ return Results.Ok(new{version="31.2.0",created=DateTimeOffset.UtcNow,dataDirectory=dataDir,configurationFiles=files,
    includes=new[]{"users","profiles","providers","media-libraries","navigation","source-access","user-sources","storage","dvr","preferences"}});
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
 app.MapGet("/api/system/backup-readiness",()=>{
@@ -3348,7 +3758,7 @@ app.MapGet("/api/system/backup-readiness",()=>{
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
 
 
-// v31.1.3 Appliance
+// v31.2.0 Appliance
 app.MapGet("/api/appliance/readiness",async ()=>{
  var checks=new List<object>();
  bool ffmpeg=File.Exists("/usr/bin/ffmpeg")||File.Exists("/usr/local/bin/ffmpeg");
@@ -3361,12 +3771,12 @@ app.MapGet("/api/appliance/readiness",async ()=>{
  checks.Add(new{name="Authentication",ok=LoadUsers().Count>0});
  checks.Add(new{name="Media source",ok=providers.Any()||libs.Any(x=>x.Enabled)});
  await Task.CompletedTask;
- return Results.Ok(new{version="31.1.3",ready=ffmpeg&&ffprobe&&dataWritable&&LoadUsers().Count>0,checks});
+ return Results.Ok(new{version="31.2.0",ready=ffmpeg&&ffprobe&&dataWritable&&LoadUsers().Count>0,checks});
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
-app.MapGet("/api/appliance/version",()=>Results.Ok(new{product="MyOnline TV",version="31.1.3",channel="stable",platform="LXC"}));
+app.MapGet("/api/appliance/version",()=>Results.Ok(new{product="MyOnline TV",version="31.2.0",channel="stable",platform="LXC"}));
 
 
-// v31.1.3 Feature Completion audit
+// v31.2.0 Feature Completion audit
 app.MapGet("/api/admin/feature-completion", () => Results.Ok(new
 {
     summary = FeatureCompletionCatalog.Summary(),
@@ -3484,7 +3894,7 @@ app.MapGet("/api/admin/recovery/capabilities", () => Results.Ok(new {
 }));
 
 app.MapGet("/api/admin/production-readiness", () => Results.Ok(new {
-    version = "31.1.3",
+    version = "31.2.0",
     adminUx = true,
     overview = true,
     sources = true,
@@ -3518,7 +3928,7 @@ app.MapGet("/api/system/self-healing-v27",()=>Results.Ok(SelfHealingV2700.Capabi
 
 app.MapGet("/api/platform/v28/architecture",()=>Results.Ok(ArchitectureV28V2800.Capabilities()));
 
-app.MapGet("/api/platform/release-gate",()=>Results.Ok(new { version="31.1.3", focus="stabilization", zeroMandatoryCost=true })).RequireAuthorization();
+app.MapGet("/api/platform/release-gate",()=>Results.Ok(new { version="31.2.0", focus="stabilization", zeroMandatoryCost=true })).RequireAuthorization();
 
 app.MapGet("/api/playback/engine",()=>Results.Ok(new { version="2.0", live=true, vod=true, unified=true, recordings=true, fallback=true, zeroMandatoryCost=true })).RequireAuthorization();
 
@@ -3553,12 +3963,12 @@ app.MapGet("/api/ux/polish",()=>Results.Ok(new { consistentControls=true, focusS
 app.MapGet("/api/production/v30",()=>Results.Ok(new { newFeatures=false, regressionGate=true, cleanInstallGate=true, upgradeGate=true, backupRestoreGate=true, tvGate=true, dvrGate=true })).RequireAuthorization();
 
 
-// v31.1.3 — explicit personal-source ownership contract.
+// v31.2.0 — explicit personal-source ownership contract.
 app.MapGet("/api/personal-sources/architecture", (HttpContext ctx) =>
 {
     var username = ctx.User.Identity?.Name ?? "";
     return Results.Ok(new {
-        version = "31.1.3",
+        version = "31.2.0",
         ownership = "per-user",
         authenticatedUser = username,
         crossUserSharing = false,
@@ -3574,7 +3984,7 @@ app.MapGet("/api/home/personal", async (HttpContext ctx) =>
     var providers = LoadProviders().Where(x => CanAccessProvider(ctx, x)).ToList();
     var libraries = LoadMediaLibraries().Where(x => x.Enabled && CanAccessMediaLibrary(ctx, x)).ToList();
     return Results.Ok(new {
-        version = "31.1.3",
+        version = "31.2.0",
         hasIptv = providers.Count > 0,
         hasPlex = libraries.Any(x => x.Type.Equals("plex", StringComparison.OrdinalIgnoreCase)),
         hasJellyfin = libraries.Any(x => x.Type.Equals("jellyfin", StringComparison.OrdinalIgnoreCase)),
@@ -3590,12 +4000,12 @@ app.MapGet("/api/source-doctor/summary", (HttpContext ctx) =>
         .Select(x => new { x.Id, x.Name, type = "iptv", status = "configured" }).ToList();
     var media = LoadMediaLibraries().Where(x => CanAccessMediaLibrary(ctx, x))
         .Select(x => new { x.Id, x.Name, type = x.Type, status = x.Enabled ? "configured" : "disabled" }).ToList();
-    return Results.Ok(new { version="31.1.3", sources = iptv.Cast<object>().Concat(media).ToArray() });
+    return Results.Ok(new { version="31.2.0", sources = iptv.Cast<object>().Concat(media).ToArray() });
 }).RequireAuthorization();
 
 
 app.MapGet("/api/playback/engine-v4", (HttpContext ctx) => Results.Ok(new {
-    version="31.1.3",
+    version="31.2.0",
     strategies=new[]{"direct","hls","ffmpeg-fallback"},
     resume=true,
     liveRecovery=true,
@@ -3607,7 +4017,7 @@ app.MapGet("/api/live/guide-v4", (HttpContext ctx) =>
 {
     var providers = LoadProviders().Where(x => CanAccessProvider(ctx, x)).ToList();
     return Results.Ok(new {
-        version="31.1.3",
+        version="31.2.0",
         providerCount=providers.Count,
         miniGuide=true,
         previousChannel=true,
@@ -3621,7 +4031,7 @@ app.MapGet("/api/unified/v4/status", (HttpContext ctx) =>
 {
     var libs=LoadMediaLibraries().Where(x=>x.Enabled && CanAccessMediaLibrary(ctx,x)).ToList();
     return Results.Ok(new {
-        version="31.1.3",
+        version="31.2.0",
         visibleLibraries=libs.Count,
         dedupeKey="normalized-title+year+media-type",
         sourcePreference=new[]{"local-direct-play","plex","jellyfin","iptv-vod"},
@@ -3631,7 +4041,7 @@ app.MapGet("/api/unified/v4/status", (HttpContext ctx) =>
 
 
 app.MapGet("/api/ui/tv-remote-v4", () => Results.Ok(new {
-    version="31.1.3",
+    version="31.2.0",
     dpad=true,
     restoreFocus=true,
     backNavigation=true,
@@ -3645,7 +4055,7 @@ app.MapGet("/api/platform/v31-gate", (HttpContext ctx) =>
     var providers=LoadProviders().Count(x=>CanAccessProvider(ctx,x));
     var libraries=LoadMediaLibraries().Count(x=>x.Enabled && CanAccessMediaLibrary(ctx,x));
     return Results.Ok(new {
-        version="31.1.3",
+        version="31.2.0",
         edition="Stable Personal Media Edition",
         personalSourceIsolation=true,
         firstLoginGuide=true,
@@ -3659,8 +4069,64 @@ app.MapGet("/api/platform/v31-gate", (HttpContext ctx) =>
 app.MapGet("/api/database/status", () =>
 {
     var counts=LocalDb.Counts(databaseFile);
-    return Results.Ok(new { version="31.1.3", engine="SQLite", wal=true, schema=LocalDb.GetMeta(databaseFile,"schema_version"), counts });
+    return Results.Ok(new { version="31.2.0", engine="SQLite", wal=true, schema=LocalDb.GetMeta(databaseFile,"schema_version"), counts });
 }).RequireAuthorization();
+
+
+app.MapGet("/api/admin/update/status", async (HttpContext ctx) =>
+{
+    if (!IsAdmin(ctx)) return Results.NotFound();
+    return await BuildUiUpdateStatus(false);
+}).RequireAuthorization();
+
+app.MapPost("/api/admin/update/check", async (HttpContext ctx) =>
+{
+    if (!IsAdmin(ctx)) return Results.NotFound();
+    return await BuildUiUpdateStatus(true);
+}).RequireAuthorization();
+
+app.MapPost("/api/admin/update/install", async (HttpContext ctx) =>
+{
+    if (!IsAdmin(ctx)) return Results.NotFound();
+
+    var current = File.Exists(versionFile) ? File.ReadAllText(versionFile).Trim() : "31.2.0";
+    var latest = await GetGithubUpdateInfo(true);
+    var target = latest.TryGetProperty("latestVersion", out var lv) ? lv.GetString() ?? "" : "";
+    var tag = latest.TryGetProperty("latestTag", out var lt) ? lt.GetString() ?? "" : "";
+    var uiInstallable = latest.TryGetProperty("uiInstallable", out var ui) && ui.ValueKind == JsonValueKind.True;
+    var compatibilityMessage = latest.TryGetProperty("compatibilityMessage", out var cm) ? cm.GetString() ?? "" : "";
+
+    if (!IsNewerRelease(current, target))
+        return Results.Conflict(new { message = "No newer GitHub release is available.", currentVersion = current, latestVersion = target });
+
+    if (!uiInstallable)
+        return Results.Conflict(new { message = string.IsNullOrWhiteSpace(compatibilityMessage) ? "This release cannot be safely installed from the UI." : compatibilityMessage, targetVersion = target });
+
+    if (!File.Exists("/usr/local/sbin/myonlinetv-self-update"))
+        return Results.Problem("The privileged UI update worker is not installed. Run the normal Proxmox updater once to install it.", statusCode: 503);
+
+    if (File.Exists(updateRequestFile))
+        return Results.Conflict(new { message = "An update is already queued or running." });
+
+    File.WriteAllText(updateStatusFile, JsonSerializer.Serialize(new
+    {
+        state = "queued",
+        currentVersion = current,
+        targetVersion = target,
+        message = "Update queued. The app will restart automatically.",
+        updatedUtc = DateTimeOffset.UtcNow
+    }, jsonOptions));
+    File.WriteAllText(updateRequestFile, tag + Environment.NewLine);
+
+    return Results.Accepted("/api/admin/update/status", new
+    {
+        state = "queued",
+        currentVersion = current,
+        targetVersion = target,
+        message = "Update queued. The web app may be unavailable briefly while it restarts."
+    });
+}).RequireAuthorization();
+
 
 app.Run();
 
@@ -4228,8 +4694,8 @@ record ChannelCacheEntry(List<LiveChannel> Channels, DateTimeOffset Loaded);
 record ContinueItem(string Id, string Title, string Url, double PositionSeconds, DateTimeOffset Updated, string? Poster = null, double? DurationSeconds = null);
 record ContinuePosterUpdate(string? Poster);
 record ChannelPreferences(HashSet<string> HiddenGroups, HashSet<string> HiddenChannels, Dictionary<string,string> Aliases);
-record ViewerProfile(string Id, string Name, bool IsKids, string Icon);
-record ViewerProfileInput(string? Id, string? Name, bool IsKids, string? Icon);
+record ViewerProfile(string Id, string Name, bool IsKids, string Icon, string? OwnerUsername = null);
+record ViewerProfileInput(string? Id, string? Name, bool IsKids, string? Icon, string? OwnerUsername = null);
 record GroupVisibilityRequest(string Group, bool Hidden);
 record ChannelPreferenceRequest(string ChannelKey, bool Hidden, string? Alias);
 record SetupRequest(string? Username, string Password);

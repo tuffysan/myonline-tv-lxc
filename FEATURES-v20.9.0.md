@@ -1,4 +1,4 @@
-# v31.1.3 — Unified Media
+# v31.2.0 — Unified Media
 
 Source scoring and deterministic best-source selection for duplicate media.
 

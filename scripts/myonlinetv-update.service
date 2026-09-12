@@ -1,0 +1,13 @@
+[Unit]
+Description=MyOnline TV privileged self-update worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/local/sbin/myonlinetv-self-update
+PrivateTmp=true
+ProtectHome=true
+NoNewPrivileges=false

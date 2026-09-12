@@ -183,6 +183,21 @@ systemctl is-active --quiet myonlinetv
 systemctl is-active --quiet nginx
 '
 
+
+echo "Installing/updating secure UI update worker..."
+pct push "$CTID" "${REPO_DIR}/scripts/myonlinetv-self-update.sh" /usr/local/sbin/myonlinetv-self-update
+pct push "$CTID" "${REPO_DIR}/scripts/myonlinetv-update.service" /etc/systemd/system/myonlinetv-update.service
+pct push "$CTID" "${REPO_DIR}/scripts/myonlinetv-update.path" /etc/systemd/system/myonlinetv-update.path
+pct exec "$CTID" -- bash -lc '
+set -e
+chmod 700 /usr/local/sbin/myonlinetv-self-update
+chown root:root /usr/local/sbin/myonlinetv-self-update /etc/systemd/system/myonlinetv-update.service /etc/systemd/system/myonlinetv-update.path
+mkdir -p /var/lib/myonlinetv
+chown www-data:www-data /var/lib/myonlinetv
+systemctl daemon-reload
+systemctl enable --now myonlinetv-update.path
+'
+
 CURRENT_STEP="8/8 Verifying backend and reverse proxy"
 echo "[8/8] Verifying backend and reverse proxy..."
 

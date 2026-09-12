@@ -1,4 +1,4 @@
-# v31.1.3 — Multi-device Platform
+# v31.2.0 — Multi-device Platform
 
 Browser/mobile/tablet/TV/Android-TV device platform.
 

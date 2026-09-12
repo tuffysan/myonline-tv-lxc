@@ -1,4 +1,4 @@
-# v31.1.3 — Playback Engine 2.0
+# v31.2.0 — Playback Engine 2.0
 
 Central direct/HLS/remux/transcode decision policy.
 

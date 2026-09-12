@@ -1,4 +1,4 @@
-# v31.1.3 — Unified Library & Search
+# v31.2.0 — Unified Library & Search
 
 - Adds deterministic client-side unified-media deduplication helpers.
 - Adds a per-user Unified Library v4 status contract.

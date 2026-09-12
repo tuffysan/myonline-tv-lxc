@@ -2,7 +2,7 @@ public static class MultiDeviceV2400
 {
     public static object Capabilities() => new
     {
-        version = "31.1.3",
+        version = "31.2.0",
         feature = "Multi-device Platform",
         localFirst = true,
         mandatoryRuntimeCostSek = 0,

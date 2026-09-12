@@ -1,8 +1,10 @@
 {
-  "version": "31.1.3",
+  "version": "31.2.0",
   "minimumUpgradeVersion": "0.2.0",
   "dataSchemaVersion": 3,
   "requiresRestart": true,
-  "artifact": "myonline-tv-web-v7.0.0-linux-x64.tar.gz",
-  "sha256": "SHA256SUMS-RELEASE.txt"
+  "artifact": "myonline-tv-web-v31.2.0-linux-x64.tar.gz",
+  "sha256": "SHA256SUMS-RELEASE.txt",
+  "uiSelfUpdateCompatible": true,
+  "uiUpdaterProtocolVersion": 1
 }

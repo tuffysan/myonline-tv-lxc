@@ -1,4 +1,4 @@
-# v31.1.3 — Home 4.0
+# v31.2.0 — Home 4.0
 
 - Adds a personal Home composition endpoint based only on the signed-in user's sources.
 - Adds a first-class empty Home state that links back to setup.

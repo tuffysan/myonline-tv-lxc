@@ -1,4 +1,4 @@
-# v31.1.3 — Remote & Pairing
+# v31.2.0 — Remote & Pairing
 
 Persistent-device contract, expiring pairing codes and remote-command validation.
 

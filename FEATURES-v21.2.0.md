@@ -1,4 +1,4 @@
-# v31.1.3 — DVR 3.0
+# v31.2.0 — DVR 3.0
 
 Series/new-episode rules, priorities, retention decisions and conflict resolution.
 

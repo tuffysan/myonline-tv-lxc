@@ -1,4 +1,4 @@
-# v31.1.3 — Onboarding Buttons Fix
+# v31.2.0 — Onboarding Buttons Fix
 
 Fixes the actual first page of Personal Media Setup.
 

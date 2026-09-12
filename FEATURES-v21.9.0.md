@@ -1,4 +1,4 @@
-# v31.1.3 — Appliance & Recovery
+# v31.2.0 — Appliance & Recovery
 
 Local health evaluation and bounded recovery-plan engine.
 

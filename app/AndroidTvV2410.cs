@@ -2,7 +2,7 @@ public static class AndroidTvV2410
 {
     public static object Capabilities() => new
     {
-        version = "31.1.3",
+        version = "31.2.0",
         feature = "Android TV First-class",
         localFirst = true,
         mandatoryRuntimeCostSek = 0,
