@@ -1,3 +1,11 @@
+# v35.0.1 — Deployment Reliability Hotfix
+
+- Fixed `target: unbound variable` in the shared GitHub deployment bootstrap.
+- Hardened `PUBLISH.ps1` when local or remote release tags do not yet exist.
+- Added a deployment regression gate to every GitHub release build.
+- Normal install/update defaults to the latest published stable GitHub Release when VERSION is omitted.
+- Exact VERSION remains optional for pinning or rollback.
+
 # v35.0.0 — Unified Media Experience
 
 - Introduced the new cross-device product UI for TV, desktop, tablet and mobile.

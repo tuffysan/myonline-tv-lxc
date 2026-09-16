@@ -44,7 +44,10 @@ resolve_ref() {
 }
 
 download_repo() {
-  local repo="$1" ref="$2" target="$3" archive="${target}/repo.tar.gz"
+  local repo="$1"
+  local ref="$2"
+  local target="$3"
+  local archive="${target}/repo.tar.gz"
   mkdir -p "$target"
   echo "Downloading deployment source ${repo}@${ref}..." >&2
   if [[ "$ref" == "main" ]]; then
