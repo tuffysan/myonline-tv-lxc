@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$RepoPath = ".",
   [string]$Remote = "origin",
   [string]$Branch = "main"
@@ -34,32 +34,26 @@ function Ensure-GitHubAuthentication {
   Write-Host "[AUTH] Checking GitHub authentication..."
   Ensure-GitHubCli
 
-  & gh auth status --hostname github.com *> $null
-  if ($LASTEXITCODE -ne 0) {
-    Write-Host "[AUTH] No valid GitHub login. Opening GitHub login..."
+  # Stale environment tokens override GitHub CLI credentials. Ignore them for
+  # this publish process without modifying the permanent Windows environment.
+  Remove-Item Env:GITHUB_TOKEN -ErrorAction SilentlyContinue
+  Remove-Item Env:GH_TOKEN -ErrorAction SilentlyContinue
+
+  & cmd.exe /d /c "gh auth status --hostname github.com >nul 2>&1"
+  $ghAuthExitCode = $LASTEXITCODE
+  if ($ghAuthExitCode -ne 0) {
+    Write-Host "[AUTH] No valid stored GitHub login. Opening browser login..."
     & gh auth login --hostname github.com --git-protocol https --web
     Assert-LastExitCode "GitHub authentication failed."
   }
 
-  # Make Git use the same credential that gh has verified. This replaces stale
-  # HTTPS credentials without storing a PAT in this repository or script.
   Write-Host "[AUTH] Configuring Git credential helper from GitHub CLI..."
-  & gh auth setup-git --hostname github.com --force
+  & gh auth setup-git --hostname github.com
   Assert-LastExitCode "Could not configure Git to use GitHub CLI authentication."
 
   Write-Host "[AUTH] Verifying access to '$Remote'..."
-  & git ls-remote $Remote HEAD *> $null
-  if ($LASTEXITCODE -ne 0) {
-    Write-Host "[AUTH] Credential test failed. Refreshing GitHub login..."
-    & gh auth logout --hostname github.com 2>$null
-    & gh auth login --hostname github.com --git-protocol https --web
-    Assert-LastExitCode "GitHub re-authentication failed."
-    & gh auth setup-git --hostname github.com --force
-    Assert-LastExitCode "Could not reconfigure Git authentication."
-    & git ls-remote $Remote HEAD *> $null
-    Assert-LastExitCode "GitHub authentication is still failing for '$Remote'."
-  }
-
+  & cmd.exe /d /c "git ls-remote $Remote HEAD >nul 2>&1"
+  Assert-LastExitCode "GitHub authentication is failing for '$Remote'."
   Write-Host "[AUTH] GitHub authentication OK."
 }
 

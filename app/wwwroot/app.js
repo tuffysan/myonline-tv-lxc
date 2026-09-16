@@ -67,11 +67,11 @@ function renderMobileNavigation(){
   const primary=[
     ['home','⌂','Home'],
     ['live','▣','Live'],
-    ['guide','▤','Guide'],
-    ['movies','▶','Movies']
+    ['movies','▶','Movies'],
+    ['search','⌕','Search']
   ];
   host.innerHTML=primary.map(([view,icon,label])=>`<button data-mobile-view="${view}" class="${currentView===view?'active':''}"><span>${icon}</span><small>${label}</small></button>`).join('')+
-    `<button id=mobileMoreButton class="${['series','plex','jellyfin','downloads','recordings','search','system','admin'].includes(currentView)?'active':''}"><span>•••</span><small>More</small></button>`;
+    `<button id=mobileMoreButton class="${['guide','series','plex','jellyfin','downloads','recordings','system','admin'].includes(currentView)?'active':''}"><span>•••</span><small>More</small></button>`;
   host.querySelectorAll('[data-mobile-view]').forEach(b=>b.onclick=()=>show(b.dataset.mobileView));
   $('#mobileMoreButton').onclick=toggleMobileMore;
 }
@@ -82,6 +82,7 @@ function toggleMobileMore(){
   const open=sheet.classList.contains('hidden');
   if(!open){sheet.classList.add('hidden');sheet.setAttribute('aria-hidden','true');document.body.classList.remove('mobileSheetOpen');return}
   const items=[
+    ['guide','▤','Guide'],
     ['series','▦','Series'],
     ['plex','◆','Plex'],
     ['jellyfin','◇','Jellyfin'],
@@ -507,9 +508,10 @@ function renderHomeContent({unifiedMovies=[],unifiedSeries=[],continueItems=[],h
   const hasJellyfin=(mediaLibraries||[]).some(x=>x.enabled!==false&&String(x.type).toLowerCase()==='jellyfin');
   const mediaFavs=getMediaFavs().slice(0,12);
 
-  content.innerHTML=`${smartHomeStatus()}<div class="hero homeHero"><div><span class=kicker>MYONLINE TV</span><h2>What do you want to watch?</h2>
-  <p class=muted>Live TV, IPTV, Plex and Jellyfin — one home screen.</p>
-  <div class=row><input id=homeSearch placeholder="Search everything"><button class=btn id=homeSearchButton>Search</button><button class=btn onclick="home3Customize()">Customize</button></div></div></div>
+  content.innerHTML=`${smartHomeStatus()}<div class="hero homeHero v35Hero"><div class=v35HeroContent><span class=kicker>MYONLINE TV</span><h2>Everything you watch.<br><span>One place.</span></h2>
+  <p class=muted>Live television, movies, series and your personal media libraries — designed for every screen.</p>
+  <div class="row v35HeroActions"><button class="btn primaryBtn" onclick="show('live')">▶ Watch Live</button><button class=btn onclick="show('guide')">▤ Open Guide</button></div>
+  <div class=v35HeroSearch><input id=homeSearch placeholder="Search channels, movies, series and programmes"><button class=btn id=homeSearchButton>Search</button></div></div></div>
 
   <div class=homeSourceGrid>
     <button class=homeSourceCard onclick="show('live')"><span>▣</span><b>Live TV</b><small>Channels</small></button>
@@ -520,11 +522,11 @@ function renderHomeContent({unifiedMovies=[],unifiedSeries=[],continueItems=[],h
     ${hasJellyfin?`<button class=homeSourceCard onclick="show('jellyfin')"><span>◇</span><b>Jellyfin</b><small>Media library</small></button>`:''}
   </div>
 
-  ${homeLiveNow.length?`<div class=sectionHead><h2>On TV now</h2><button class=linkButton onclick="show('guide')">Open Guide</button></div><div class=liveNowRail>${homeLiveNow.map(x=>`<button class=liveNowCard onclick='show("live").then(()=>playLive(${JSON.stringify(x.channel.key)},${JSON.stringify(x.channel.name)}))'>${x.channel.logo?`<img src="${escAttr(x.channel.logo)}">`:''}<div><b>${esc(channelName(x.channel))}</b><span>${esc(x.program.title)}</span><small>${esc(liveProgramTimes(x.program))}</small></div></button>`).join('')}</div>`:`<div id=homeLivePlaceholder class=homeDeferredPlaceholder><span>Loading what's on TV…</span></div>`}
+  ${homeLiveNow.length?`<div class=sectionHead><h2>Live now</h2><button class=linkButton onclick="show('guide')">Open Guide</button></div><div class=liveNowRail>${homeLiveNow.map(x=>`<button class=liveNowCard onclick='show("live").then(()=>playLive(${JSON.stringify(x.channel.key)},${JSON.stringify(x.channel.name)}))'>${x.channel.logo?`<img src="${escAttr(x.channel.logo)}">`:''}<div><b>${esc(channelName(x.channel))}</b><span>${esc(x.program.title)}</span><small>${esc(liveProgramTimes(x.program))}</small></div></button>`).join('')}</div>`:`<div id=homeLivePlaceholder class=homeDeferredPlaceholder><span>Loading what's on TV…</span></div>`}
 
   ${continueItems.length?`<div class=sectionHead><h2>Continue watching</h2><button class=linkButton onclick="clearContinueWatching()">Clear all</button></div><div class="continueRow mediaHistoryRail">${continueItems.slice(0,16).map(x=>`<div class="continueCard historyCard"><button class=historyMain onclick='resumeContinueItem(${JSON.stringify(x)})'>${mediaPosterMarkup(x.poster,x.title)}<div class=historyCardBody><b>${esc(x.title)}</b><small>${formatMediaTime(x.positionSeconds||0)}${x.durationSeconds?' / '+formatMediaTime(x.durationSeconds):''}</small>${x.durationSeconds?`<div class=continueProgress><span style="width:${continueProgress(x)}%"></span></div>`:''}</div></button><div class=historyActions><button class=historyWatched title="Mark as watched" onclick='markContinueWatched(${JSON.stringify(x.id)})'>✓</button><button class=historyRemove title="Remove" onclick='removeContinueWatching(${JSON.stringify(x.id)})'>×</button></div></div>`).join('')}</div><div id=mediaPlayer></div>`:''}
 
-  ${recentlyAdded.length?`<div class=sectionHead><h2>New for you</h2><button class=linkButton onclick="show('search')">Browse all</button></div><div class=posterRail>${recentlyAdded.map(x=>`<button class=posterCard onclick='playUnifiedItem(${JSON.stringify(x.kind==='series'?{...x,kind:"series"}:x)})'>${x.poster?`<img loading=lazy decoding=async src="${escAttr(x.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(x.name)}</b><small><span class=sourceBadge>${esc(x.source||'media')}</span> ${esc(x.year||'')}</small></div></button>`).join('')}</div>`:`<div id=homeMediaPlaceholder class=homeDeferredPlaceholder><span>Loading media libraries…</span></div>`}
+  ${recentlyAdded.length?`<div class=sectionHead><h2>Recently added</h2><button class=linkButton onclick="show('search')">Browse all</button></div><div class=posterRail>${recentlyAdded.map(x=>`<button class=posterCard onclick='playUnifiedItem(${JSON.stringify(x.kind==='series'?{...x,kind:"series"}:x)})'>${x.poster?`<img loading=lazy decoding=async src="${escAttr(x.poster)}">`:posterPlaceholder()}<div class=posterBody><b>${esc(x.name)}</b><small><span class=sourceBadge>${esc(x.source||'media')}</span> ${esc(x.year||'')}</small></div></button>`).join('')}</div>`:`<div id=homeMediaPlaceholder class=homeDeferredPlaceholder><span>Loading media libraries…</span></div>`}
 
   ${homeMediaRails(homeHistory)}
 

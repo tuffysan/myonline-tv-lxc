@@ -1,29 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-echo "Upgrade preflight: CTID=${CTID:-auto}; repository release will be checksum-verified." >&2
-
 MYONLINE_REPO="${MYONLINE_REPO:-tuffysan/myonline-tv-lxc}"
 MYONLINE_CHANNEL="${MYONLINE_CHANNEL:-stable}"
-MYONLINE_REF="${MYONLINE_REF:-}"
-
+MYONLINE_REF="${MYONLINE_REF:-${VERSION:-}}"
 TMP_ROOT="$(mktemp -d /tmp/myonline-tv-update.XXXXXX)"
 trap 'rm -rf "$TMP_ROOT"' EXIT
-
-curl -fsSL --retry 3 \
-  "https://raw.githubusercontent.com/${MYONLINE_REPO}/main/scripts/github-common.sh" \
-  -o "$TMP_ROOT/github-common.sh"
+curl -fsSL --retry 3 "https://raw.githubusercontent.com/${MYONLINE_REPO}/main/scripts/github-common.sh" -o "$TMP_ROOT/github-common.sh"
 source "$TMP_ROOT/github-common.sh"
-
 REF="$(resolve_ref)"
+echo "MyOnline TV updater: CTID=${CTID:-145}, target=${REF}"
 REPO_DIR="$(download_repo "$MYONLINE_REPO" "$REF" "$TMP_ROOT/source")"
-
 if [[ "$REF" == v* ]]; then
   ARTIFACT="$(download_release_artifact "$MYONLINE_REPO" "$REF" "$TMP_ROOT/release")"
   export MYONLINE_ARTIFACT="$ARTIFACT"
 else
   unset MYONLINE_ARTIFACT || true
 fi
-
-bash "$REPO_DIR/scripts/update-local.sh" "$REPO_DIR"
-
+exec bash "$REPO_DIR/scripts/update-local.sh" "$REPO_DIR"
