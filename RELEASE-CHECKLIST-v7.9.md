@@ -1,0 +1,12 @@
+# Android TV Release Candidate checklist
+- D-pad traversal from every screen; no focus traps.
+- Back returns predictably; Home never exits unexpectedly.
+- Live channel zapping and playback recovery.
+- HLS/VOD/episode playback.
+- Audio-track and subtitle behavior.
+- Overscan / 1080p / 4K layout sanity.
+- Profile, favourites, Continue Watching.
+- Network loss and server restart recovery.
+- Upgrade from previous installed client/server.
+- 60-minute soak test and repeated channel changes.
+- Verify no provider credentials are present on client.

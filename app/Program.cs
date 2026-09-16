@@ -1058,7 +1058,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "34.2.0",
+    version = "34.3.0",
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -1096,8 +1096,8 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = AuthConfigured();
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "34.2.0", checks })
-        : Results.Json(new { status = "not-ready", version = "34.2.0", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = "34.3.0", checks })
+        : Results.Json(new { status = "not-ready", version = "34.3.0", checks }, statusCode: 503);
 }).AllowAnonymous();
 
 
@@ -1270,7 +1270,7 @@ app.MapPost("/api/onboarding/restart", (HttpContext ctx) =>
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "34.2.0",
+    version = "34.3.0",
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = AuthConfigured(),
@@ -2649,6 +2649,20 @@ app.MapPost("/api/channel-preferences/{providerId}/channel", (string providerId,
     }
     all[providerId] = pref; Save(channelPreferencesFile, all); return Results.Ok(pref);
 }).RequireAuthorization();
+app.MapPost("/api/channel-preferences/{providerId}/bulk", (string providerId, BulkChannelVisibilityRequest req, HttpContext ctx) =>
+{
+    if (!CanManageProviderId(ctx, providerId)) return Results.Forbid();
+    var all = LoadChannelPreferences();
+    var existing = all.TryGetValue(providerId, out var current)
+        ? current
+        : new ChannelPreferences(new(StringComparer.OrdinalIgnoreCase), new(StringComparer.OrdinalIgnoreCase), new(StringComparer.OrdinalIgnoreCase));
+    var groups = new HashSet<string>((req.HiddenGroups ?? Array.Empty<string>()).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.OrdinalIgnoreCase);
+    var channels = new HashSet<string>((req.HiddenChannels ?? Array.Empty<string>()).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.OrdinalIgnoreCase);
+    all[providerId] = new ChannelPreferences(groups, channels, existing.Aliases);
+    Save(channelPreferencesFile, all);
+    return Results.Ok(all[providerId]);
+}).RequireAuthorization();
+
 app.MapPost("/api/channel-preferences/{providerId}/reset", (string providerId) =>
 {
     var all = LoadChannelPreferences(); all.Remove(providerId); Save(channelPreferencesFile, all); return Results.NoContent();
@@ -3247,7 +3261,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "34.2.0",
+        version = "34.3.0",
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -4056,7 +4070,7 @@ app.MapGet("/api/admin/recovery/capabilities", () => Results.Ok(new {
 }));
 
 app.MapGet("/api/admin/production-readiness", () => Results.Ok(new {
-    version = "34.2.0",
+    version = "34.3.0",
     adminUx = true,
     overview = true,
     sources = true,
@@ -4130,7 +4144,7 @@ app.MapGet("/api/personal-sources/architecture", (HttpContext ctx) =>
 {
     var username = ctx.User.Identity?.Name ?? "";
     return Results.Ok(new {
-        version = "34.2.0",
+        version = "34.3.0",
         ownership = "per-user",
         authenticatedUser = username,
         crossUserSharing = false,
@@ -4146,7 +4160,7 @@ app.MapGet("/api/home/personal", async (HttpContext ctx) =>
     var providers = LoadProviders().Where(x => CanAccessProvider(ctx, x)).ToList();
     var libraries = LoadMediaLibraries().Where(x => x.Enabled && CanAccessMediaLibrary(ctx, x)).ToList();
     return Results.Ok(new {
-        version = "34.2.0",
+        version = "34.3.0",
         hasIptv = providers.Count > 0,
         hasPlex = libraries.Any(x => x.Type.Equals("plex", StringComparison.OrdinalIgnoreCase)),
         hasJellyfin = libraries.Any(x => x.Type.Equals("jellyfin", StringComparison.OrdinalIgnoreCase)),
@@ -4297,7 +4311,7 @@ app.MapGet("/api/v32/playback-diagnostics", async (HttpContext ctx) =>
     var visibleProviders = LoadProviders().Where(x => CanAccessProvider(ctx, x)).ToList();
     var libraries = LoadMediaLibraries().Where(x => x.Enabled && CanAccessMediaLibrary(ctx, x)).ToList();
     return Results.Ok(new {
-        version = "34.2.0",
+        version = "34.3.0",
         generatedAt = DateTimeOffset.UtcNow,
         providers = visibleProviders.Select(x => new { x.Id, x.Name, x.Type, configured = true }),
         mediaLibraries = libraries.Select(x => new { x.Id, x.Name, x.Type, x.Enabled }),
@@ -4317,7 +4331,7 @@ app.MapGet("/api/v34/advanced-features", () => Results.Ok(ReleaseV3400.Capabilit
 
 app.MapGet("/api/iptv/transport/capabilities", () => Results.Ok(new
 {
-    version = "34.2.0",
+    version = "34.3.0",
     retry = new { maxAttempts = 3, backoffMs = new[] { 300, 600 }, transientHttp = new[] { 408, 425, 429, 500, 502, 503, 504 } },
     resilientReads = new[] { "Xtream JSON", "M3U playlist", "XMLTV EPG" },
     liveChannelCache = new { memory = true, diskFallbackHours = 24, staleWhileRevalidate = true },
@@ -4987,6 +5001,7 @@ record CatalogueItemVisibilityRequest(string? Kind, string ItemId, bool Hidden);
 record CatalogueResetRequest(string? Kind);
 record ViewerProfile(string Id, string Name, bool IsKids, string Icon, string? OwnerUsername = null);
 record ViewerProfileInput(string? Id, string? Name, bool IsKids, string? Icon, string? OwnerUsername = null);
+record BulkChannelVisibilityRequest(string[]? HiddenGroups, string[]? HiddenChannels);
 record GroupVisibilityRequest(string Group, bool Hidden);
 record ChannelPreferenceRequest(string ChannelKey, bool Hidden, string? Alias);
 record SetupRequest(string? Username, string Password);

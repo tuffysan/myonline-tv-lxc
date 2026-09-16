@@ -1,6 +1,6 @@
 # Current release
 
-**Version:** 34.2.0
+**Version:** 34.3.0
 
 ## Apple TV client
 

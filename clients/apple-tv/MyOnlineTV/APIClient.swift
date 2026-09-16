@@ -53,7 +53,7 @@ actor APIClient {
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Accept")
-        req.setValue("MyOnlineTV-AppleTV/34.2.0", forHTTPHeaderField: "User-Agent")
+        req.setValue("MyOnlineTV-AppleTV/34.3.0", forHTTPHeaderField: "User-Agent")
         if let body {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.httpBody = try JSONEncoder().encode(AnyEncodable(body))
