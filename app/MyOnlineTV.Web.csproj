@@ -3,7 +3,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>34.3.0</Version>
+    <Version>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/../VERSION').Trim())</Version>
+    <AssemblyVersion>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/../VERSION').Trim()).0</AssemblyVersion>
+    <FileVersion>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/../VERSION').Trim()).0</FileVersion>
+    <InformationalVersion>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/../VERSION').Trim())</InformationalVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />

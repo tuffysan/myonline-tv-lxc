@@ -1,0 +1,5 @@
+{
+  "version": "35.0.3",
+  "title": "Runtime Version Truth",
+  "description": "Runtime version is now sourced from the built application for every Web UI version label and status endpoint. No UI version is read from installer metadata."
+}

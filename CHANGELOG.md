@@ -1,3 +1,17 @@
+# v35.0.3 — Runtime Version Truth
+
+- Runtime version is now sourced from the built application for every Web UI version label and status endpoint. No UI version is read from installer metadata.
+- Release pipeline remains PUBLISH.cmd → GitHub Release → latest install/update from Proxmox without VERSION.
+
+# v35.0.2 — Permanent Publish & Proxmox Deployment Repair
+
+- Replaced the fragile Proxmox bootstrap path with self-contained install and update launchers.
+- Install and update now resolve the latest published GitHub Release automatically when VERSION is omitted.
+- Release source, application artifact and checksums are downloaded together and verified before deployment.
+- PUBLISH now builds locally, commits, pushes main, creates an immutable version tag, waits for GitHub Actions, and verifies all GitHub Release assets.
+- Added deployment regression gates for the `target: unbound variable` failure and bootstrap dependencies.
+- VERSION remains optional only for explicit pin/rollback scenarios.
+
 # v35.0.1 — Deployment Reliability Hotfix
 
 - Fixed `target: unbound variable` in the shared GitHub deployment bootstrap.

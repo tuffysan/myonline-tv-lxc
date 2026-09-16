@@ -118,7 +118,7 @@ Assert-LastExitCode "git push failed even though authentication preflight succee
 $headCommit = (& git rev-parse HEAD).Trim()
 
 Write-Host "[6/9] Checking local tag..."
-$localTag = (@(& git tag --list $tag) -join "`n").Trim()
+$localTag = (& git tag --list $tag).Trim()
 if ($localTag) {
   $localCommit = (& git rev-list -n 1 $tag).Trim()
   if ($localCommit -ne $headCommit) {
@@ -129,7 +129,7 @@ if ($localTag) {
 }
 
 Write-Host "[7/9] Checking remote tag..."
-$remoteTagLine = (@(& git ls-remote --tags $Remote "refs/tags/$tag") -join "`n").Trim()
+$remoteTagLine = (& git ls-remote --tags $Remote "refs/tags/$tag").Trim()
 if ($remoteTagLine) {
   $remoteCommit = (($remoteTagLine -split '\s+')[0]).Trim()
   if ($remoteCommit -ne $headCommit) {
@@ -142,8 +142,7 @@ if ($remoteTagLine) {
 }
 
 Write-Host "[8/9] Creating tag when needed..."
-$existingTag = (@(& git tag --list $tag) -join "`n").Trim()
-if ([string]::IsNullOrWhiteSpace($existingTag)) {
+if (-not ((& git tag --list $tag).Trim())) {
   & git tag -a $tag -m "MyOnline TV $tag"
   Assert-LastExitCode "Could not create tag $tag."
 }

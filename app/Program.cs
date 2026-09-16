@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Authorization;
 using MyOnlineTV;
 
 var builder = WebApplication.CreateBuilder(args);
+var appVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
 builder.WebHost.UseUrls("http://127.0.0.1:5080");
 
 builder.Services
@@ -1058,7 +1059,7 @@ app.Use(async (ctx, next) =>
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
-    version = "34.3.0",
+    version = appVersion,
     uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds
 })).AllowAnonymous();
 
@@ -1096,8 +1097,8 @@ app.MapGet("/ready", () =>
     checks["authConfigured"] = AuthConfigured();
 
     return ready
-        ? Results.Ok(new { status = "ready", version = "34.3.0", checks })
-        : Results.Json(new { status = "not-ready", version = "34.3.0", checks }, statusCode: 503);
+        ? Results.Ok(new { status = "ready", version = appVersion, checks })
+        : Results.Json(new { status = "not-ready", version = appVersion, checks }, statusCode: 503);
 }).AllowAnonymous();
 
 
@@ -1270,7 +1271,7 @@ app.MapPost("/api/onboarding/restart", (HttpContext ctx) =>
 app.MapGet("/api/status", () => Results.Ok(new
 {
     name = "MyOnline TV Web",
-    version = "34.3.0",
+    version = appVersion,
     dataDir,
     platform = Environment.OSVersion.ToString(),
     authConfigured = AuthConfigured(),
@@ -3261,7 +3262,7 @@ app.MapGet("/api/system", () =>
     var backupCount = Directory.Exists(backupsDir) ? Directory.EnumerateFiles(backupsDir, "*.zip").Count() : 0;
     return Results.Ok(new
     {
-        version = "34.3.0",
+        version = appVersion,
         dataSchemaVersion = 3,
         uptimeSeconds = (long)(DateTimeOffset.UtcNow - startedAt).TotalSeconds,
         processId = Environment.ProcessId,
@@ -3948,7 +3949,7 @@ app.MapGet("/api/appliance/readiness",async ()=>{
  await Task.CompletedTask;
  return Results.Ok(new{version="34.1.0",ready=ffmpeg&&ffprobe&&dataWritable&&LoadUsers().Count>0,checks});
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
-app.MapGet("/api/appliance/version",()=>Results.Ok(new{product="MyOnline TV",version="34.1.0",channel="stable",platform="LXC"}));
+app.MapGet("/api/appliance/version",()=>Results.Ok(new{product="MyOnline TV",version=appVersion,channel="stable",platform="LXC"}));
 
 
 // v31.2.0 Feature Completion audit
@@ -4070,7 +4071,7 @@ app.MapGet("/api/admin/recovery/capabilities", () => Results.Ok(new {
 }));
 
 app.MapGet("/api/admin/production-readiness", () => Results.Ok(new {
-    version = "34.3.0",
+    version = appVersion,
     adminUx = true,
     overview = true,
     sources = true,
@@ -4104,7 +4105,7 @@ app.MapGet("/api/system/self-healing-v27",()=>Results.Ok(SelfHealingV2700.Capabi
 
 app.MapGet("/api/platform/v28/architecture",()=>Results.Ok(ArchitectureV28V2800.Capabilities()));
 
-app.MapGet("/api/platform/release-gate",()=>Results.Ok(new { version="34.1.0", focus="stabilization", zeroMandatoryCost=true })).RequireAuthorization();
+app.MapGet("/api/platform/release-gate",()=>Results.Ok(new { version=appVersion, focus="stabilization", zeroMandatoryCost=true })).RequireAuthorization();
 
 app.MapGet("/api/playback/engine",()=>Results.Ok(new { version="2.0", live=true, vod=true, unified=true, recordings=true, fallback=true, zeroMandatoryCost=true })).RequireAuthorization();
 
@@ -4144,7 +4145,7 @@ app.MapGet("/api/personal-sources/architecture", (HttpContext ctx) =>
 {
     var username = ctx.User.Identity?.Name ?? "";
     return Results.Ok(new {
-        version = "34.3.0",
+        version = appVersion,
         ownership = "per-user",
         authenticatedUser = username,
         crossUserSharing = false,
@@ -4160,7 +4161,7 @@ app.MapGet("/api/home/personal", async (HttpContext ctx) =>
     var providers = LoadProviders().Where(x => CanAccessProvider(ctx, x)).ToList();
     var libraries = LoadMediaLibraries().Where(x => x.Enabled && CanAccessMediaLibrary(ctx, x)).ToList();
     return Results.Ok(new {
-        version = "34.3.0",
+        version = appVersion,
         hasIptv = providers.Count > 0,
         hasPlex = libraries.Any(x => x.Type.Equals("plex", StringComparison.OrdinalIgnoreCase)),
         hasJellyfin = libraries.Any(x => x.Type.Equals("jellyfin", StringComparison.OrdinalIgnoreCase)),
@@ -4311,7 +4312,7 @@ app.MapGet("/api/v32/playback-diagnostics", async (HttpContext ctx) =>
     var visibleProviders = LoadProviders().Where(x => CanAccessProvider(ctx, x)).ToList();
     var libraries = LoadMediaLibraries().Where(x => x.Enabled && CanAccessMediaLibrary(ctx, x)).ToList();
     return Results.Ok(new {
-        version = "34.3.0",
+        version = appVersion,
         generatedAt = DateTimeOffset.UtcNow,
         providers = visibleProviders.Select(x => new { x.Id, x.Name, x.Type, configured = true }),
         mediaLibraries = libraries.Select(x => new { x.Id, x.Name, x.Type, x.Enabled }),
@@ -4331,7 +4332,7 @@ app.MapGet("/api/v34/advanced-features", () => Results.Ok(ReleaseV3400.Capabilit
 
 app.MapGet("/api/iptv/transport/capabilities", () => Results.Ok(new
 {
-    version = "34.3.0",
+    version = appVersion,
     retry = new { maxAttempts = 3, backoffMs = new[] { 300, 600 }, transientHttp = new[] { 408, 425, 429, 500, 502, 503, 504 } },
     resilientReads = new[] { "Xtream JSON", "M3U playlist", "XMLTV EPG" },
     liveChannelCache = new { memory = true, diskFallbackHours = 24, staleWhileRevalidate = true },
