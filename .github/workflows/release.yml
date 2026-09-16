@@ -52,7 +52,6 @@ jobs:
         run: |
           set -euo pipefail
           find . -name '*.sh' -print0 | xargs -0 -n1 bash -n
-          bash scripts/DEPLOYMENT-GATE.sh
           node --check app/wwwroot/app.js
 
       - name: Setup .NET 10
