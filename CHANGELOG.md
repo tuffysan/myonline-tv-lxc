@@ -1,5 +1,12 @@
 # Changelog
 
+## v36.4.0 — Mobile Experience
+- Dedicated thumb-first mobile Home; no desktop Hero on phones.
+- Compact mobile brand/profile header.
+- Bottom navigation is Home / Live / Guide / Movies / More.
+- Compact Continue Watching, Live Now, Continue Series, Movies, My List and Series surfaces.
+- Existing TV and desktop experiences remain independent.
+
 ## 36.3.1 — Desktop Header Polish
 - Desktop header right side now groups profile avatar/name, divider, localized date and live clock.
 - Sidebar brand is compact: MyOnlineTV with the app logo directly after the name on the same row.

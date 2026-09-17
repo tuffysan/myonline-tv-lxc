@@ -67,11 +67,11 @@ function renderMobileNavigation(){
   const primary=[
     ['home','⌂','Home'],
     ['live','▣','Live'],
-    ['movies','▶','Movies'],
-    ['search','⌕','Search']
+    ['guide','▤','Guide'],
+    ['movies','▶','Movies']
   ];
   host.innerHTML=primary.map(([view,icon,label])=>`<button data-mobile-view="${view}" class="${currentView===view?'active':''}"><span>${icon}</span><small>${label}</small></button>`).join('')+
-    `<button id=mobileMoreButton class="${['guide','series','plex','jellyfin','downloads','recordings','system','admin'].includes(currentView)?'active':''}"><span>•••</span><small>More</small></button>`;
+    `<button id=mobileMoreButton class="${['series','plex','jellyfin','downloads','recordings','sources','system','admin'].includes(currentView)?'active':''}"><span>•••</span><small>More</small></button>`;
   host.querySelectorAll('[data-mobile-view]').forEach(b=>b.onclick=()=>show(b.dataset.mobileView));
   $('#mobileMoreButton').onclick=toggleMobileMore;
 }
@@ -82,12 +82,13 @@ function toggleMobileMore(){
   const open=sheet.classList.contains('hidden');
   if(!open){sheet.classList.add('hidden');sheet.setAttribute('aria-hidden','true');document.body.classList.remove('mobileSheetOpen');return}
   const items=[
-    ['guide','▤','Guide'],
     ['series','▦','Series'],
+    ['search','⌕','Search'],
     ['plex','◆','Plex'],
     ['jellyfin','◇','Jellyfin'],
     ['downloads','↓','Downloads'],
     ['recordings','●','DVR'],
+    ['sources','⚙','My Sources'],
     ['system','◉','System'],
     ['completion','✓','Completion'],
     ['admin','🛡','Admin']
@@ -522,6 +523,7 @@ function renderHomeContent({unifiedMovies=[],unifiedSeries=[],continueItems=[],h
   const mediaFavs=getMediaFavs().slice(0,12);
 
   if(tvHome361IsActive()){renderTvHome361({unifiedMovies,unifiedSeries,continueItems,homeHistory,homeLiveNow});return;}
+  if(mobileHome364IsActive()){renderMobileHome364({unifiedMovies,unifiedSeries,continueItems,homeHistory,homeLiveNow});return;}
   if(desktopHome362IsActive()){renderDesktopHome362({unifiedMovies,unifiedSeries,continueItems,homeHistory,homeLiveNow});return;}
 
   content.innerHTML=`${smartHomeStatus()}<div class="hero homeHero v35Hero"><div class=v35HeroContent><span class=kicker>MYONLINE TV</span><h2>Everything you watch.<br><span>One place.</span></h2>
@@ -4379,5 +4381,45 @@ function renderDesktopHome362({unifiedMovies=[],unifiedSeries=[],continueItems=[
     ${favs.length?`<section class="desktop362Section desktop363Section"><header><h2>My List</h2><button onclick="show('search')">See all ›</button></header><div class="desktop362Rail desktop363Rail">${favs.map(x=>desktop362MediaCard(x)).join('')}</div></section>`:''}
     ${movies.length?`<section class="desktop362Section desktop363Section"><header><h2>Recently Added Movies</h2><button onclick="show('movies')">See all ›</button></header><div class="desktop362Rail desktop363Rail">${movies.map(x=>desktop362MediaCard(x)).join('')}</div></section>`:''}
     ${series.length?`<section class="desktop362Section desktop363Section"><header><h2>Continue Series</h2><button onclick="show('series')">See all ›</button></header><div class="desktop362Rail desktop363Rail">${series.map(x=>desktop362MediaCard({...x,kind:'series'})).join('')}</div></section>`:''}
+  </div>`;
+}
+
+
+// v36.4.0 — Mobile Experience
+// A dedicated thumb-first Home surface. TV and desktop renderers remain independent.
+function mobileHome364IsActive(){
+  return document.body?.dataset?.clientMode==='mobile' || (window.innerWidth<=900 && window.matchMedia?.('(pointer:coarse)')?.matches===true);
+}
+function mobile364Artwork(item){
+  return item?.backdrop||item?.art||item?.fanart||item?.poster||item?.image||'';
+}
+function mobile364ContinueCard(item){
+  const art=mobile364Artwork(item), title=item?.title||item?.name||'Continue watching';
+  return `<article class=mobile364Continue><button onclick='resumeContinueItem(${JSON.stringify(item)})'>${art?`<img loading=lazy decoding=async src="${escAttr(art)}">`:posterPlaceholder()}<span><b>${esc(title)}</b>${item?.durationSeconds?`<i><i style="width:${continueProgress(item)}%"></i></i>`:''}<small>${item?.durationSeconds?`${formatMediaTime(item.positionSeconds||0)} / ${formatMediaTime(item.durationSeconds)}`:'Continue'}</small></span></button></article>`;
+}
+function mobile364LiveCard(row){
+  const c=row.channel,p=row.program;
+  const start=new Date(p.start).getTime(), stop=new Date(p.stop).getTime(), now=Date.now();
+  const pct=Math.max(0,Math.min(100,((now-start)/Math.max(1,stop-start))*100));
+  return `<button class=mobile364Live onclick='show("live").then(()=>playLive(${JSON.stringify(c.key)},${JSON.stringify(c.name)}))'>${c.logo?`<img src="${escAttr(c.logo)}">`:`<span class=mobile364ChannelFallback>TV</span>`}<span><i>LIVE</i><b>${esc(channelName(c))}</b><em>${esc(p.title||'Live television')}</em><u><u style="width:${pct}%"></u></u><small>${esc(liveProgramTimes(p))}</small></span><strong>▶</strong></button>`;
+}
+function mobile364Poster(item,kind){
+  const name=item?.name||item?.title||'Media'; const art=item?.poster||item?.image||mobile364Artwork(item);
+  const payload=kind==='series'?{...item,kind:'series'}:item;
+  return `<button class=mobile364Poster onclick='playUnifiedItem(${JSON.stringify(payload)})'>${art?`<img loading=lazy decoding=async src="${escAttr(art)}">`:posterPlaceholder()}<b>${esc(name)}</b>${item?.year?`<small>${esc(item.year)}</small>`:''}</button>`;
+}
+function renderMobileHome364({unifiedMovies=[],unifiedSeries=[],continueItems=[],homeHistory=[],homeLiveNow=[]}){
+  const mediaFavs=getMediaFavs().slice(0,12);
+  const continueSeries=(homeHistory||[]).filter(x=>String(x.kind||x.type||'').toLowerCase().includes('series')||x.season||x.episode).slice(0,10);
+  content.innerHTML=`<div class=mobile364Home>
+    <section class=mobile364Welcome><span>${esc(authState.user||'')}</span><h1>${new Date().getHours()<12?'Good morning':new Date().getHours()<18?'Good afternoon':'Good evening'}</h1></section>
+    <button class=mobile364Search onclick="show('search')"><span>⌕</span><span>Search movies, series, channels…</span></button>
+    ${continueItems.length?`<section class=mobile364Section><header><h2>Continue Watching</h2><button onclick="show('search')">See all ›</button></header><div class=mobile364LandscapeRail>${continueItems.slice(0,10).map(mobile364ContinueCard).join('')}</div></section>`:''}
+    ${homeLiveNow.length?`<section class=mobile364Section><header><h2>Live Now</h2><button onclick="show('guide')">Guide ›</button></header><div class=mobile364LiveStack>${homeLiveNow.slice(0,5).map(mobile364LiveCard).join('')}</div></section>`:''}
+    ${continueSeries.length?`<section class=mobile364Section><header><h2>Continue Series</h2><button onclick="show('series')">See all ›</button></header><div class=mobile364LandscapeRail>${continueSeries.map(x=>mobile364Poster(x,'series')).join('')}</div></section>`:''}
+    ${unifiedMovies.length?`<section class=mobile364Section><header><h2>Movies</h2><button onclick="show('movies')">See all ›</button></header><div class=mobile364PosterRail>${unifiedMovies.slice(0,12).map(x=>mobile364Poster(x,'movie')).join('')}</div></section>`:''}
+    ${mediaFavs.length?`<section class=mobile364Section><header><h2>My List</h2><button onclick="show('search')">See all ›</button></header><div class=mobile364PosterRail>${mediaFavs.map(x=>`<button class=mobile364Poster onclick='openHomeFavourite(${JSON.stringify(x)})'>${x.poster?`<img loading=lazy decoding=async src="${escAttr(x.poster)}">`:posterPlaceholder()}<b>${esc(x.name||x.title||'Favourite')}</b></button>`).join('')}</div></section>`:''}
+    ${unifiedSeries.length?`<section class=mobile364Section><header><h2>Series</h2><button onclick="show('series')">See all ›</button></header><div class=mobile364PosterRail>${unifiedSeries.slice(0,12).map(x=>mobile364Poster(x,'series')).join('')}</div></section>`:''}
+    <div id=mediaPlayer></div>
   </div>`;
 }
