@@ -1,3 +1,10 @@
+## v36.5.2 – Tablet Live Channel Fix
+
+- Scopes tablet sidebar CSS to the app navigation only (`#app > aside`).
+- Keeps the nested Live TV channel pane visible and selectable in tablet portrait and landscape.
+- Prevents tablet navigation sizing rules from being applied to the Live channel pane.
+- Includes the v36.5.1 mobile Live channel fix.
+
 # v36.5.1 — Mobile Live Channel Fix
 
 - Fixes Live on phones: the channel selector is visible and channels can be selected again.
