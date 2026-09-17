@@ -1,3 +1,12 @@
+# v36.5.6 — Mobile & Tablet Scroll Fix
+
+- Restores reliable vertical touch scrolling on mobile and tablet layouts.
+- Keeps fixed mobile bottom navigation while allowing the main page to scroll.
+- Preserves horizontal swipe rails for Continue Watching, Movies, Series and similar content.
+- Tablet landscape keeps the compact sidebar sticky while the main content scrolls.
+- Tablet portrait uses the same safe vertical scrolling model as mobile.
+- Live channel pane remains independently scrollable.
+
 ## v36.5.5 – Release ID Direct Creation
 - Fixed atomic GitHub Release creation/upload to use the numeric release ID end-to-end.
 

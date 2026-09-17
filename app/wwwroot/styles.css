@@ -1882,3 +1882,90 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
   .tvLiveShell>.liveChannelPane{display:block!important;visibility:visible!important;max-height:46dvh;overflow:auto}
   .liveChannelPane #chan{display:grid!important}
 }
+
+/* =========================================================
+   v36.5.6 — Mobile & Tablet Scroll Fix
+   Keep the document/main surface vertically scrollable while preserving
+   independent horizontal media rails and fixed/sticky navigation.
+   ========================================================= */
+@media(max-width:1179px){
+  html:not(.isTV),
+  html:not(.isTV) body{
+    height:auto!important;
+    min-height:100%!important;
+    min-height:100dvh!important;
+    overflow-x:hidden!important;
+    overflow-y:auto!important;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-y:auto!important;
+  }
+  html:not(.isTV) #app{
+    height:auto!important;
+    min-height:100dvh!important;
+    overflow:visible!important;
+  }
+  html:not(.isTV) main{
+    height:auto!important;
+    min-height:100dvh!important;
+    overflow:visible!important;
+    min-width:0;
+  }
+  html:not(.isTV) #content{
+    height:auto!important;
+    min-height:0!important;
+    overflow:visible!important;
+    touch-action:pan-y pinch-zoom;
+  }
+
+  /* Horizontal rails keep horizontal gestures without stealing vertical page scroll. */
+  html:not(.isTV) .posterRail,
+  html:not(.isTV) .continueRow,
+  html:not(.isTV) .mediaHistoryRail,
+  html:not(.isTV) .mobile364LandscapeRail,
+  html:not(.isTV) .mobile364PosterRail,
+  html:not(.isTV) .tablet365LandscapeRail,
+  html:not(.isTV) .tablet365PosterRail{
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    -webkit-overflow-scrolling:touch;
+    touch-action:pan-x pan-y pinch-zoom;
+  }
+
+  /* Live channel list is its own vertical scroll surface. */
+  html:not(.isTV) .tvLiveShell>.liveChannelPane{
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    -webkit-overflow-scrolling:touch;
+    touch-action:pan-y pinch-zoom;
+  }
+}
+
+@media(max-width:719px){
+  html:not(.isTV) body{
+    padding-bottom:calc(var(--mobile-nav-h) + env(safe-area-inset-bottom))!important;
+  }
+  html:not(.isTV) #app{
+    padding-bottom:0!important;
+  }
+  html:not(.isTV) #content{
+    padding-bottom:calc(30px + var(--mobile-nav-h) + env(safe-area-inset-bottom))!important;
+  }
+}
+
+@media(min-width:720px) and (max-width:900px) and (orientation:portrait){
+  html.isTablet:not(.isTV) body{
+    padding-bottom:calc(76px + env(safe-area-inset-bottom))!important;
+  }
+  html.isTablet:not(.isTV) #content{
+    padding-bottom:calc(38px + 76px + env(safe-area-inset-bottom))!important;
+  }
+}
+
+@media(min-width:720px) and (max-width:1179px) and (orientation:landscape){
+  html.isTablet:not(.isTV) #app>aside{
+    position:sticky!important;
+    top:0!important;
+    height:100dvh!important;
+    align-self:start!important;
+  }
+}
