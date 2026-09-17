@@ -509,6 +509,7 @@ function renderHomeContent({unifiedMovies=[],unifiedSeries=[],continueItems=[],h
   const mediaFavs=getMediaFavs().slice(0,12);
 
   if(tvHome361IsActive()){renderTvHome361({unifiedMovies,unifiedSeries,continueItems,homeHistory,homeLiveNow});return;}
+  if(desktopHome362IsActive()){renderDesktopHome362({unifiedMovies,unifiedSeries,continueItems,homeHistory,homeLiveNow});return;}
 
   content.innerHTML=`${smartHomeStatus()}<div class="hero homeHero v35Hero"><div class=v35HeroContent><span class=kicker>MYONLINE TV</span><h2>Everything you watch.<br><span>One place.</span></h2>
   <p class=muted>Live television, movies, series and your personal media libraries — designed for every screen.</p>
@@ -4313,4 +4314,50 @@ function renderTvHome361({unifiedMovies=[],unifiedSeries=[],continueItems=[],hom
     ${recentSeries.length?`<section class=tv361Section><header><h2>Series</h2><button onclick="show('series')">View all ›</button></header><div class=tv361Rail>${recentSeries.map(x=>tvHome361Poster({...x,kind:'series'})).join('')}</div></section>`:''}
   </div>`;
   requestAnimationFrame(()=>{const first=document.querySelector('.tv361Home button');if(first&&tvHome361IsActive())first.focus({preventScroll:true})});
+}
+
+
+// =========================================================
+// v36.2.0 — Desktop Home Experience
+// Information-rich desktop/laptop Home while TV keeps v36.1.
+// =========================================================
+function desktopHome362IsActive(){
+  return !tvHome361IsActive() && matchMedia('(min-width:1180px) and (pointer:fine)').matches;
+}
+function desktop362Hero(continueItems,liveRows,movies,series){
+  const c=(continueItems||[])[0];
+  if(c)return {title:c.title||c.name||'Continue watching',eyebrow:'CONTINUE WATCHING',description:'Pick up exactly where you left off.',art:c.backdrop||c.poster||'',primary:`resumeContinueItem(${JSON.stringify(c)})`,primaryText:'▶ Continue'};
+  const m=(movies||[])[0]||(series||[])[0];
+  if(m)return {title:m.name||m.title||'Featured',eyebrow:'FEATURED FOR YOU',description:[m.year,m.genre].filter(Boolean).join(' · ')||'Movie & Series',art:m.backdrop||m.poster||'',primary:`playUnifiedItem(${JSON.stringify(m)})`,primaryText:'▶ Watch now'};
+  const l=(liveRows||[])[0];
+  if(l)return {title:l.program?.title||channelName(l.channel),eyebrow:'LIVE NOW',description:channelName(l.channel),art:l.channel?.logo||'',primary:`show('live').then(()=>playLive(${JSON.stringify(l.channel.key)},${JSON.stringify(l.channel.name)}))`,primaryText:'▶ Watch live'};
+  return {title:'Everything you watch. One place.',eyebrow:'MYONLINE TV',description:'Live television, movies, series and your personal media.',art:'',primary:`show('live')`,primaryText:'▶ Watch live'};
+}
+function desktop362MediaCard(item,kind='media'){
+  const title=item?.title||item?.name||'Media',poster=item?.poster||'';
+  const action=kind==='continue'?`resumeContinueItem(${JSON.stringify(item)})`:`playUnifiedItem(${JSON.stringify(item)})`;
+  return `<article class=desktop362Card><button class=desktop362CardMain onclick='${action}'>${poster?`<img loading=lazy decoding=async src="${escAttr(poster)}">`:posterPlaceholder()}<span><b>${esc(title)}</b>${item?.year?`<small>${esc(item.year)}</small>`:''}${kind==='continue'&&item.durationSeconds?`<i class=desktop362Progress><i style="width:${continueProgress(item)}%"></i></i>`:''}</span></button><div class=desktop362Hover><button title="Play" onclick='${action}'>▶</button><button title="More info" onclick='${action}'>ⓘ</button></div></article>`;
+}
+function desktop362LiveCard(row){
+  const pr=row.program||{},start=new Date(pr.start),stop=new Date(pr.stop),now=Date.now();
+  const pct=Math.max(0,Math.min(100,(now-start)/(stop-start)*100||0));
+  return `<button class=desktop362Live onclick='show("live").then(()=>playLive(${JSON.stringify(row.channel.key)},${JSON.stringify(row.channel.name)}))'>${row.channel.logo?`<img src="${escAttr(row.channel.logo)}">`:''}<span><i>LIVE</i><b>${esc(channelName(row.channel))}</b><em>${esc(pr.title||'Live TV')}</em><small>${esc(liveProgramTimes(pr))}</small><u><u style="width:${pct}%"></u></u></span></button>`;
+}
+function renderDesktopHome362({unifiedMovies=[],unifiedSeries=[],continueItems=[],homeLiveNow=[]}){
+  const hero=desktop362Hero(continueItems,homeLiveNow,unifiedMovies,unifiedSeries);
+  const favs=getMediaFavs().slice(0,10);
+  const movies=[...unifiedMovies].sort((a,b)=>new Date(b.addedAt||0)-new Date(a.addedAt||0)).slice(0,12);
+  const series=[...unifiedSeries].sort((a,b)=>new Date(b.addedAt||0)-new Date(a.addedAt||0)).slice(0,12);
+  const upNext=continueItems.slice(0,4);
+  content.innerHTML=`<div class=desktop362Home>
+    <div class=desktop362Top><label>⌕<input id=desktop362Search placeholder="Search movies, series, channels and programmes…"></label><span>${esc(authState?.user||'')}</span></div>
+    <div class=desktop362Lead><section class=desktop362Hero style="--desktop362-art:${hero.art?`url('${escAttr(hero.art)}')`:'none'}"><div><small>${esc(hero.eyebrow)}</small><h1>${esc(hero.title)}</h1><p>${esc(hero.description)}</p><nav><button class="btn primaryBtn" onclick='${hero.primary}'>${hero.primaryText}</button><button class=btn onclick="show('search')">ⓘ More info</button>${favs.length?`<button class=btn onclick="show('search')">＋ My List</button>`:''}</nav></div></section>
+    <aside class=desktop362Side><header><h2>Up Next</h2></header>${upNext.length?upNext.map(x=>`<button onclick='resumeContinueItem(${JSON.stringify(x)})'>${x.poster?`<img src="${escAttr(x.poster)}">`:''}<span><b>${esc(x.title||x.name||'Continue')}</b><small>${x.durationSeconds?Math.max(1,Math.round((x.durationSeconds-(x.positionSeconds||0))/60))+' min left':'Continue watching'}</small></span></button>`).join(''):'<p class=muted>Nothing waiting right now.</p>'}<header><h2>Live Today</h2><button onclick="show('guide')">Guide ›</button></header>${homeLiveNow.slice(0,5).map(x=>`<button onclick='show("live").then(()=>playLive(${JSON.stringify(x.channel.key)},${JSON.stringify(x.channel.name)}))'><span><b>${esc(channelName(x.channel))}</b><small>${esc(x.program?.title||'Live TV')}</small></span></button>`).join('')}</aside></div>
+    ${continueItems.length?`<section class=desktop362Section><header><h2>Continue Watching</h2><button onclick="show('search')">See all ›</button></header><div class=desktop362Rail>${continueItems.slice(0,10).map(x=>desktop362MediaCard(x,'continue')).join('')}</div></section>`:''}
+    ${homeLiveNow.length?`<section class=desktop362Section><header><h2>Live Now</h2><button onclick="show('guide')">See guide ›</button></header><div class="desktop362Rail desktop362LiveRail">${homeLiveNow.slice(0,10).map(desktop362LiveCard).join('')}</div></section>`:''}
+    ${favs.length?`<section class=desktop362Section><header><h2>My List</h2></header><div class=desktop362Rail>${favs.map(x=>desktop362MediaCard(x)).join('')}</div></section>`:''}
+    ${movies.length?`<section class=desktop362Section><header><h2>Movies</h2><button onclick="show('movies')">See all ›</button></header><div class=desktop362Rail>${movies.map(x=>desktop362MediaCard(x)).join('')}</div></section>`:''}
+    ${series.length?`<section class=desktop362Section><header><h2>Series</h2><button onclick="show('series')">See all ›</button></header><div class=desktop362Rail>${series.map(x=>desktop362MediaCard({...x,kind:'series'})).join('')}</div></section>`:''}
+  </div>`;
+  const q=document.querySelector('#desktop362Search');if(q)q.onkeydown=e=>{if(e.key==='Enter'){const v=q.value.trim();if(v){sessionStorage.setItem('myonline-search-query',v);show('search')}}};
 }

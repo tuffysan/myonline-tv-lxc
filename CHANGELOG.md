@@ -1,3 +1,14 @@
+## v36.2.0 — Desktop Home Experience
+
+- New content-first laptop/desktop Home experience inspired by the v36 desktop concept.
+- Compact global search bar and profile-aware desktop header.
+- Cinematic hero with contextual Continue Watching, featured media, or Live TV action.
+- Dedicated Up Next and Live Today side panel on wide screens.
+- Desktop rails for Continue Watching, Live Now, My List, Movies and Series.
+- Mouse hover quick actions, playback progress and EPG progress indicators.
+- TV keeps the v36.1 ten-foot Home; tablet/mobile keep their existing responsive Home.
+- VERSION remains the single build/runtime/UI version source.
+
 # Changelog
 
 ## v36.1.0 – TV Home Experience
