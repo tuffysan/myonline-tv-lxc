@@ -1,3 +1,14 @@
+# v36.0.0 — TV Product Experience
+
+- Dedicated ten-foot TV shell layered on the existing responsive application.
+- Persistent remote-first navigation with Home/Menu launcher and predictable Back behavior.
+- Stronger focus memory, focus visibility and automatic focused-card centering.
+- TV playback overlay with Play/Pause, Guide, Live TV and Home actions.
+- Idle playback chrome that gets out of the way while watching.
+- Remote help overlay and keyboard/media-key mappings for TV testing.
+- TV-safe overscan spacing, larger typography/targets and reduced UI density.
+- Existing Live TV, Guide, Movies, Series and profile sync remain the underlying product features.
+
 # v35.4.0 — Cross-device & Profiles
 
 - Profile-scoped server favourites and Continue Watching.

@@ -4169,3 +4169,109 @@ function showGuideProgramActions(channelKey,channelName,programJson){
   $('#guideReminder').onclick=()=>{if('Notification'in window&&Notification.permission==='default')Notification.requestPermission().catch(()=>{});toggleGuideReminder(channelKey,channelName,programJson);closeProgramActions()};
   setTimeout(()=>$('#guidePlay')?.focus(),20);
 }
+
+// =========================================================
+// v36.0.0 — TV Product Experience
+// Ten-foot product shell layered on the existing application.
+// =========================================================
+window.MyOnlineTvProduct={
+  active:false,
+  launcherOpen:false,
+  helpOpen:false,
+  idleTimer:null,
+  activate(){
+    const tv=document.documentElement.classList.contains('isTV');
+    this.active=tv;
+    document.documentElement.classList.toggle('tvProductExperience',tv);
+    if(tv){
+      document.body.dataset.tvProduct='36';
+      this.ensureShell();
+      this.wake();
+      setTimeout(()=>tvFocusFirst(),80);
+    }else{
+      delete document.body.dataset.tvProduct;
+      this.closeLauncher();
+      this.closeHelp();
+    }
+  },
+  ensureShell(){
+    if(!document.querySelector('#tvProductHud')){
+      const hud=document.createElement('div');
+      hud.id='tvProductHud';hud.className='tvProductHud';
+      hud.innerHTML='<span>MyOnline TV</span><small>HOME Menu · BACK Home · ? Remote help</small>';
+      document.body.appendChild(hud);
+    }
+  },
+  wake(){
+    if(!this.active)return;
+    document.documentElement.classList.remove('tvProductIdle');
+    clearTimeout(this.idleTimer);
+    this.idleTimer=setTimeout(()=>{
+      const playing=[...document.querySelectorAll('video')].some(v=>!v.paused&&!v.ended);
+      if(playing&&!this.launcherOpen&&!this.helpOpen)
+        document.documentElement.classList.add('tvProductIdle');
+    },6500);
+  },
+  openLauncher(){
+    if(!this.active)return;
+    this.closeHelp();
+    let host=document.querySelector('#tvProductLauncher');
+    if(!host){host=document.createElement('div');host.id='tvProductLauncher';document.body.appendChild(host)}
+    const items=[['home','⌂','Home'],['live','▣','Live TV'],['guide','▤','Guide'],['movies','▶','Movies'],['series','▦','Series'],['search','⌕','Search']];
+    host.className='tvProductLauncher';
+    host.innerHTML=`<div class=tvLauncherPanel><div class=tvLauncherBrand><b>MyOnline TV</b><small>Choose where to go</small></div><div class=tvLauncherGrid>${items.map(([view,icon,label])=>`<button data-tv-launch="${view}" class="${currentView===view?'current':''}"><span>${icon}</span><b>${label}</b></button>`).join('')}</div><div class=tvLauncherHint>← ↑ ↓ → Navigate &nbsp; · &nbsp; OK Select &nbsp; · &nbsp; Back Close</div></div>`;
+    host.querySelectorAll('[data-tv-launch]').forEach(b=>b.onclick=()=>{const v=b.dataset.tvLaunch;this.closeLauncher();show(v)});
+    this.launcherOpen=true;this.wake();
+    setTimeout(()=>host.querySelector(`[data-tv-launch="${currentView}"]`)?.focus()||host.querySelector('button')?.focus(),30);
+  },
+  closeLauncher(){const h=document.querySelector('#tvProductLauncher');if(h)h.remove();this.launcherOpen=false},
+  openHelp(){
+    if(!this.active)return;this.closeLauncher();
+    let h=document.querySelector('#tvRemoteHelp');if(!h){h=document.createElement('div');h.id='tvRemoteHelp';document.body.appendChild(h)}
+    h.className='tvRemoteHelp';h.innerHTML=`<div class=tvRemoteHelpCard><span class=kicker>REMOTE CONTROL</span><h2>Remote shortcuts</h2><div class=tvHelpGrid><div><kbd>↑ ↓ ← →</kbd><b>Navigate</b></div><div><kbd>OK / Enter</kbd><b>Select</b></div><div><kbd>Back</kbd><b>Close / Home</b></div><div><kbd>Home / Menu</kbd><b>TV launcher</b></div><div><kbd>Play/Pause</kbd><b>Playback</b></div><div><kbd>G</kbd><b>Mini guide</b></div><div><kbd>F</kbd><b>Fullscreen</b></div><div><kbd>0–9</kbd><b>Channel number</b></div></div><button class="btn primaryBtn" id=tvHelpClose>Close</button></div>`;
+    h.onclick=e=>{if(e.target===h)this.closeHelp()};h.querySelector('#tvHelpClose').onclick=()=>this.closeHelp();
+    this.helpOpen=true;this.wake();setTimeout(()=>h.querySelector('#tvHelpClose')?.focus(),20);
+  },
+  closeHelp(){const h=document.querySelector('#tvRemoteHelp');if(h)h.remove();this.helpOpen=false},
+  togglePlaybackOverlay(){
+    if(!this.active)return;
+    let h=document.querySelector('#tvPlaybackOverlay');
+    if(h){h.remove();return}
+    const video=document.querySelector('video');if(!video)return;
+    h=document.createElement('div');h.id='tvPlaybackOverlay';h.className='tvPlaybackOverlay';
+    h.innerHTML=`<div class=tvPlaybackActions><button data-tv-action=play>${video.paused?'▶ Play':'Ⅱ Pause'}</button><button data-tv-action=live>▣ Live TV</button><button data-tv-action=guide>▤ Guide</button><button data-tv-action=home>⌂ Home</button></div>`;
+    document.body.appendChild(h);
+    h.querySelector('[data-tv-action=play]').onclick=()=>{video.paused?video.play().catch(()=>{}):video.pause();h.remove()};
+    h.querySelector('[data-tv-action=live]').onclick=()=>{h.remove();show('live')};
+    h.querySelector('[data-tv-action=guide]').onclick=()=>{h.remove();show('guide')};
+    h.querySelector('[data-tv-action=home]').onclick=()=>{h.remove();show('home')};
+    setTimeout(()=>h.querySelector('button')?.focus(),20);
+  }
+};
+
+(function installTvProductExperience(){
+  const p=window.MyOnlineTvProduct;
+  const refresh=()=>p.activate();
+  window.addEventListener('resize',debounce(refresh,180));
+  window.addEventListener('pageshow',refresh);
+  document.addEventListener('mousemove',()=>p.wake(),{passive:true});
+  document.addEventListener('keydown',e=>{
+    if(!p.active)return;
+    p.wake();
+    const k=String(e.key||'');
+    if(['Home','Menu','ContextMenu','BrowserHome'].includes(k)){
+      e.preventDefault();p.launcherOpen?p.closeLauncher():p.openLauncher();return;
+    }
+    if(k==='?'||k==='Help'){e.preventDefault();p.helpOpen?p.closeHelp():p.openHelp();return}
+    if((k==='Escape'||k==='Backspace'||k==='BrowserBack')&&p.launcherOpen){e.preventDefault();p.closeLauncher();tvFocusFirst();return}
+    if((k==='Escape'||k==='Backspace'||k==='BrowserBack')&&p.helpOpen){e.preventDefault();p.closeHelp();tvFocusFirst();return}
+    if(k==='MediaSelect'||k==='Info'){e.preventDefault();p.togglePlaybackOverlay();return}
+  },true);
+  document.addEventListener('focusin',e=>{
+    if(!p.active)return;
+    const el=e.target;if(!el?.scrollIntoView)return;
+    if(el.matches('button,a[href],[tabindex],input,select'))el.scrollIntoView({block:'nearest',inline:'center'});
+  });
+  new MutationObserver(()=>{if(p.active)p.ensureShell()}).observe(document.body,{childList:true,subtree:false});
+  setTimeout(refresh,0);
+})();
