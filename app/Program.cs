@@ -80,6 +80,8 @@ var dvrRulesFile = Path.Combine(dataDir, "dvr-rules.json");
 var roomsFile = Path.Combine(dataDir, "rooms.json");
 var notificationsFile = Path.Combine(dataDir, "notifications.json");
 var profileStateFile = Path.Combine(dataDir, "profile-state.json");
+var profileDataDir = Path.Combine(dataDir, "profiles-data");
+Directory.CreateDirectory(profileDataDir);
 var navigationFile = Path.Combine(dataDir, "navigation.json");
 var userSourceAccessFile = Path.Combine(dataDir, "user-source-access.json");
 var userSourcesFile = Path.Combine(dataDir, "user-sources.json");
@@ -395,8 +397,32 @@ ProviderConnection Connection(ProviderStored p)
     return JsonSerializer.Deserialize<ProviderConnection>(json, jsonOptions) ?? new(null, null, null, null, null);
 }
 
-HashSet<string> LoadFavourites() => Load<HashSet<string>>(favouritesFile) ?? new(StringComparer.OrdinalIgnoreCase);
-List<ContinueItem> LoadContinue() => Load<List<ContinueItem>>(continueFile) ?? new();
+string SafeProfileKey(string? value)
+{
+    var raw = string.IsNullOrWhiteSpace(value) ? "default" : value.Trim();
+    return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw))).ToLowerInvariant()[..24];
+}
+string RequestedProfile(HttpContext ctx) => ctx.Request.Headers.TryGetValue("X-MyOnline-Profile", out var h) && !string.IsNullOrWhiteSpace(h) ? h.ToString() : "default";
+bool CanUseProfile(HttpContext ctx, string profileId)
+{
+    var username = ctx.User.Identity?.Name ?? "";
+    if (string.IsNullOrWhiteSpace(username)) return false;
+    var allowed = AccessFor(username).AllowedProfileIds;
+    return ctx.User.IsInRole("Admin") || allowed.Contains(profileId, StringComparer.OrdinalIgnoreCase);
+}
+string ProfileFile(HttpContext ctx, string kind) => Path.Combine(profileDataDir, $"{SafeProfileKey(RequestedProfile(ctx))}-{kind}.json");
+HashSet<string> LoadFavourites(HttpContext ctx)
+{
+    var path=ProfileFile(ctx,"favourites");
+    if (File.Exists(path)) return Load<HashSet<string>>(path) ?? new(StringComparer.OrdinalIgnoreCase);
+    return Load<HashSet<string>>(favouritesFile) ?? new(StringComparer.OrdinalIgnoreCase);
+}
+List<ContinueItem> LoadContinue(HttpContext ctx)
+{
+    var path=ProfileFile(ctx,"continue");
+    if (File.Exists(path)) return Load<List<ContinueItem>>(path) ?? new();
+    return Load<List<ContinueItem>>(continueFile) ?? new();
+}
 List<ViewerProfile> LoadProfiles()
 {
     return Load<List<ViewerProfile>>(profilesFile) ?? new List<ViewerProfile>();
@@ -2713,47 +2739,47 @@ app.MapPost("/api/catalogue-preferences/{providerId}/reset", (string providerId,
     return Results.NoContent();
 }).RequireAuthorization();
 
-app.MapGet("/api/favourites", () => Results.Ok(LoadFavourites())).RequireAuthorization();
-app.MapPost("/api/favourites/{id}", (string id) =>
+app.MapGet("/api/favourites", (HttpContext ctx) => Results.Ok(LoadFavourites(ctx))).RequireAuthorization();
+app.MapPost("/api/favourites/{id}", (string id, HttpContext ctx) =>
 {
-    var fav = LoadFavourites();
+    var fav = LoadFavourites(ctx);
     if (!fav.Add(id)) fav.Remove(id);
-    Save(favouritesFile, fav);
+    Save(ProfileFile(ctx,"favourites"), fav);
     return Results.Ok(fav);
 }).RequireAuthorization();
 
-app.MapGet("/api/continue", () => Results.Ok(LoadContinue().OrderByDescending(x => x.Updated).Take(50))).RequireAuthorization();
-app.MapPost("/api/continue", (ContinueItem item) =>
+app.MapGet("/api/continue", (HttpContext ctx) => Results.Ok(LoadContinue(ctx).OrderByDescending(x => x.Updated).Take(50))).RequireAuthorization();
+app.MapPost("/api/continue", (ContinueItem item, HttpContext ctx) =>
 {
-    var list = LoadContinue();
+    var list = LoadContinue(ctx);
     list.RemoveAll(x => x.Id == item.Id);
     list.Insert(0, item with { Updated = DateTimeOffset.UtcNow });
-    Save(continueFile, list.Take(100).ToList());
+    Save(ProfileFile(ctx,"continue"), list.Take(100).ToList());
     return Results.Ok();
 }).RequireAuthorization();
 
-app.MapDelete("/api/continue/{id}", (string id) =>
+app.MapDelete("/api/continue/{id}", (string id, HttpContext ctx) =>
 {
-    var list = LoadContinue();
+    var list = LoadContinue(ctx);
     var removed = list.RemoveAll(x => x.Id == id);
     if (removed == 0) return Results.NotFound();
-    Save(continueFile, list);
+    Save(ProfileFile(ctx,"continue"), list);
     return Results.NoContent();
 }).RequireAuthorization();
 
-app.MapPut("/api/continue/{id}/poster", (string id, ContinuePosterUpdate input) =>
+app.MapPut("/api/continue/{id}/poster", (string id, ContinuePosterUpdate input, HttpContext ctx) =>
 {
-    var list = LoadContinue();
+    var list = LoadContinue(ctx);
     var idx = list.FindIndex(x => x.Id == id);
     if (idx < 0) return Results.NotFound();
     list[idx] = list[idx] with { Poster = input.Poster ?? "" };
-    Save(continueFile, list);
+    Save(ProfileFile(ctx,"continue"), list);
     return Results.NoContent();
 }).RequireAuthorization();
 
-app.MapDelete("/api/continue", () =>
+app.MapDelete("/api/continue", (HttpContext ctx) =>
 {
-    Save(continueFile, new List<ContinueItem>());
+    Save(ProfileFile(ctx,"continue"), new List<ContinueItem>());
     return Results.NoContent();
 }).RequireAuthorization();
 
@@ -3678,7 +3704,7 @@ app.MapGet("/api/appliance/health", () =>
 {
     var drive=new DriveInfo(Path.GetPathRoot(dataDir)!);
     return Results.Ok(new {
-        version="34.1.0", dataDirectory=dataDir,
+        version=appVersion, dataDirectory=dataDir,
         storageTargets=LoadStorageTargets().Count,
         dvrRules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count,
         rooms=(Load<List<RoomDevice>>(roomsFile)??new()).Count,
@@ -3758,19 +3784,22 @@ app.MapPut("/api/admin/navigation",(NavigationConfig input)=>{
     Save(navigationFile,new NavigationConfig(items));return Results.Ok(LoadNavigationConfig());
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
 
-app.MapGet("/api/profile-state/{profileId}", (string profileId) =>
+app.MapGet("/api/profile-state/{profileId}", (string profileId, HttpContext ctx) =>
 {
+    if(!CanUseProfile(ctx,profileId)) return Results.Forbid();
     var rows=Load<List<ProfileMediaState>>(profileStateFile)??new();
     return Results.Ok(rows.Where(x=>x.ProfileId==profileId).OrderByDescending(x=>x.Updated));
 }).RequireAuthorization();
-app.MapPut("/api/profile-state/{profileId}/{mediaId}", (string profileId,string mediaId,ProfileMediaStateInput input) =>
+app.MapPut("/api/profile-state/{profileId}/{mediaId}", (string profileId,string mediaId,ProfileMediaStateInput input,HttpContext ctx) =>
 {
+    if(!CanUseProfile(ctx,profileId)) return Results.Forbid();
     var rows=Load<List<ProfileMediaState>>(profileStateFile)??new();var i=rows.FindIndex(x=>x.ProfileId==profileId&&x.MediaId==mediaId);
     var item=new ProfileMediaState(profileId,mediaId,input.Title??mediaId,input.Kind??"media",input.PositionSeconds,input.DurationSeconds,input.Watched,input.Favourite,input.Poster,DateTimeOffset.UtcNow);
     if(i>=0)rows[i]=item;else rows.Add(item);Save(profileStateFile,rows);return Results.Ok(item);
 }).RequireAuthorization();
-app.MapDelete("/api/profile-state/{profileId}/{mediaId}", (string profileId,string mediaId) =>
+app.MapDelete("/api/profile-state/{profileId}/{mediaId}", (string profileId,string mediaId,HttpContext ctx) =>
 {
+    if(!CanUseProfile(ctx,profileId)) return Results.Forbid();
     var rows=Load<List<ProfileMediaState>>(profileStateFile)??new();rows.RemoveAll(x=>x.ProfileId==profileId&&x.MediaId==mediaId);Save(profileStateFile,rows);return Results.NoContent();
 }).RequireAuthorization();
 
@@ -3797,7 +3826,7 @@ app.MapGet("/api/platform/status", () =>
 {
     var drive=new DriveInfo(Path.GetPathRoot(dataDir)!);
     return Results.Ok(new {
-        version="34.1.0",platform="MyOnline TV Platform",
+        version=appVersion,platform="MyOnline TV Platform",
         providers=LoadProviders().Count,
         storageTargets=LoadStorageTargets().Count(x=>x.Enabled),
         dvrRules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count(x=>x.Enabled),
@@ -3917,7 +3946,7 @@ app.MapGet("/api/admin/overview",(HttpContext ctx)=>{
  return Results.Ok(new{
    users=users.Count,admins=users.Count(x=>x.Role.Equals("Admin",StringComparison.OrdinalIgnoreCase)&&x.Enabled),iptvProviders=providers.Count,mediaLibraries=libs.Count,
    storageTargets=stores.Count,navigation=LoadNavigationConfig().Items.Count,sourcePolicies=LoadUserSourceAccess().Count,
-   version="34.1.0"
+   version=appVersion
  });
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
 
@@ -3925,7 +3954,7 @@ app.MapGet("/api/admin/overview",(HttpContext ctx)=>{
 // v31.2.0 Backup, Restore & Migration
 app.MapGet("/api/system/migration-manifest",(HttpContext ctx)=>{
  var files=Directory.Exists(dataDir)?Directory.GetFiles(dataDir,"*.json").Select(Path.GetFileName).OrderBy(x=>x).ToArray():Array.Empty<string>();
- return Results.Ok(new{version="34.1.0",created=DateTimeOffset.UtcNow,dataDirectory=dataDir,configurationFiles=files,
+ return Results.Ok(new{version=appVersion,created=DateTimeOffset.UtcNow,dataDirectory=dataDir,configurationFiles=files,
    includes=new[]{"users","profiles","providers","media-libraries","navigation","source-access","user-sources","storage","dvr","preferences"}});
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
 app.MapGet("/api/system/backup-readiness",()=>{
@@ -3947,7 +3976,7 @@ app.MapGet("/api/appliance/readiness",async ()=>{
  checks.Add(new{name="Authentication",ok=LoadUsers().Count>0});
  checks.Add(new{name="Media source",ok=providers.Any()||libs.Any(x=>x.Enabled)});
  await Task.CompletedTask;
- return Results.Ok(new{version="34.1.0",ready=ffmpeg&&ffprobe&&dataWritable&&LoadUsers().Count>0,checks});
+ return Results.Ok(new{version=appVersion,ready=ffmpeg&&ffprobe&&dataWritable&&LoadUsers().Count>0,checks});
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
 app.MapGet("/api/appliance/version",()=>Results.Ok(new{product="MyOnline TV",version=appVersion,channel="stable",platform="LXC"}));
 
@@ -4177,12 +4206,12 @@ app.MapGet("/api/source-doctor/summary", (HttpContext ctx) =>
         .Select(x => new { x.Id, x.Name, type = "iptv", status = "configured" }).ToList();
     var media = LoadMediaLibraries().Where(x => CanAccessMediaLibrary(ctx, x))
         .Select(x => new { x.Id, x.Name, type = x.Type, status = x.Enabled ? "configured" : "disabled" }).ToList();
-    return Results.Ok(new { version="34.1.0", sources = iptv.Cast<object>().Concat(media).ToArray() });
+    return Results.Ok(new { version=appVersion, sources = iptv.Cast<object>().Concat(media).ToArray() });
 }).RequireAuthorization();
 
 
 app.MapGet("/api/playback/engine-v4", (HttpContext ctx) => Results.Ok(new {
-    version="34.1.0",
+    version=appVersion,
     strategies=new[]{"direct","hls","ffmpeg-fallback"},
     resume=true,
     liveRecovery=true,
@@ -4194,7 +4223,7 @@ app.MapGet("/api/live/guide-v4", (HttpContext ctx) =>
 {
     var providers = LoadProviders().Where(x => CanAccessProvider(ctx, x)).ToList();
     return Results.Ok(new {
-        version="34.1.0",
+        version=appVersion,
         providerCount=providers.Count,
         miniGuide=true,
         previousChannel=true,
@@ -4208,7 +4237,7 @@ app.MapGet("/api/unified/v4/status", (HttpContext ctx) =>
 {
     var libs=LoadMediaLibraries().Where(x=>x.Enabled && CanAccessMediaLibrary(ctx,x)).ToList();
     return Results.Ok(new {
-        version="34.1.0",
+        version=appVersion,
         visibleLibraries=libs.Count,
         dedupeKey="normalized-title+year+media-type",
         sourcePreference=new[]{"local-direct-play","plex","jellyfin","iptv-vod"},
@@ -4218,7 +4247,7 @@ app.MapGet("/api/unified/v4/status", (HttpContext ctx) =>
 
 
 app.MapGet("/api/ui/tv-remote-v4", () => Results.Ok(new {
-    version="34.1.0",
+    version=appVersion,
     dpad=true,
     restoreFocus=true,
     backNavigation=true,
@@ -4232,7 +4261,7 @@ app.MapGet("/api/platform/v31-gate", (HttpContext ctx) =>
     var providers=LoadProviders().Count(x=>CanAccessProvider(ctx,x));
     var libraries=LoadMediaLibraries().Count(x=>x.Enabled && CanAccessMediaLibrary(ctx,x));
     return Results.Ok(new {
-        version="34.1.0",
+        version=appVersion,
         edition="Stable Personal Media Edition",
         personalSourceIsolation=true,
         firstLoginGuide=true,
@@ -4246,7 +4275,7 @@ app.MapGet("/api/platform/v31-gate", (HttpContext ctx) =>
 app.MapGet("/api/database/status", () =>
 {
     var counts=LocalDb.Counts(databaseFile);
-    return Results.Ok(new { version="34.1.0", engine="SQLite", wal=true, schema=LocalDb.GetMeta(databaseFile,"schema_version"), counts });
+    return Results.Ok(new { version=appVersion, engine="SQLite", wal=true, schema=LocalDb.GetMeta(databaseFile,"schema_version"), counts });
 }).RequireAuthorization();
 
 

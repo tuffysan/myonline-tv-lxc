@@ -315,7 +315,7 @@ async function enterApp(st){
   const s=await api('/api/status');$('#status').textContent=`${s.version} · ${s.platform}`;
   const brandVersion=$('#brandVersion');if(brandVersion)brandVersion.textContent=`Web v${s.version} · Unified Media Center`;
   if(authState.role==='Admin')checkUiUpdate(false).catch(()=>{});
-  providers=await api('/api/providers');fav=new Set(await api('/api/favourites'));profiles=await api('/api/profiles');try{sourceAccess=await api('/api/source-access/me')}catch{sourceAccess={adminIptv:true,adminPlex:true,adminJellyfin:true}};try{mediaLibraries=await api('/api/media-libraries')}catch{mediaLibraries=[]}try{accessState=await api('/api/access/me')}catch{accessState={allowedProfileIds:profiles.map(p=>p.id),defaultProfileId:profiles[0]?.id||'default',policies:{}}}profiles=profiles.filter(p=>authState.role==='Admin'||(accessState.allowedProfileIds||[]).includes(p.id));if(!profiles.some(p=>p.id===currentProfile))currentProfile=accessState.defaultProfileId||profiles[0]?.id||'default';applyPermissions();renderMediaLibraryNav();renderProfileBadge();
+  providers=await api('/api/providers');fav=new Set(await api('/api/favourites'));profiles=await api('/api/profiles');try{sourceAccess=await api('/api/source-access/me')}catch{sourceAccess={adminIptv:true,adminPlex:true,adminJellyfin:true}};try{mediaLibraries=await api('/api/media-libraries')}catch{mediaLibraries=[]}try{accessState=await api('/api/access/me')}catch{accessState={allowedProfileIds:profiles.map(p=>p.id),defaultProfileId:profiles[0]?.id||'default',policies:{}}}profiles=profiles.filter(p=>authState.role==='Admin'||(accessState.allowedProfileIds||[]).includes(p.id));if(!profiles.some(p=>p.id===currentProfile))currentProfile=accessState.defaultProfileId||profiles[0]?.id||'default';fav=new Set(await api('/api/favourites'));await hydrateProfileMediaState();applyPermissions();renderMediaLibraryNav();renderProfileBadge();
   if(!currentProvider&&providers.length)currentProvider=providers[0].id;
   updateResponsiveMode();
   renderMobileNavigation();
@@ -397,7 +397,7 @@ async function selectProfile(id){
     if(pin===null)return;
     try{const r=await jpost('/api/profile/'+encodeURIComponent(id)+'/verify-pin',{pin});if(!r.valid){alert('Incorrect PIN.');return}}catch(e){alert(friendlyError(e));return}
   }
-  currentProfile=id;localStorage.setItem('myonline-profile',id);$('#profilePicker')?.remove();applyPermissions();renderProfileBadge();show('home')
+  currentProfile=id;localStorage.setItem('myonline-profile',id);$('#profilePicker')?.remove();fav=new Set(await api('/api/favourites'));await hydrateProfileMediaState();applyPermissions();renderProfileBadge();show('home')
 }
 
 
@@ -1401,6 +1401,7 @@ function markMediaWatched(id,watched=true){
   if(!key)return;
   if(watched)set.add(key);else set.delete(key);
   localStorage.setItem(watchedKey(),JSON.stringify([...set].slice(-5000)));
+  syncProfileMediaState(key,{title:key,kind:key.startsWith('iptv-episode:')?'episode':key.startsWith('iptv-movie:')?'movie':'media',watched,positionSeconds:0}).catch(()=>{});
 }
 function toggleEpisodeWatched(id,seriesId){
   markMediaWatched(id,!isMediaWatched(id));
@@ -2318,6 +2319,8 @@ function toggleMediaFav(type,item){
   let rows=getMediaFavs().filter(x=>!(x.type===type&&String(x.id)===String(item.id)));
   if(!isMediaFav(type,item.id))rows.unshift({type,id:String(item.id),name:item.name,poster:item.poster||'',providerId:currentProvider});
   localStorage.setItem(mediaFavKey(),JSON.stringify(rows.slice(0,500)));
+  const enabled=rows.some(x=>x.type===type&&String(x.id)===String(item.id));
+  syncProfileMediaState(`${type}:${item.id}`,{title:item.name||item.title||String(item.id),kind:type,watched:isMediaWatched(`${type}:${item.id}`),favourite:enabled,poster:item.poster||'',positionSeconds:0}).catch(()=>{});
   if(type==='movie')filterMedia();else filterSeries();
 }
 
@@ -2340,6 +2343,7 @@ function rememberMediaHistory(type,item){
     updated:Date.now()
   });
   localStorage.setItem(historyKey(),JSON.stringify(rows.slice(0,100)));
+  syncProfileMediaState(`${type}:${item.id}`,{title:item.name||item.title||'Untitled',kind:type,watched:isMediaWatched(`${type}:${item.id}`),favourite:isMediaFav(type,item.id),poster:item.poster||'',positionSeconds:Number(item.positionSeconds||0)}).catch(()=>{});
 }
 
 // v0.7.0 home rails
@@ -3100,6 +3104,19 @@ async function diagnosticsView(){
 
 
 
+async function hydrateProfileMediaState(){
+  const rows=await serverProfileState();
+  if(!rows.length)return;
+  const watched=new Set(), favs=[], history=[];
+  for(const x of rows){
+    if(x.watched)watched.add(String(x.mediaId));
+    if(x.favourite)favs.push({type:x.kind,id:String(x.mediaId).replace(/^[^:]+:/,''),name:x.title,poster:x.poster||'',providerId:x.providerId||currentProvider});
+    if((x.positionSeconds||0)>0||x.watched)history.push({type:x.kind,id:String(x.mediaId).replace(/^[^:]+:/,''),name:x.title,poster:x.poster||'',providerId:currentProvider,updated:new Date(x.updated).getTime()||Date.now()});
+  }
+  localStorage.setItem(watchedKey(),JSON.stringify([...watched].slice(-5000)));
+  if(favs.length)localStorage.setItem(mediaFavKey(),JSON.stringify(favs.slice(0,500)));
+  if(history.length)localStorage.setItem(historyKey(),JSON.stringify(history.slice(0,100)));
+}
 async function serverProfileState(){
   if(!currentProfile)return [];
   try{return await api('/api/profile-state/'+encodeURIComponent(currentProfile))}catch{return []}

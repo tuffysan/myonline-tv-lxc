@@ -1,3 +1,10 @@
+# v35.4.0 — Cross-device & Profiles
+
+- Profile-scoped server favourites and Continue Watching.
+- Cross-device watched state, media favourites and recent activity.
+- Secure profile-state access checks.
+- Profile switching hydrates state before Home.
+
 # v35.3.0 — TV Guide Experience
 
 - New 30-minute EPG timeline and stronger Now marker.
