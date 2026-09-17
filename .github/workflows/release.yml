@@ -161,6 +161,17 @@ jobs:
           sha256sum -c SHA256SUMS-RELEASE.txt
           echo "Release checksums verified."
 
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: myonline-tv-v${{ steps.version.outputs.version }}
+          if-no-files-found: error
+          path: |
+            myonline-tv-web-v${{ steps.version.outputs.version }}-linux-x64.tar.gz
+            myonline-tv-lxc-v${{ steps.version.outputs.version }}-source.tar.gz
+            SHA256SUMS-RELEASE.txt
+            release.json
+
       - name: Publish GitHub Release resiliently
         if: startsWith(github.ref, 'refs/tags/')
         shell: bash
@@ -241,14 +252,3 @@ jobs:
 
           echo "Release ${TAG} published with all mandatory assets."
           jq '{tagName, isDraft, isPrerelease, url, assets: [.assets[].name]}' <<<"${RELEASE_JSON}"
-
-      - name: Upload workflow artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: myonline-tv-v${{ steps.version.outputs.version }}
-          if-no-files-found: error
-          path: |
-            myonline-tv-web-v${{ steps.version.outputs.version }}-linux-x64.tar.gz
-            myonline-tv-lxc-v${{ steps.version.outputs.version }}-source.tar.gz
-            SHA256SUMS-RELEASE.txt
-            release.json

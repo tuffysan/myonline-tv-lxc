@@ -1,3 +1,14 @@
+## 38.0.0 - Core Consolidation
+
+- Centralized runtime product identity on the assembly version generated from `VERSION`.
+- Removed stale v31.2.0 capability version reporting from active capability endpoints.
+- Removed stale v34.1.0 updater/user-agent and fallback version strings from runtime code.
+- Removed stale v31.2.0 branding from active frontend views.
+- Updated the service-worker cache identity to v38.0.0.
+- Added release consistency checks so stale runtime release identities fail CI.
+- Kept historical version comments and release documents intact as history.
+- Retains the resilient GitHub Release publication fix from v37.0.2.
+
 ## 37.0.1 - Resilient GitHub Release Upload
 
 - Keeps all v37.0.0 Library Management & Provider Refresh features.

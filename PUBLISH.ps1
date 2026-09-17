@@ -1,4 +1,4 @@
-﻿param(
+param(
   [string]$RepoPath = ".",
   [string]$Remote = "origin",
   [string]$Branch = "main"
@@ -83,11 +83,49 @@ if ($currentBranch -ne $Branch) { throw "Current branch is '$currentBranch'. Exp
 # Authenticate BEFORE fetch/push so stale Windows credentials cannot break the release halfway through.
 Ensure-GitHubAuthentication
 
-Write-Host "[1/9] Fetching repository..."
+Write-Host "[1/11] Saving local release changes..."
+$hasLocalChanges = -not [string]::IsNullOrWhiteSpace((@(& git status --porcelain) -join "`n"))
+$stashCreated = $false
+if ($hasLocalChanges) {
+  & git stash push --include-untracked -m "myonlinetv-publish-$tag"
+  Assert-LastExitCode "Could not temporarily stash local release changes."
+  $stashCreated = $true
+}
+
+Write-Host "[2/11] Fetching and synchronizing with $Remote/$Branch..."
 & git fetch $Remote --tags
 Assert-LastExitCode "git fetch failed."
+$remoteRef = "$Remote/$Branch"
+& git rev-parse --verify $remoteRef *> $null
+Assert-LastExitCode "Remote branch '$remoteRef' was not found."
 
-Write-Host "[2/9] Local .NET build preflight..."
+$remoteAhead = [int]((& git rev-list --count "HEAD..$remoteRef").Trim())
+if ($remoteAhead -gt 0) {
+  Write-Host "Remote $Branch is ahead by $remoteAhead commit(s). Rebasing BEFORE the release files are committed..."
+  & git rebase $remoteRef
+  if ($LASTEXITCODE -ne 0) {
+    & git rebase --abort *> $null
+    throw "Existing local commits could not be rebased onto $remoteRef. Rebase was aborted; main was not force-pushed."
+  }
+} else {
+  Write-Host "Local branch is already based on latest $remoteRef."
+}
+
+Write-Host "[3/11] Restoring local release changes..."
+if ($stashCreated) {
+  & git stash pop
+  if ($LASTEXITCODE -ne 0) {
+    throw "Local release files could not be restored cleanly. Run 'git status' before continuing."
+  }
+} else {
+  Write-Host "No local changes needed restoring."
+}
+
+$version = (Get-Content VERSION -Raw).Trim()
+if ($version -notmatch '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') { throw "VERSION '$version' is not valid." }
+$tag = "v$version"
+
+Write-Host "[4/11] Local .NET build preflight..."
 $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
 if ($dotnet) {
   & dotnet restore app/MyOnlineTV.Web.csproj
@@ -98,11 +136,11 @@ if ($dotnet) {
   Write-Warning ".NET SDK not found locally; GitHub Actions will perform the compile gate."
 }
 
-Write-Host "[3/9] Adding files..."
+Write-Host "[5/11] Adding files..."
 & git add -A
 Assert-LastExitCode "git add failed."
 
-Write-Host "[4/9] Commit..."
+Write-Host "[6/11] Commit..."
 $staged = @(& git diff --cached --name-only)
 if ($staged.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace(($staged -join ''))) {
   & git commit -m "v$version"
@@ -111,13 +149,12 @@ if ($staged.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace(($staged -join ''
   Write-Host "No staged changes; current commit will be released."
 }
 
-Write-Host "[5/9] Push $Branch..."
+Write-Host "[7/11] Push $Branch..."
 & git push $Remote "HEAD:$Branch"
 Assert-LastExitCode "git push failed even though authentication preflight succeeded."
-
 $headCommit = (& git rev-parse HEAD).Trim()
 
-Write-Host "[6/9] Checking local tag..."
+Write-Host "[11/11] Checking local tag..."
 $localTag = (@(& git tag --list $tag) -join "`n").Trim()
 if ($localTag) {
   $localCommit = (& git rev-list -n 1 $tag).Trim()
@@ -128,7 +165,7 @@ if ($localTag) {
   }
 }
 
-Write-Host "[7/9] Checking remote tag..."
+Write-Host "[11/11] Checking remote tag..."
 $remoteTagLine = (@(& git ls-remote --tags $Remote "refs/tags/$tag") -join "`n").Trim()
 if ($remoteTagLine) {
   $remoteCommit = (($remoteTagLine -split '\s+')[0]).Trim()
@@ -141,14 +178,14 @@ if ($remoteTagLine) {
   }
 }
 
-Write-Host "[8/9] Creating tag when needed..."
+Write-Host "[11/11] Creating tag when needed..."
 $existingTag = (@(& git tag --list $tag) -join "`n").Trim()
 if ([string]::IsNullOrWhiteSpace($existingTag)) {
   & git tag -a $tag -m "MyOnline TV $tag"
   Assert-LastExitCode "Could not create tag $tag."
 }
 
-Write-Host "[9/9] Push tag..."
+Write-Host "[11/11] Push tag..."
 & git push $Remote "refs/tags/$tag"
 Assert-LastExitCode "Could not push tag $tag."
 

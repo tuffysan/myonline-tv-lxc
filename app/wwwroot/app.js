@@ -1595,7 +1595,7 @@ async function featureCompletionView(){
     const groups=[...new Set(features.map(x=>x.area))];
     content.innerHTML=`
       <div class=hero>
-        <span class=kicker>v31.2.0 FEATURE COMPLETION</span>
+        <span class=kicker>FEATURE COMPLETION</span>
         <h2>Feature Completion audit</h2>
         <p class=muted>This page distinguishes working features from partial implementations, foundations and missing functionality. It intentionally does not count a contract/model as a finished feature.</p>
       </div>
@@ -1791,7 +1791,7 @@ async function adminView(){
   <div class="admin2Shell">
     <div class="admin2Hero">
       <div>
-        <span class="admin2Kicker">MYONLINE TV v31.2.0</span>
+        <span class="admin2Kicker">MYONLINE TV</span>
         <h1>Administration</h1>
         <p>Everything needed to configure, monitor and maintain your media center — without one endless settings page.</p>
       </div>

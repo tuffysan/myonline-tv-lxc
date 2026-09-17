@@ -146,7 +146,7 @@ async Task<JsonElement> GetGithubUpdateInfo(bool force = false)
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(12));
         using var req = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/repos/tuffysan/myonline-tv-lxc/releases/latest");
         req.Headers.Accept.ParseAdd("application/vnd.github+json");
-        req.Headers.UserAgent.ParseAdd("MyOnline-TV-Updater/34.1.0");
+        req.Headers.UserAgent.ParseAdd(AppIdentity.UserAgent("MyOnline-TV-Updater"));
         using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseContentRead, cts.Token);
         resp.EnsureSuccessStatusCode();
 
@@ -167,7 +167,7 @@ async Task<JsonElement> GetGithubUpdateInfo(bool force = false)
                 using var metaCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
                 var metaUrl = $"https://github.com/tuffysan/myonline-tv-lxc/releases/download/{Uri.EscapeDataString(tag)}/release.json";
                 using var metaReq = new HttpRequestMessage(HttpMethod.Get, metaUrl);
-                metaReq.Headers.UserAgent.ParseAdd("MyOnline-TV-Updater/34.1.0");
+                metaReq.Headers.UserAgent.ParseAdd(AppIdentity.UserAgent("MyOnline-TV-Updater"));
                 using var metaResp = await http.SendAsync(metaReq, HttpCompletionOption.ResponseContentRead, metaCts.Token);
                 if (metaResp.IsSuccessStatusCode)
                 {
@@ -219,7 +219,7 @@ object? ReadUiUpdateWorkerStatus()
 
 async Task<IResult> BuildUiUpdateStatus(bool force)
 {
-    var current = File.Exists(versionFile) ? File.ReadAllText(versionFile).Trim() : "34.1.0";
+    var current = File.Exists(versionFile) ? File.ReadAllText(versionFile).Trim() : appVersion;
     try
     {
         var latest = await GetGithubUpdateInfo(force);
@@ -4387,7 +4387,7 @@ app.MapPost("/api/admin/update/install", async (HttpContext ctx) =>
 {
     if (!IsAdmin(ctx)) return Results.NotFound();
 
-    var current = File.Exists(versionFile) ? File.ReadAllText(versionFile).Trim() : "34.1.0";
+    var current = File.Exists(versionFile) ? File.ReadAllText(versionFile).Trim() : appVersion;
     var latest = await GetGithubUpdateInfo(true);
     var target = latest.TryGetProperty("latestVersion", out var lv) ? lv.GetString() ?? "" : "";
     var tag = latest.TryGetProperty("latestTag", out var lt) ? lt.GetString() ?? "" : "";
@@ -4583,7 +4583,7 @@ async Task<string> ProviderTextWithRetry(string url, string accept, TimeSpan tim
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.TryAddWithoutValidation("Accept", accept);
-            request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/34.1.0");
+            request.Headers.TryAddWithoutValidation("User-Agent", AppIdentity.UserAgent());
             using var cts = new CancellationTokenSource(timeout);
             using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
             if (!response.IsSuccessStatusCode)
@@ -4806,7 +4806,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/34.1.0");
+    request.Headers.TryAddWithoutValidation("User-Agent", AppIdentity.UserAgent());
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }
