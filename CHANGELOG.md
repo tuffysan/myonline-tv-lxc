@@ -1,3 +1,15 @@
+# Changelog
+
+## v36.1.0 – TV Home Experience
+
+- New content-first 10-foot Home for TV Product Experience.
+- Dynamic hero selects Continue Watching, Live Now, or available media.
+- Sofa-friendly horizontal rails for Continue Watching, Live Now, My List, Movies and Series.
+- Larger remote focus targets, overscan-safe spacing and cinematic backdrop treatment.
+- TV Home uses existing profile-aware Continue Watching, favourites, unified media and EPG data.
+- Desktop and mobile retain their existing Home experience.
+- VERSION remains the single build/runtime/UI version source.
+
 # v36.0.0 — TV Product Experience
 
 - Dedicated ten-foot TV shell layered on the existing responsive application.

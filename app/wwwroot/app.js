@@ -508,6 +508,8 @@ function renderHomeContent({unifiedMovies=[],unifiedSeries=[],continueItems=[],h
   const hasJellyfin=(mediaLibraries||[]).some(x=>x.enabled!==false&&String(x.type).toLowerCase()==='jellyfin');
   const mediaFavs=getMediaFavs().slice(0,12);
 
+  if(tvHome361IsActive()){renderTvHome361({unifiedMovies,unifiedSeries,continueItems,homeHistory,homeLiveNow});return;}
+
   content.innerHTML=`${smartHomeStatus()}<div class="hero homeHero v35Hero"><div class=v35HeroContent><span class=kicker>MYONLINE TV</span><h2>Everything you watch.<br><span>One place.</span></h2>
   <p class=muted>Live television, movies, series and your personal media libraries — designed for every screen.</p>
   <div class="row v35HeroActions"><button class="btn primaryBtn" onclick="show('live')">▶ Watch Live</button><button class=btn onclick="show('guide')">▤ Open Guide</button></div>
@@ -4275,3 +4277,40 @@ window.MyOnlineTvProduct={
   new MutationObserver(()=>{if(p.active)p.ensureShell()}).observe(document.body,{childList:true,subtree:false});
   setTimeout(refresh,0);
 })();
+
+// =========================================================
+// v36.1.0 — TV Home Experience
+// A content-first 10-foot home surface layered on the existing
+// profile-aware Home APIs. Desktop/mobile keep the standard Home.
+// =========================================================
+function tvHome361IsActive(){return document.documentElement.classList.contains('tvProductExperience')||document.documentElement.classList.contains('isTV')}
+function tvHome361Hero(continueItems,liveRows,movies,series){
+  const c=(continueItems||[])[0];
+  if(c)return {kind:'continue',title:c.title||c.name||'Continue watching',subtitle:'Continue watching',poster:c.poster||'',item:c,action:`resumeContinueItem(${JSON.stringify(c)})`};
+  const l=(liveRows||[])[0];
+  if(l)return {kind:'live',title:l.program?.title||channelName(l.channel),subtitle:`Live now · ${channelName(l.channel)}`,poster:l.channel?.logo||'',item:l,action:`show('live').then(()=>playLive(${JSON.stringify(l.channel.key)},${JSON.stringify(l.channel.name)}))`};
+  const m=(movies||[])[0]||(series||[])[0];
+  if(m)return {kind:'media',title:m.name||m.title||'MyOnline TV',subtitle:m.year?String(m.year):'Movie & Series',poster:m.backdrop||m.poster||'',item:m,action:`playUnifiedItem(${JSON.stringify(m)})`};
+  return {title:'Everything you watch. One place.',subtitle:'Live TV · Movies · Series',poster:'',action:`show('live')`};
+}
+function tvHome361Poster(item,kind='media'){
+  const title=item?.title||item?.name||'Media',poster=item?.poster||'';
+  const action=kind==='continue'?`resumeContinueItem(${JSON.stringify(item)})`:`playUnifiedItem(${JSON.stringify(item)})`;
+  return `<button class=tv361MediaCard onclick='${action}'>${poster?`<img loading=lazy decoding=async src="${escAttr(poster)}">`:posterPlaceholder()}<span><b>${esc(title)}</b>${kind==='continue'&&item.durationSeconds?`<i class=tv361Progress><i style="width:${continueProgress(item)}%"></i></i>`:''}</span></button>`;
+}
+function tvHome361Live(row){return `<button class=tv361LiveCard onclick='show("live").then(()=>playLive(${JSON.stringify(row.channel.key)},${JSON.stringify(row.channel.name)}))'>${row.channel.logo?`<img src="${escAttr(row.channel.logo)}">`:''}<span><small>LIVE</small><b>${esc(channelName(row.channel))}</b><em>${esc(row.program?.title||'Live TV')}</em></span></button>`}
+function renderTvHome361({unifiedMovies=[],unifiedSeries=[],continueItems=[],homeLiveNow=[]}){
+  const hero=tvHome361Hero(continueItems,homeLiveNow,unifiedMovies,unifiedSeries);
+  const mediaFavs=getMediaFavs().slice(0,12);
+  const recentMovies=[...unifiedMovies].sort((a,b)=>new Date(b.addedAt||0)-new Date(a.addedAt||0)).slice(0,12);
+  const recentSeries=[...unifiedSeries].sort((a,b)=>new Date(b.addedAt||0)-new Date(a.addedAt||0)).slice(0,12);
+  content.innerHTML=`<div class=tv361Home>
+    <section class=tv361Hero style="--tv361-art:${hero.poster?`url('${escAttr(hero.poster)}')`:'none'}"><div class=tv361HeroShade></div><div class=tv361HeroCopy><span>${esc(hero.subtitle||'Featured')}</span><h1>${esc(hero.title)}</h1><p>Your television, movies and series — ready from the sofa.</p><div><button class="btn primaryBtn" onclick='${hero.action}'>▶ Watch now</button><button class=btn onclick="show('guide')">▤ TV Guide</button><button class=btn onclick="show('search')">⌕ Search</button></div></div></section>
+    ${continueItems.length?`<section class=tv361Section><header><h2>Continue Watching</h2></header><div class=tv361Rail>${continueItems.slice(0,12).map(x=>tvHome361Poster(x,'continue')).join('')}</div></section>`:''}
+    ${homeLiveNow.length?`<section class=tv361Section><header><h2>Live Now</h2><button onclick="show('guide')">View Guide ›</button></header><div class="tv361Rail tv361LiveRail">${homeLiveNow.slice(0,12).map(tvHome361Live).join('')}</div></section>`:''}
+    ${mediaFavs.length?`<section class=tv361Section><header><h2>My List</h2></header><div class=tv361Rail>${mediaFavs.map(x=>tvHome361Poster(x)).join('')}</div></section>`:''}
+    ${recentMovies.length?`<section class=tv361Section><header><h2>Movies</h2><button onclick="show('movies')">View all ›</button></header><div class=tv361Rail>${recentMovies.map(x=>tvHome361Poster(x)).join('')}</div></section>`:''}
+    ${recentSeries.length?`<section class=tv361Section><header><h2>Series</h2><button onclick="show('series')">View all ›</button></header><div class=tv361Rail>${recentSeries.map(x=>tvHome361Poster({...x,kind:'series'})).join('')}</div></section>`:''}
+  </div>`;
+  requestAnimationFrame(()=>{const first=document.querySelector('.tv361Home button');if(first&&tvHome361IsActive())first.focus({preventScroll:true})});
+}
