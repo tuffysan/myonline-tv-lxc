@@ -161,7 +161,7 @@ jobs:
           sha256sum -c SHA256SUMS-RELEASE.txt
           echo "Release checksums verified."
 
-      - name: Publish GitHub Release atomically
+      - name: Publish GitHub Release resiliently
         if: startsWith(github.ref, 'refs/tags/')
         shell: bash
         env:
@@ -172,47 +172,72 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           APP="myonline-tv-web-v${VERSION}-linux-x64.tar.gz"
           SRC="myonline-tv-lxc-v${VERSION}-source.tar.gz"
+          REQUIRED=("${APP}" "${SRC}" "SHA256SUMS-RELEASE.txt" "release.json")
 
-          # GitHub CLI has a supported atomic path for this exact operation:
-          # when files are supplied to `gh release create`, it creates a draft,
-          # uploads every asset, and publishes only after the uploads succeed.
-          # Do not manually call uploads.github.com or try to resolve draft IDs.
-          for f in "${APP}" "${SRC}" SHA256SUMS-RELEASE.txt release.json; do
+          for f in "${REQUIRED[@]}"; do
             test -s "${f}"
           done
 
-          # Refuse to overwrite an already published release. A normal versioned
-          # publish should always use a new tag/version.
+          # Create the release metadata without assets. If a previous attempt
+          # created a partial release for this tag, resume it instead.
           if gh release view "${TAG}" >/dev/null 2>&1; then
-            echo "::error::A GitHub Release already exists for ${TAG}; refusing to replace it."
-            exit 1
+            echo "Release ${TAG} already exists; resuming asset publication."
+          else
+            gh release create "${TAG}" \
+              --verify-tag \
+              --generate-notes \
+              --title "${TAG}"
           fi
 
-          gh release create "${TAG}" \
-            "${APP}" \
-            "${SRC}" \
-            SHA256SUMS-RELEASE.txt \
-            release.json \
-            --verify-tag \
-            --generate-notes \
-            --title "${TAG}" \
-            --latest
+          upload_with_retry() {
+            local file="$1"
+            local max_attempts=6
+            local attempt=1
+            local delay=5
 
-          # Verify the public release and its exact mandatory asset set.
+            while true; do
+              echo "Uploading ${file} (attempt ${attempt}/${max_attempts})..."
+              if gh release upload "${TAG}" "${file}" --clobber; then
+                echo "Uploaded ${file}."
+                return 0
+              fi
+
+              if (( attempt >= max_attempts )); then
+                echo "::error::Failed to upload ${file} after ${max_attempts} attempts."
+                return 1
+              fi
+
+              echo "GitHub asset upload failed; retrying in ${delay}s..."
+              sleep "${delay}"
+              attempt=$((attempt + 1))
+              delay=$((delay * 2))
+            done
+          }
+
+          # Upload separately so one transient uploads.github.com failure does
+          # not force all other assets to be recreated.
+          for f in "${REQUIRED[@]}"; do
+            upload_with_retry "${f}"
+          done
+
           RELEASE_JSON="$(gh release view "${TAG}" --json tagName,isDraft,isPrerelease,url,assets)"
           jq -e --arg tag "${TAG}" \
             '.tagName == $tag and .isDraft == false and .isPrerelease == false' \
             <<<"${RELEASE_JSON}" >/dev/null
 
-          for f in "${APP}" "${SRC}" SHA256SUMS-RELEASE.txt release.json; do
-            SIZE="$(jq -r --arg name "${f}" '.assets[] | select(.name == $name) | .size' <<<"${RELEASE_JSON}" | head -1)"
-            if [[ -z "${SIZE}" || "${SIZE}" == "null" || "${SIZE}" -le 0 ]]; then
-              echo "::error::Mandatory GitHub Release asset missing or empty after publication: ${f}"
+          for f in "${REQUIRED[@]}"; do
+            COUNT="$(jq -r --arg name "${f}" '[.assets[] | select(.name == $name and .size > 0)] | length' <<<"${RELEASE_JSON}")"
+            if [[ "${COUNT}" != "1" ]]; then
+              echo "::error::Mandatory GitHub Release asset missing, empty, or duplicated: ${f}"
               exit 1
             fi
+            SIZE="$(jq -r --arg name "${f}" '.assets[] | select(.name == $name) | .size' <<<"${RELEASE_JSON}")"
             echo "Verified GitHub asset: ${f} (${SIZE} bytes)"
           done
 
+          # Only after the complete asset set has been verified do we mark it latest.
+          gh release edit "${TAG}" --latest
+          echo "Release ${TAG} published with all mandatory assets."
           jq '{tagName, isDraft, isPrerelease, url, assets: [.assets[].name]}' <<<"${RELEASE_JSON}"
 
       - name: Upload workflow artifacts

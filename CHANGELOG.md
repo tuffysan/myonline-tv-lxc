@@ -1,3 +1,11 @@
+## 37.0.1 - Resilient GitHub Release Upload
+
+- Keeps all v37.0.0 Library Management & Provider Refresh features.
+- Creates the GitHub release without assets first, then uploads each mandatory asset separately.
+- Retries transient GitHub upload failures (HTTP 5xx / temp-dir failures) with exponential backoff.
+- Resumes an existing partial release for the same tag and replaces individual assets safely.
+- Verifies all mandatory assets are present and non-empty before marking the release latest.
+
 # v37.0.0 – Library Management & Provider Refresh
 
 - New Library Management UI for Groups, Channels, Movies and Series.
