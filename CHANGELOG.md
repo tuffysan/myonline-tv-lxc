@@ -1,3 +1,11 @@
+# v36.5.3 – Release Integrity Fix
+
+- Prevent incomplete GitHub Releases from becoming Latest.
+- Verify all mandatory release assets before publishing.
+- Make release reruns safe with asset replacement.
+- Bypass stale latest-release caches in the Proxmox updater.
+- Includes v36.5.1 mobile and v36.5.2 tablet Live channel fixes.
+
 ## v36.5.2 – Tablet Live Channel Fix
 
 - Scopes tablet sidebar CSS to the app navigation only (`#app > aside`).

@@ -8,8 +8,11 @@ TMP_ROOT="$(mktemp -d /tmp/myonline-tv-update.XXXXXX)"
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
 latest_tag() {
-  curl -fsSL --retry 3 --connect-timeout 15 -H 'Accept: application/vnd.github+json' \
-    "https://api.github.com/repos/${REPO}/releases/latest" \
+  curl -fsSL --retry 3 --connect-timeout 15 \
+    -H 'Accept: application/vnd.github+json' \
+    -H 'Cache-Control: no-cache' \
+    -H 'Pragma: no-cache' \
+    "https://api.github.com/repos/${REPO}/releases/latest?nocache=$(date +%s)" \
     | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
 }
 normalize_tag() {
