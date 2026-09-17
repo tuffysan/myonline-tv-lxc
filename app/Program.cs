@@ -107,7 +107,7 @@ var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = Decom
 {
     Timeout = TimeSpan.FromMinutes(30)
 };
-http.DefaultRequestHeaders.UserAgent.ParseAdd("MyOnline-TV-Web/34.1.0");
+http.DefaultRequestHeaders.UserAgent.ParseAdd($"MyOnline-TV-Web/{appVersion}");
 
 
 

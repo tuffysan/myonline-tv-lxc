@@ -722,6 +722,8 @@ function renderChannels(){
       ${[...new Set(channels.map(x=>x.group).filter(Boolean).filter(g=>!channelPrefs.hiddenGroups.includes(g)))].sort().map(g=>`<option>${esc(g)}</option>`).join('')}
     </select>
     <button class=btn id=liveFavQuick>★ Favourites</button>
+    <button class=btn id=liveRecentQuick>↻ Recent</button>
+    <button class=btn id=liveFullscreenQuick>⛶ Fullscreen</button>
     <button class=btn id=hideGroupBtn>Hide group</button>
   </div>
   <div class="tvLiveShell">
@@ -745,6 +747,8 @@ function renderChannels(){
   $('#q').oninput=renderFilter;
   $('#group').onchange=renderFilter;
   $('#liveFavQuick').onclick=()=>{$('#group').value='__favorites';renderFilter()};
+  $('#liveRecentQuick').onclick=()=>{$('#group').value='__recent';renderFilter()};
+  $('#liveFullscreenQuick').onclick=()=>toggleLiveFullscreen();
   $('#hideGroupBtn').onclick=()=>hideGroup($('#group').value);
   $('#chan').addEventListener('keydown',liveKeyHandler);
   renderFilter();
@@ -3367,9 +3371,9 @@ async function applianceManagerSnapshot(){
 
 
 // v5.0.0 Unified Media Appliance
-window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'5.0.0',generation:5,experience:'Unified Media Appliance'};
+window.MYONLINE_PRODUCT={name:'MyOnline TV',version:null,generation:5,experience:'Unified Media Appliance'};
 async function unifiedMediaReadiness(){
- const result={version:'5.0.0',network:navigator.onLine,checkedAt:new Date().toISOString()};
+ const result={version:window.MYONLINE_PRODUCT?.version||null,network:navigator.onLine,checkedAt:new Date().toISOString()};
  try{result.sources=await api('/api/sources/effective')}catch{}
  try{result.appliance=await api('/api/appliance/readiness')}catch{}
  return result;
@@ -3499,7 +3503,7 @@ window.MyOnlineOperations={
 
 
 // v31.2.0 Native Client Generation
-window.MYONLINE_PRODUCT={name:'MyOnline TV',version:'31.2.0',generation:6,experience:'Server + Web/PWA + Native Client API'};
+window.MYONLINE_PRODUCT={name:'MyOnline TV',version:null,generation:6,experience:'Server + Web/PWA + Native Client API'};
 window.MyOnlineClientBridge={
  version:1,
  capabilities(){return {sourceEngine:true,player:true,live:true,guide:true,library:true,dvr:true,profiles:true,rooms:true,remote:true}},
@@ -3682,7 +3686,7 @@ async function showDvrOperations(){
 
 // v31.2.0 — Production Edition
 window.MyOnlineTvProduction={
-  version:'31.2.0',
+  version:null,
   clientMode:()=>document.body.dataset.clientMode||'unknown',
   runtimeSummary:()=>({
     online:navigator.onLine,
@@ -3846,7 +3850,7 @@ function enterGuestMode(){sessionStorage.setItem('myonline-guest','1');currentPr
 async function uiAction(action,{busyText='Working…',errorTitle='Action failed'}={}){
   try{return await action()}catch(e){console.error(errorTitle,e);alert(`${errorTitle}: ${friendlyError(e)}`);throw e}
 }
-window.MyOnlineRelease={version:'34.1.0',qualityGate:'stabilization'};
+window.MyOnlineRelease={version:null,qualityGate:'stabilization'};
 
 
 // v28.3 — reusable UI states
@@ -4014,3 +4018,81 @@ async function advancedPlatformSnapshot(){
   return {advanced,rooms,search,watchlist};
 }
 
+
+
+// v35.1.0 — Live TV Experience
+// Device-friendly channel zapping, remote keys, mobile swipe and guarded stall recovery.
+window.MyOnlineLiveExperience={
+  version:'runtime',
+  recoveryAttempts:0,
+  recoveryTimer:null,
+  lastPlayingAt:0,
+  install(video){
+    if(!video||video.dataset.live351==='1')return;
+    video.dataset.live351='1';
+    this.recoveryAttempts=0;
+    const healthy=()=>{this.lastPlayingAt=Date.now();this.recoveryAttempts=0;clearTimeout(this.recoveryTimer)};
+    video.addEventListener('playing',healthy);
+    video.addEventListener('timeupdate',()=>{if(!video.paused)healthy()},{passive:true});
+    video.addEventListener('waiting',()=>this.armRecovery(video));
+    video.addEventListener('stalled',()=>this.armRecovery(video));
+    this.installSwipe(video);
+    this.installMediaSession();
+  },
+  armRecovery(video){
+    clearTimeout(this.recoveryTimer);
+    this.recoveryTimer=setTimeout(()=>{
+      if(!video||video.paused||video.ended||!liveCurrentChannel)return;
+      if(this.recoveryAttempts>=1){liveStatus('Stream stalled — press Enter to retry','error');return}
+      this.recoveryAttempts++;
+      liveStatus('Stream stalled — recovering…','loading');
+      playLive(liveCurrentChannel.key,liveCurrentChannel.name,true);
+    },12000);
+  },
+  installSwipe(video){
+    let x=0,y=0,active=false;
+    video.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;active=true;x=e.clientX;y=e.clientY},{passive:true});
+    video.addEventListener('pointerup',e=>{
+      if(!active)return;active=false;
+      const dx=e.clientX-x,dy=e.clientY-y;
+      if(Math.abs(dx)>70&&Math.abs(dx)>Math.abs(dy)*1.4)stepLiveChannel(dx<0?1:-1);
+    },{passive:true});
+  },
+  installMediaSession(){
+    if(!('mediaSession' in navigator))return;
+    try{
+      navigator.mediaSession.setActionHandler('nexttrack',()=>stepLiveChannel(1));
+      navigator.mediaSession.setActionHandler('previoustrack',()=>stepLiveChannel(-1));
+    }catch{}
+  }
+};
+
+// Attach v35.1 behavior whenever a live player is created.
+new MutationObserver(()=>{
+  if(currentView!=='live')return;
+  const v=document.querySelector('.livePlayer video');
+  if(v)window.MyOnlineLiveExperience.install(v);
+}).observe(document.documentElement,{subtree:true,childList:true});
+
+document.addEventListener('keydown',e=>{
+  if(currentView!=='live'||['INPUT','SELECT','TEXTAREA'].includes(document.activeElement?.tagName))return;
+  if(e.key==='PageUp'||e.key==='MediaTrackPrevious'){e.preventDefault();stepLiveChannel(-1)}
+  else if(e.key==='PageDown'||e.key==='MediaTrackNext'){e.preventDefault();stepLiveChannel(1)}
+  else if((e.key==='Enter'||e.key==='MediaPlayPause')&&liveCurrentChannel&&document.activeElement===document.body){
+    const v=document.querySelector('.livePlayer video');
+    if(v){e.preventDefault();if(v.paused)v.play().catch(()=>{});else v.pause()}
+  }
+});
+
+
+// Runtime product identity: never hard-code the release version in the frontend.
+(async()=>{
+  try{
+    const v=await api('/api/appliance/version');
+    const runtimeVersion=v?.version||null;
+    if(window.MYONLINE_PRODUCT)window.MYONLINE_PRODUCT.version=runtimeVersion;
+    if(window.MyOnlineTvProduction)window.MyOnlineTvProduction.version=runtimeVersion;
+    if(window.MyOnlineRelease)window.MyOnlineRelease.version=runtimeVersion;
+    document.documentElement.dataset.appVersion=runtimeVersion||'';
+  }catch{}
+})();

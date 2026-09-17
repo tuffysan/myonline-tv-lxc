@@ -1,3 +1,16 @@
+# Changelog
+
+## 35.1.0 — Live TV Experience
+- Faster TV-first channel zapping with existing Now/Next overlay and mini-guide.
+- Remote/keyboard channel switching extended with Page Up/Down and media next/previous keys.
+- Numeric channel entry retained and integrated with the Live TV experience.
+- Quick Favourites and Recent filters in the Live toolbar.
+- Mobile horizontal swipe to change channels.
+- Guarded stream-stall recovery with one compatibility-transcode retry.
+- Media Session previous/next channel integration where supported.
+- TV focus/readability and Live playback status polish.
+- Product version remains sourced from VERSION -> assembly -> runtime UI.
+
 # v35.0.3 — Runtime Version Truth
 
 - Runtime version is now sourced from the built application for every Web UI version label and status endpoint. No UI version is read from installer metadata.
