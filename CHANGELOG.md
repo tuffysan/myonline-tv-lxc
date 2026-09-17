@@ -1,3 +1,11 @@
+# v36.2.3 — Desktop Hero Hard Cap
+
+- Fixed the laptop/desktop Home hero sizing rule so the browser actually applies it.
+- Removed accidental literal `\n` tokens that invalidated the v36.2.2 CSS rule.
+- Desktop hero is hard-capped to 260 px (220 px on low-height laptops).
+- Hero title is limited to two lines and description to one line.
+- TV and touch layouts are unchanged.
+
 ## v36.2.2 – Laptop Home Density Fix
 - Fixes oversized Continue Watching hero on laptop: hero now has a bounded height instead of min-height.
 - Caps long hero titles to two lines and descriptions to two lines.

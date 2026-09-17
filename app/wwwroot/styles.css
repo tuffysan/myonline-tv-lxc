@@ -1618,7 +1618,9 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
   .desktop362LiveRail{grid-auto-columns:185px}
   .desktop362Live{min-height:84px}
 }
-\n\n/* v36.2.2 — Laptop Home Density Fix
+
+
+/* v36.2.2 — Laptop Home Density Fix
    The v36.2.1 rule used min-height, so a long Continue Watching hero title
    could still grow the hero to several hundred extra pixels. Laptop uses a
    bounded hero and compact rails; large desktop and TV remain unchanged. */
@@ -1651,4 +1653,24 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
   .desktop362Rail{grid-auto-columns:165px}
   .desktop362Card{min-width:165px}
   .desktop362CardMain>img,.desktop362CardMain>.posterPlaceholder{height:88px;max-height:88px}
+}
+
+
+/* v36.2.3 — Desktop Hero Hard Cap
+   Fixes v36.2.2 where literal \n tokens before the media rule made the browser discard the rule.
+   The desktop hero is now explicitly bounded; TV/touch layouts are untouched. */
+@media (min-width:1180px) and (pointer:fine) {
+  .desktop362Lead{align-items:start}
+  .desktop362Hero{height:260px!important;min-height:260px!important;max-height:260px!important;align-items:end!important}
+  .desktop362Hero>div{padding:18px 22px!important;max-width:62%;max-height:260px;overflow:hidden}
+  .desktop362Hero h1{font-size:clamp(1.75rem,2.45vw,2.65rem)!important;line-height:1!important;margin:.12em 0 .18em!important;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .desktop362Hero p{font-size:.88rem!important;line-height:1.25!important;margin:.3rem 0!important;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+  .desktop362Hero nav{margin-top:8px!important}
+  .desktop362Hero nav .btn{min-height:34px!important;padding:6px 10px!important}
+  .desktop362Side{height:260px;max-height:260px;overflow:auto}
+}
+@media (min-width:1180px) and (pointer:fine) and (max-height:800px) {
+  .desktop362Hero,.desktop362Side{height:220px!important;min-height:220px!important;max-height:220px!important}
+  .desktop362Hero>div{max-height:220px}
+  .desktop362Hero p{display:none!important}
 }
