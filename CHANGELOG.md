@@ -1,3 +1,9 @@
+# v36.5.1 — Mobile Live Channel Fix
+
+- Fixes Live on phones: the channel selector is visible and channels can be selected again.
+- Scopes the mobile sidebar hiding rule to the main application navigation instead of every `<aside>`, which had also hidden the Live channel pane.
+- Preserves the v36.5.0 Tablet Experience and v36.4.0 Mobile Experience.
+
 # Changelog
 
 ## v36.5.0 – Tablet Experience

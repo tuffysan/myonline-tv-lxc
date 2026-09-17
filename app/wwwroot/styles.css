@@ -1497,7 +1497,7 @@ main header{background:rgba(7,16,25,.76);backdrop-filter:blur(18px);border-botto
 /* Tablet: compact side-free media surface */
 @media(min-width:720px) and (max-width:1179px){#content{padding:24px}.homeSourceGrid{grid-template-columns:repeat(4,minmax(0,1fr))}.v35Hero{min-height:340px}.posterRail,.continueRow,.mediaHistoryRail{grid-auto-columns:minmax(170px,24vw)}}
 /* Phone: thumb-first, bottom navigation, two-column discovery */
-@media(max-width:719px){body{padding-bottom:76px}aside{display:none!important}#app{display:block!important}.v35Hero{margin:-14px -14px 18px;border-radius:0 0 24px 24px;padding:34px 18px 24px;min-height:310px}.v35Hero h2{font-size:2.65rem}.v35Hero p{font-size:.95rem}.v35HeroActions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.v35HeroActions .btn{padding:10px}.v35HeroSearch{display:grid;grid-template-columns:1fr auto}.homeSourceGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:18px}.homeSourceCard{min-height:94px;padding:13px}.sectionHead{margin-top:25px}.posterRail,.continueRow,.mediaHistoryRail{grid-auto-columns:minmax(145px,43vw);gap:11px}.liveNowRail{grid-auto-columns:minmax(250px,82vw)}#content{padding-bottom:30px}}
+@media(max-width:719px){body{padding-bottom:76px}#app>aside{display:none!important}#app{display:block!important}.v35Hero{margin:-14px -14px 18px;border-radius:0 0 24px 24px;padding:34px 18px 24px;min-height:310px}.v35Hero h2{font-size:2.65rem}.v35Hero p{font-size:.95rem}.v35HeroActions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.v35HeroActions .btn{padding:10px}.v35HeroSearch{display:grid;grid-template-columns:1fr auto}.homeSourceGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:18px}.homeSourceCard{min-height:94px;padding:13px}.sectionHead{margin-top:25px}.posterRail,.continueRow,.mediaHistoryRail{grid-auto-columns:minmax(145px,43vw);gap:11px}.liveNowRail{grid-auto-columns:minmax(250px,82vw)}#content{padding-bottom:30px}}
 /* Ten-foot UI: large targets, restrained density, unmistakable focus */
 .isTV body{font-size:18px}.isTV aside{width:250px}.isTV #content{padding:40px 48px}.isTV .v35Hero{min-height:430px}.isTV .homeSourceCard{min-height:130px;padding:22px}.isTV .posterRail,.isTV .continueRow,.isTV .mediaHistoryRail{grid-auto-columns:minmax(210px,250px);gap:24px}.isTV .liveNowRail{grid-auto-columns:minmax(330px,390px);gap:20px}.isTV button,.isTV a{scroll-margin:70px}.isTV .tvRemoteMode button:focus,.isTV .tvRemoteMode a:focus{outline-width:5px;box-shadow:0 0 0 4px rgba(0,0,0,.85),0 18px 50px rgba(0,0,0,.65)}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important}}
@@ -1873,4 +1873,12 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
 }
 @media(min-width:720px) and (max-width:900px) and (orientation:portrait){
   html.isTablet:not(.isTV) #app{grid-template-columns:1fr!important}html.isTablet:not(.isTV) aside{display:none!important}html.isTablet:not(.isTV) .mobileBottomNav{display:grid!important;grid-template-columns:repeat(5,1fr)!important}html.isTablet:not(.isTV) body{padding-bottom:76px}.tablet365Intro{grid-template-columns:1fr}.tablet365LiveGrid{grid-template-columns:1fr}.tablet365LandscapeRail{grid-auto-columns:minmax(250px,62vw)}.tablet365PosterRail{grid-auto-columns:minmax(140px,28vw)}
+}
+
+/* v36.5.1 — Mobile Live channel selector fix.
+   Only the application navigation sidebar is hidden on phones; the Live channel pane must remain visible. */
+@media(max-width:719px){
+  #app>aside{display:none!important}
+  .tvLiveShell>.liveChannelPane{display:block!important;visibility:visible!important;max-height:46dvh;overflow:auto}
+  .liveChannelPane #chan{display:grid!important}
 }
