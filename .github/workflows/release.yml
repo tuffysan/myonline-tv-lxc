@@ -220,9 +220,13 @@ jobs:
             upload_with_retry "${f}"
           done
 
+          # A previous failed run can leave the release as a draft.
+          # Publish it before validating public release state.
+          gh release edit "${TAG}" --draft=false --prerelease=false --latest
+
           RELEASE_JSON="$(gh release view "${TAG}" --json tagName,isDraft,isPrerelease,url,assets)"
           jq -e --arg tag "${TAG}" \
-            '.tagName == $tag and .isDraft == false and .isPrerelease == false' \
+            '(.tagName == $tag) and (.isDraft == false) and (.isPrerelease == false)' \
             <<<"${RELEASE_JSON}" >/dev/null
 
           for f in "${REQUIRED[@]}"; do
@@ -235,8 +239,6 @@ jobs:
             echo "Verified GitHub asset: ${f} (${SIZE} bytes)"
           done
 
-          # Only after the complete asset set has been verified do we mark it latest.
-          gh release edit "${TAG}" --latest
           echo "Release ${TAG} published with all mandatory assets."
           jq '{tagName, isDraft, isPrerelease, url, assets: [.assets[].name]}' <<<"${RELEASE_JSON}"
 
