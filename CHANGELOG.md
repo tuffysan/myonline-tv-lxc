@@ -1,3 +1,10 @@
+# v35.3.0 — TV Guide Experience
+
+- New 30-minute EPG timeline and stronger Now marker.
+- Sticky channel/time headers and improved TV/D-pad focus.
+- Programme details with Watch, Record, Record series and Reminder.
+- Responsive guide experience across TV, desktop, tablet and mobile.
+
 # Changelog
 
 ## 35.2.0 — Movies & Series Experience

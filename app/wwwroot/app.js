@@ -4095,3 +4095,60 @@ document.addEventListener('keydown',e=>{
     document.documentElement.dataset.appVersion=runtimeVersion||'';
   }catch{}
 })();
+
+// v35.3.0 — TV Guide Experience
+const GUIDE_REMINDER_KEY='myonlinetv-guide-reminders-v353';
+function guideReminders(){try{return JSON.parse(localStorage.getItem(GUIDE_REMINDER_KEY)||'[]')}catch{return []}}
+function guideReminderId(channelKey,pr){return `${currentProvider}|${channelKey}|${pr.start}|${pr.title||''}`}
+function hasGuideReminder(channelKey,pr){const id=guideReminderId(channelKey,pr);return guideReminders().some(x=>x.id===id)}
+function toggleGuideReminder(channelKey,channelName,programJson){
+  let pr;try{pr=JSON.parse(programJson)}catch{return}
+  const id=guideReminderId(channelKey,pr),rows=guideReminders(),idx=rows.findIndex(x=>x.id===id);
+  if(idx>=0){rows.splice(idx,1);localStorage.setItem(GUIDE_REMINDER_KEY,JSON.stringify(rows));alert('Reminder removed.');return}
+  rows.push({id,providerId:currentProvider,channelKey,channelName,title:pr.title||channelName,start:pr.start,stop:pr.stop,created:new Date().toISOString()});
+  localStorage.setItem(GUIDE_REMINDER_KEY,JSON.stringify(rows));alert('Reminder added. Keep MyOnline TV open to receive it.');
+}
+function checkGuideReminders(){
+  const now=Date.now();
+  for(const x of guideReminders()){
+    const start=new Date(x.start).getTime();
+    if(start>now&&start-now<=60000&&!sessionStorage.getItem('guide-reminder:'+x.id)){
+      sessionStorage.setItem('guide-reminder:'+x.id,'1');
+      if('Notification'in window&&Notification.permission==='granted')new Notification(x.title,{body:`Starting now on ${x.channelName}`});
+    }
+  }
+}
+setInterval(checkGuideReminders,30000);
+
+// Override the legacy guide with the v35.3 ten-foot timeline.
+function renderGuide(start,hours){
+  const end=new Date(start.getTime()+hours*3600000),span=end-start;
+  const by=new Map();epg.forEach(x=>{if(!by.has(x.channel))by.set(x.channel,[]);by.get(x.channel).push(x)});
+  const rows=channels.filter(c=>!isChannelHidden(c)&&by.has(c.id)).slice(0,220);
+  const ticks=[];for(let d=new Date(start);d<end;d=new Date(d.getTime()+1800000))ticks.push(d);
+  content.innerHTML=`<div class="guideHeader guide353Header"><div><span class=kicker>TV GUIDE</span><h1>Programme guide</h1><p>Browse the timeline, play live, record or set a reminder.</p></div><div class="toolbar guide353Toolbar">${providerSelect()}<button class="btn ${guideWindow==='now'?'activeBtn':''}" onclick="guideWindow='now';guide()">Now</button><button class="btn ${guideWindow==='tonight'?'activeBtn':''}" onclick="guideWindow='tonight';guide()">Tonight</button><button class="btn ${guideWindow==='tomorrow'?'activeBtn':''}" onclick="guideWindow='tomorrow';guide()">Tomorrow</button><button class=btn id=guideNow>◎ Jump to now</button><button class=btn id=refreshGuide>↻ Refresh</button></div></div><div id=playerWrap></div><div class="timelineWrap premiumGuide guide353"><div class=timelineHead><div class=channelHead>Channel</div><div class=timeAxis style="grid-template-columns:repeat(${ticks.length},minmax(90px,1fr))">${ticks.map(x=>`<span>${x.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>`).join('')}</div></div><div class=timeline>${rows.map(c=>timelineRowV353(c,by.get(c.id)||[],start,end,span)).join('')}</div></div><div class=guide353Help>Remote: ↑ ↓ channels · ← → programmes · Enter details · N/Home jumps to Now</div>`;
+  $('#provider').onchange=async e=>{currentProvider=e.target.value;await guide()};$('#refreshGuide').onclick=guide;$('#guideNow').onclick=scrollGuideToNow;setTimeout(()=>{if(guideWindow==='now')scrollGuideToNow();document.querySelector('.guide353 .currentProgram')?.focus()},100);
+}
+function timelineRowV353(c,progs,start,end,span){
+  const nowPct=(Date.now()-start.getTime())/span*100;
+  const line=nowPct>=0&&nowPct<=100?`<div class=nowLine style="left:${nowPct}%"><span>NOW</span></div>`:'';
+  const blocks=progs.map(pr=>{
+    const a=Math.max(new Date(pr.start).getTime(),start.getTime()),b=Math.min(new Date(pr.stop).getTime(),end.getTime());if(b<=a)return '';
+    const left=(a-start.getTime())/span*100,width=Math.max(.8,(b-a)/span*100),isNow=new Date(pr.start)<=new Date()&&new Date(pr.stop)>new Date();
+    const payload=encodeURIComponent(JSON.stringify(pr));
+    return `<button class="prog guide353Prog ${isNow?'currentProgram':''}" style="left:${left}%;width:${width}%" onclick='showGuideProgramActions(${JSON.stringify(c.key)},${JSON.stringify(channelName(c))},decodeURIComponent("${payload}"))' title="${escAttr(pr.title)}"><b>${esc(pr.title)}</b><small>${new Date(pr.start).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}–${new Date(pr.stop).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</small></button>`;
+  }).join('');
+  return `<div class=timelineRow><button class=timelineChannel onclick='playLive(${JSON.stringify(c.key)},${JSON.stringify(channelName(c))})'>${c.logo?`<img src="${escAttr(c.logo)}">`:''}<span>${c.number?`<small>${esc(c.number)}</small>`:''}<b>${esc(channelName(c))}</b></span></button><div class=programLane>${line}${blocks}</div></div>`;
+}
+function showGuideProgramActions(channelKey,channelName,programJson){
+  closeProgramActions();let pr;try{pr=JSON.parse(programJson)}catch{return}
+  const now=Date.now(),start=new Date(pr.start).getTime(),stop=new Date(pr.stop).getTime(),live=start<=now&&stop>now;
+  const box=document.createElement('div');box.id='programActionSheet';box.className='programActionSheet';
+  box.innerHTML=`<div class="programActionCard guide353Details"><button class=dialogClose onclick="closeProgramActions()">×</button><span class=kicker>${live?'ON NOW':'TV GUIDE'}</span><h2>${esc(pr.title||channelName)}</h2><p class=guide353Meta>${esc(channelName)} · ${new Date(pr.start).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}–${new Date(pr.stop).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</p>${pr.description?`<p class=guide353Description>${esc(pr.description)}</p>`:''}<div class="row guide353Actions"><button class="btn primaryBtn" id=guidePlay>▶ ${live?'Watch now':'Play channel'}</button><button class="btn recordBtn" id=guideRecord>● Record</button><button class=btn id=guideSeries>● Record series</button><button class=btn id=guideReminder>${hasGuideReminder(channelKey,pr)?'✓ Reminder set':'🔔 Remind me'}</button></div></div>`;
+  document.body.appendChild(box);
+  $('#guidePlay').onclick=()=>{closeProgramActions();playLive(channelKey,channelName)};
+  $('#guideRecord').onclick=()=>{closeProgramActions();scheduleGuideRecording(channelKey,channelName,programJson)};
+  $('#guideSeries').onclick=()=>{closeProgramActions();createSeriesDvrRule(channelKey,channelName,programJson)};
+  $('#guideReminder').onclick=()=>{if('Notification'in window&&Notification.permission==='default')Notification.requestPermission().catch(()=>{});toggleGuideReminder(channelKey,channelName,programJson);closeProgramActions()};
+  setTimeout(()=>$('#guidePlay')?.focus(),20);
+}
