@@ -1,5 +1,14 @@
 # Changelog
 
+## v36.5.0 – Tablet Experience
+- Dedicated tablet Home UI instead of a scaled desktop/mobile layout.
+- Compact touch-first navigation for landscape tablets and bottom navigation in portrait.
+- Tablet-specific header with search and profile controls.
+- Two-column Live Now cards, horizontal Continue Watching and media rails.
+- Tablet card sizes, spacing and touch targets tuned for 720–1179 px viewports.
+- TV, desktop and phone experiences remain independent.
+
+
 ## v36.4.0 — Mobile Experience
 - Dedicated thumb-first mobile Home; no desktop Hero on phones.
 - Compact mobile brand/profile header.

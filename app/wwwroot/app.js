@@ -524,6 +524,7 @@ function renderHomeContent({unifiedMovies=[],unifiedSeries=[],continueItems=[],h
 
   if(tvHome361IsActive()){renderTvHome361({unifiedMovies,unifiedSeries,continueItems,homeHistory,homeLiveNow});return;}
   if(mobileHome364IsActive()){renderMobileHome364({unifiedMovies,unifiedSeries,continueItems,homeHistory,homeLiveNow});return;}
+  if(tabletHome365IsActive()){renderTabletHome365({unifiedMovies,unifiedSeries,continueItems,homeHistory,homeLiveNow});return;}
   if(desktopHome362IsActive()){renderDesktopHome362({unifiedMovies,unifiedSeries,continueItems,homeHistory,homeLiveNow});return;}
 
   content.innerHTML=`${smartHomeStatus()}<div class="hero homeHero v35Hero"><div class=v35HeroContent><span class=kicker>MYONLINE TV</span><h2>Everything you watch.<br><span>One place.</span></h2>
@@ -4420,6 +4421,49 @@ function renderMobileHome364({unifiedMovies=[],unifiedSeries=[],continueItems=[]
     ${unifiedMovies.length?`<section class=mobile364Section><header><h2>Movies</h2><button onclick="show('movies')">See all ›</button></header><div class=mobile364PosterRail>${unifiedMovies.slice(0,12).map(x=>mobile364Poster(x,'movie')).join('')}</div></section>`:''}
     ${mediaFavs.length?`<section class=mobile364Section><header><h2>My List</h2><button onclick="show('search')">See all ›</button></header><div class=mobile364PosterRail>${mediaFavs.map(x=>`<button class=mobile364Poster onclick='openHomeFavourite(${JSON.stringify(x)})'>${x.poster?`<img loading=lazy decoding=async src="${escAttr(x.poster)}">`:posterPlaceholder()}<b>${esc(x.name||x.title||'Favourite')}</b></button>`).join('')}</div></section>`:''}
     ${unifiedSeries.length?`<section class=mobile364Section><header><h2>Series</h2><button onclick="show('series')">See all ›</button></header><div class=mobile364PosterRail>${unifiedSeries.slice(0,12).map(x=>mobile364Poster(x,'series')).join('')}</div></section>`:''}
+    <div id=mediaPlayer></div>
+  </div>`;
+}
+
+
+// v36.5.0 — Tablet Experience
+// Dedicated touch-first tablet Home between phone and desktop layouts.
+function tabletHome365IsActive(){
+  return document.body?.dataset?.clientMode==='tablet' && !document.documentElement.classList.contains('isTV');
+}
+function tablet365Section(title,actionLabel,action,body,extra=''){
+  if(!body)return '';
+  return `<section class="tablet365Section ${extra}"><header><h2>${esc(title)}</h2><button onclick="${action}">${esc(actionLabel)} ›</button></header>${body}</section>`;
+}
+function tablet365ContinueCard(item){
+  const art=mobile364Artwork(item), title=item?.title||item?.name||'Continue watching';
+  return `<article class=tablet365Continue><button onclick='resumeContinueItem(${JSON.stringify(item)})'>${art?`<img loading=lazy decoding=async src="${escAttr(art)}">`:posterPlaceholder()}<span><b>${esc(title)}</b><small>${item?.durationSeconds?`${formatMediaTime(item.positionSeconds||0)} left off`:'Continue watching'}</small>${item?.durationSeconds?`<i><i style="width:${continueProgress(item)}%"></i></i>`:''}</span></button></article>`;
+}
+function tablet365LiveCard(row){
+  const c=row.channel,p=row.program,start=new Date(p.start).getTime(),stop=new Date(p.stop).getTime(),pct=Math.max(0,Math.min(100,((Date.now()-start)/Math.max(1,stop-start))*100));
+  return `<button class=tablet365Live onclick='show("live").then(()=>playLive(${JSON.stringify(c.key)},${JSON.stringify(c.name)}))'>${c.logo?`<img src="${escAttr(c.logo)}">`:`<span class=tablet365ChannelFallback>TV</span>`}<span><i>LIVE</i><b>${esc(channelName(c))}</b><em>${esc(p.title||'Live television')}</em><small>${esc(liveProgramTimes(p))}</small><u><u style="width:${pct}%"></u></u></span><strong>▶</strong></button>`;
+}
+function tablet365Poster(item,kind='movie'){
+  const art=item?.poster||item?.image||mobile364Artwork(item), name=item?.name||item?.title||'Media', payload=kind==='series'?{...item,kind:'series'}:item;
+  return `<button class=tablet365Poster onclick='playUnifiedItem(${JSON.stringify(payload)})'>${art?`<img loading=lazy decoding=async src="${escAttr(art)}">`:posterPlaceholder()}<span><b>${esc(name)}</b>${item?.year?`<small>${esc(item.year)}</small>`:''}</span></button>`;
+}
+function renderTabletHome365({unifiedMovies=[],unifiedSeries=[],continueItems=[],homeHistory=[],homeLiveNow=[]}){
+  const favs=getMediaFavs().slice(0,10);
+  const seriesHistory=(homeHistory||[]).filter(x=>String(x.kind||x.type||'').toLowerCase().includes('series')||x.season||x.episode).slice(0,8);
+  const continueBody=continueItems.length?`<div class=tablet365LandscapeRail>${continueItems.slice(0,8).map(tablet365ContinueCard).join('')}</div>`:'';
+  const liveBody=homeLiveNow.length?`<div class=tablet365LiveGrid>${homeLiveNow.slice(0,6).map(tablet365LiveCard).join('')}</div>`:'';
+  const seriesBody=seriesHistory.length?`<div class=tablet365LandscapeRail>${seriesHistory.map(x=>tablet365Poster(x,'series')).join('')}</div>`:'';
+  const moviesBody=unifiedMovies.length?`<div class=tablet365PosterRail>${unifiedMovies.slice(0,10).map(x=>tablet365Poster(x,'movie')).join('')}</div>`:'';
+  const favBody=favs.length?`<div class=tablet365PosterRail>${favs.map(x=>`<button class=tablet365Poster onclick='openHomeFavourite(${JSON.stringify(x)})'>${x.poster?`<img loading=lazy decoding=async src="${escAttr(x.poster)}">`:posterPlaceholder()}<span><b>${esc(x.name||x.title||'Favourite')}</b></span></button>`).join('')}</div>`:'';
+  const allSeries=unifiedSeries.length?`<div class=tablet365PosterRail>${unifiedSeries.slice(0,10).map(x=>tablet365Poster(x,'series')).join('')}</div>`:'';
+  content.innerHTML=`<div class=tablet365Home>
+    <div class=tablet365Intro><div><span>MYONLINE TV</span><h1>What do you want to watch?</h1></div><button class=tablet365Search onclick="show('search')"><span>⌕</span><b>Search</b><small>Movies, series, channels & programmes</small></button></div>
+    ${tablet365Section('Continue Watching','See all',"show('search')",continueBody,'tablet365ContinueSection')}
+    ${tablet365Section('Live Now','Guide',"show('guide')",liveBody,'tablet365LiveSection')}
+    ${tablet365Section('Continue Series','Series',"show('series')",seriesBody)}
+    ${tablet365Section('Movies','See all',"show('movies')",moviesBody)}
+    ${tablet365Section('My List','See all',"show('search')",favBody)}
+    ${tablet365Section('Series','See all',"show('series')",allSeries)}
     <div id=mediaPlayer></div>
   </div>`;
 }
