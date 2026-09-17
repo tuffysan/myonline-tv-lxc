@@ -1,5 +1,16 @@
 # Changelog
 
+## 35.2.0 — Movies & Series Experience
+- Cinematic movie and series detail views with poster/backdrop presentation and metadata.
+- Movie browsing gains title/year/rating sorting and genre-aware search.
+- Movie cards surface watched/favourite state and direct playback.
+- Movie detail adds Play, Favourite, Download and watched-state actions.
+- Series detail adds Start/Continue series, watched progress and next-unwatched episode.
+- Season tabs replace the long all-seasons list.
+- Episode cards are redesigned for TV, desktop, tablet and mobile.
+- Existing resume tracking, next-episode playback, downloads and provider APIs are preserved.
+- Product version remains sourced from VERSION -> assembly -> runtime UI.
+
 ## 35.1.0 — Live TV Experience
 - Faster TV-first channel zapping with existing Now/Next overlay and mini-guide.
 - Remote/keyboard channel switching extended with Page Up/Down and media next/previous keys.
