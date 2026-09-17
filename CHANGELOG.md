@@ -1,3 +1,11 @@
+# v36.2.1 — Laptop Layout Fix
+
+- Compact laptop-specific Desktop Home layout for common 1366×768 and 1920×1080 browser viewports.
+- Continue Watching cards reduced to roughly 175–220 px wide with a 16:9 image capped at 105–124 px on laptop layouts.
+- Desktop hero reduced to roughly 240–300 px on shorter/finer-pointer screens.
+- Tighter section spacing and compact Live Now cards so more content remains above the fold.
+- Large desktop, TV, tablet and mobile layouts remain unchanged.
+
 ## v36.2.0 — Desktop Home Experience
 
 - New content-first laptop/desktop Home experience inspired by the v36 desktop concept.
