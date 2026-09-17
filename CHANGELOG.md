@@ -1,3 +1,9 @@
+## v36.2.5 — Desktop Hero Artwork Composition
+- Desktop Hero now prefers a matching library landscape backdrop for Continue Watching.
+- Portrait-only artwork uses an ambient blurred fill plus a deliberate framed poster instead of a tiny contained image.
+- Landscape artwork fills the Hero with controlled cropping and readable text gradients.
+- Keeps the compact v36.2.3 laptop Hero height and the v36.2.4 single-line brand.
+
 ## v36.2.4 – Desktop Hero Artwork & Brand Cleanup
 - Fixed desktop/laptop hero artwork scaling/cropping.
 - Simplified sidebar branding to MyOnlineTV + logo on one row.
