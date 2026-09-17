@@ -388,7 +388,18 @@ function applyPermissions(){
 function featureForView(v){return ({live:'live',guide:'live',movies:'movies',series:'series',downloads:'downloads',recordings:'live'})[v]||''}
 function viewAllowed(v){const f=featureForView(v);return !f||currentPolicy()[f]!==false}
 
-function renderProfileBadge(){const p=profiles.find(x=>x.id===currentProfile);const b=$('#userBadge');if(b&&p)b.innerHTML=`<button class=profileBadge onclick="profilePicker()">${esc(p.icon)} ${esc(p.name)} ▾</button>`}
+function renderProfileBadge(){const p=profiles.find(x=>x.id===currentProfile);const b=$('#userBadge');if(b&&p){const icon=(p.icon||'👤').trim();b.innerHTML=`<button class="profileBadge desktop363ProfileBadge" onclick="profilePicker()"><span class="desktop363Avatar">${esc(icon)}</span><span class="desktop363ProfileName">${esc(p.name)}</span><span class="desktop363Chevron">⌄</span></button>`}}
+function updateDesktop363Clock(){
+  const dateEl=$('#desktop363Date'), timeEl=$('#desktop363Time');
+  if(!dateEl||!timeEl)return;
+  const now=new Date();
+  dateEl.textContent=new Intl.DateTimeFormat(undefined,{weekday:'short',day:'numeric',month:'short',year:'numeric'}).format(now);
+  timeEl.textContent=new Intl.DateTimeFormat(undefined,{hour:'2-digit',minute:'2-digit',hour12:false}).format(now);
+}
+setInterval(updateDesktop363Clock,15000);
+document.addEventListener('DOMContentLoaded',updateDesktop363Clock);
+setTimeout(updateDesktop363Clock,0);
+
 function profilePicker(){let box=$('#profilePicker');if(box){box.remove();return}box=document.createElement('div');box.id='profilePicker';box.className='profilePicker';box.innerHTML=profiles.map(p=>`<button onclick="selectProfile('${escAttr(p.id)}')">${esc(p.icon)} ${esc(p.name)}${p.isKids?' · Kids':''}</button>`).join('')+(authState.role==='Admin'?`<button onclick="show('admin')">⚙ Admin</button>`:'');document.body.appendChild(box)}
 async function selectProfile(id){
   const p=profiles.find(x=>x.id===id);if(!p)return;

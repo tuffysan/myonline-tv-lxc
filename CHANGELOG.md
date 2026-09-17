@@ -1,3 +1,10 @@
+# Changelog
+
+## 36.3.1 — Desktop Header Polish
+- Desktop header right side now groups profile avatar/name, divider, localized date and live clock.
+- Sidebar brand is compact: MyOnlineTV with the app logo directly after the name on the same row.
+- Preserves the v36.3.0 Desktop Home Redesign and TV/mobile layouts.
+
 ## 36.3.0 — Desktop Home Redesign
 
 - Removes the large desktop/laptop Hero and the permanent Up Next / Live Today side column.

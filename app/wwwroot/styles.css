@@ -1804,3 +1804,26 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
 @media (max-width:1179px), (pointer:coarse){
   .desktop363HeaderSearch{display:none!important}
 }
+
+
+/* v36.3.1 — Desktop top-bar identity polish */
+.brand3624Row{gap:7px!important;align-items:center!important}
+.brand3624Row h1{font-size:1.22rem!important;font-weight:800;letter-spacing:-.045em!important}
+.brand3624Icon{width:28px!important;height:28px!important;flex-basis:28px!important;filter:drop-shadow(0 4px 10px rgba(0,0,0,.35))}
+
+@media(min-width:1180px) and (pointer:fine){
+  main>header{height:68px;padding:0 26px;align-items:center;gap:20px;background:#07131d}
+  .desktop363HeaderTitle{display:flex;align-items:center;white-space:nowrap;min-width:150px}
+  .desktop363HeaderSearch{margin-left:auto;margin-right:auto}
+  .headerActions{display:flex;align-items:center;justify-content:flex-end;gap:13px;min-width:max-content;height:100%}
+  #userBadge{opacity:1}
+  .desktop363ProfileBadge{display:flex;align-items:center;gap:7px;border:0!important;background:transparent!important;padding:5px 4px!important;border-radius:10px!important;color:#eaf4fb!important}
+  .desktop363ProfileBadge:hover{background:rgba(255,255,255,.055)!important}
+  .desktop363Avatar{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:linear-gradient(145deg,#e8d2c3,#80594d);font-size:16px;box-shadow:0 0 0 1px rgba(255,255,255,.13)}
+  .desktop363ProfileName{font-size:.82rem;font-weight:600}
+  .desktop363Chevron{font-size:.72rem;color:#91a6b7;transform:translateY(-1px)}
+  .desktop363HeaderDivider{width:1px;height:28px;background:rgba(255,255,255,.12);margin:0 2px}
+  .desktop363DateTime{display:flex;align-items:center;gap:16px;white-space:nowrap;color:#9fb0bd;font-size:.72rem}
+  .desktop363DateTime b{color:#e8f1f7;font-size:.9rem;letter-spacing:.02em}
+}
+@media(max-width:1179px), (pointer:coarse){.desktop363HeaderDivider,.desktop363DateTime{display:none!important}}
