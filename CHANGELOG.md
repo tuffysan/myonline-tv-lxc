@@ -1,3 +1,11 @@
+# v36.5.4 – Atomic Release Draft-ID Fix
+
+- Fixes GitHub Release publication for draft releases by resolving and using the draft release ID.
+- Verifies all four mandatory assets against the draft release ID before publication.
+- Publishes with the GitHub Releases API only after asset verification succeeds.
+- Prevents incomplete releases from becoming Latest.
+- Includes the v36.5.3 release-integrity changes and mobile/tablet Live channel fixes.
+
 # v36.5.3 – Release Integrity Fix
 
 - Prevent incomplete GitHub Releases from becoming Latest.

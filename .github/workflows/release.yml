@@ -173,21 +173,38 @@ jobs:
           APP="myonline-tv-web-v${VERSION}-linux-x64.tar.gz"
           SRC="myonline-tv-lxc-v${VERSION}-source.tar.gz"
 
-          # Never expose a release as Latest before every mandatory asset exists.
-          if ! gh release view "${TAG}" >/dev/null 2>&1; then
+          # A draft release is intentionally not resolved through /releases/tags/{tag}.
+          # Resolve it from the releases collection and keep its numeric ID for all
+          # verification/publication operations.
+          RELEASE_ID="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"${TAG}\") | .id" | head -1)"
+
+          if [[ -z "${RELEASE_ID}" ]]; then
             gh release create "${TAG}" --draft --verify-tag --generate-notes --title "${TAG}"
+            RELEASE_ID="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+              --jq ".[] | select(.tag_name == \"${TAG}\") | .id" | head -1)"
           else
-            gh release edit "${TAG}" --draft=true
+            # If a previous attempt left the release public, move it back to draft
+            # before replacing assets. This prevents a partial release being Latest.
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+              -F draft=true >/dev/null
           fi
+
+          if [[ -z "${RELEASE_ID}" ]]; then
+            echo "::error::Could not resolve GitHub Release ID for ${TAG}."
+            exit 1
+          fi
+          echo "Release ID: ${RELEASE_ID}"
 
           for f in "${APP}" "${SRC}" SHA256SUMS-RELEASE.txt release.json; do
             test -s "${f}"
             gh release upload "${TAG}" "${f}" --clobber
           done
 
-          # Verify GitHub itself sees all four non-empty assets before publishing.
+          # Verify GitHub itself sees every mandatory, non-empty asset on the draft.
           for f in "${APP}" "${SRC}" SHA256SUMS-RELEASE.txt release.json; do
-            SIZE="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq ".assets[] | select(.name == \"${f}\") | .size" | head -1)"
+            SIZE="$(gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+              --jq ".assets[] | select(.name == \"${f}\") | .size" | head -1)"
             if [[ -z "${SIZE}" || "${SIZE}" -le 0 ]]; then
               echo "::error::Mandatory GitHub Release asset missing or empty: ${f}"
               exit 1
@@ -195,9 +212,14 @@ jobs:
             echo "Verified GitHub asset: ${f} (${SIZE} bytes)"
           done
 
-          # Only now can this release become public/Latest.
-          gh release edit "${TAG}" --draft=false --prerelease=false --latest
-          gh release view "${TAG}" --json tagName,isDraft,isPrerelease,url
+          # Publication is the final operation. Only a complete release can become Latest.
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+            -F draft=false \
+            -F prerelease=false \
+            -f make_latest=true >/dev/null
+
+          gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+            --jq '{tag_name: .tag_name, draft: .draft, prerelease: .prerelease, html_url: .html_url, assets: [.assets[].name]}'
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
