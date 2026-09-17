@@ -1,3 +1,14 @@
+# v37.0.0 – Library Management & Provider Refresh
+
+- New Library Management UI for Groups, Channels, Movies and Series.
+- Bulk channel hide/show and persistent group/category/item visibility.
+- Live provider refresh with added/changed/removed/unchanged diff.
+- Per-group quality filters: RAW, 4K/UHD, FHD, HD, SD and Unknown.
+- Configurable quality priority and Best available only deduplication.
+- Provider refresh settings (Manual / Every X hours / Daily).
+- Cleanup Center for duplicate-looking channels, missing logos and ungrouped content.
+- Group refresh action and persistent local preferences across refresh.
+
 # v36.5.7 — Release Asset Upload Fix
 
 - Removes the custom release-ID / `uploads.github.com` asset-upload implementation.

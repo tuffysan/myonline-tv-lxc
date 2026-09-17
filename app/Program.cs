@@ -69,6 +69,8 @@ var favouritesFile = Path.Combine(dataDir, "favourites.json");
 var continueFile = Path.Combine(dataDir, "continue-watching.json");
 var channelPreferencesFile = Path.Combine(dataDir, "channel-preferences.json");
 var cataloguePreferencesFile = Path.Combine(dataDir, "catalogue-preferences.json");
+var libraryManagementFile = Path.Combine(dataDir, "library-management.json");
+var providerRefreshFile = Path.Combine(dataDir, "provider-refresh.json");
 var profilesFile = Path.Combine(dataDir, "profiles.json");
 var adminFile = Path.Combine(dataDir, "admin.json");
 var usersFile = Path.Combine(dataDir, "users.json");
@@ -1714,13 +1716,21 @@ app.MapGet("/api/channels/{providerId}", async (string providerId) =>
     try
     {
         var rows = await GetCachedChannels(p);
-        return Results.Ok(rows.Select(ch => new
+        var lm = LibraryManagementFor(providerId);
+        IEnumerable<LiveChannel> visibleRows = rows;
+        visibleRows = visibleRows.Where(ch => !lm.Groups.TryGetValue(ch.Group ?? "", out var rule) || rule.Allowed.Length == 0 || rule.Allowed.Contains(DetectQuality(ch.Name), StringComparer.OrdinalIgnoreCase));
+        var bestGroups = visibleRows.Where(ch => lm.Groups.TryGetValue(ch.Group ?? "", out var r) && r.BestOnly)
+            .GroupBy(ch => (Group:(ch.Group??"").ToUpperInvariant(), Name:LogicalChannelName(ch.Name)));
+        var bestKeys = new HashSet<string>(bestGroups.Select(g => g.OrderBy(ch => QualityRank(DetectQuality(ch.Name), lm.Groups[ch.Group??""].Priority)).First().Key), StringComparer.OrdinalIgnoreCase);
+        visibleRows = visibleRows.Where(ch => !lm.Groups.TryGetValue(ch.Group ?? "", out var r) || !r.BestOnly || bestKeys.Contains(ch.Key));
+        return Results.Ok(visibleRows.Select(ch => new
         {
             id = ch.Id,
             key = ch.Key,
             name = ch.Name,
             group = ch.Group,
             number = ch.Number,
+            quality = DetectQuality(ch.Name),
             logo = string.IsNullOrWhiteSpace(ch.LogoUrl)
                 ? ""
                 : $"/api/channels/{Uri.EscapeDataString(providerId)}/{Uri.EscapeDataString(ch.Key)}/logo",
@@ -2655,6 +2665,88 @@ app.MapDelete("/api/profiles/{id}", (string id) =>
 
     return Results.NoContent();
 }).RequireAuthorization(p => p.RequireRole("Admin"));
+
+
+// v37.0.0 Library Management & Provider Refresh
+Dictionary<string, LibraryManagementPreferences> LoadLibraryManagement() =>
+    Load<Dictionary<string, LibraryManagementPreferences>>(libraryManagementFile) ?? new(StringComparer.OrdinalIgnoreCase);
+LibraryManagementPreferences LibraryManagementFor(string providerId)
+{
+    var all = LoadLibraryManagement();
+    if (!all.TryGetValue(providerId, out var p) || p is null) p = new LibraryManagementPreferences();
+    return p;
+}
+string DetectQuality(string? name)
+{
+    var n = (name ?? "").ToUpperInvariant();
+    if (Regex.IsMatch(n, @"(^|[\s._|\-])RAW($|[\s._|\-])")) return "RAW";
+    if (n.Contains("2160") || Regex.IsMatch(n, @"(^|[\s._|\-])(4K|UHD)($|[\s._|\-])")) return "4K";
+    if (n.Contains("1080") || Regex.IsMatch(n, @"(^|[\s._|\-])FHD($|[\s._|\-])")) return "FHD";
+    if (n.Contains("720") || Regex.IsMatch(n, @"(^|[\s._|\-])HD($|[\s._|\-])")) return "HD";
+    if (Regex.IsMatch(n, @"(^|[\s._|\-])SD($|[\s._|\-])")) return "SD";
+    return "Unknown";
+}
+string LogicalChannelName(string? name)
+{
+    var n = Regex.Replace(name ?? "", @"(?i)(^|[\s._|\-])(RAW|4K|UHD|FHD|HD|SD|2160P?|1080P?|720P?)($|[\s._|\-])", " ");
+    return Regex.Replace(n, @"\s+", " ").Trim().ToUpperInvariant();
+}
+int QualityRank(string quality, string[]? priority)
+{
+    var order = priority is { Length: > 0 } ? priority : new[]{"RAW","4K","FHD","HD","SD","Unknown"};
+    var i = Array.FindIndex(order, x => x.Equals(quality, StringComparison.OrdinalIgnoreCase));
+    return i < 0 ? 999 : i;
+}
+
+app.MapGet("/api/library-management/{providerId}", async (string providerId, HttpContext ctx) =>
+{
+    if (!CanManageProviderId(ctx, providerId)) return Results.Forbid();
+    var p = LoadProviders().FirstOrDefault(x => x.Id == providerId); if (p is null) return Results.NotFound();
+    var rows = await GetCachedChannels(p); var pref = LibraryManagementFor(providerId); var cp = PreferencesFor(providerId); var cat = CataloguePreferencesFor(providerId);
+    var groups = rows.GroupBy(x => x.Group ?? "", StringComparer.OrdinalIgnoreCase).Select(g => new {
+        name=g.Key, count=g.Count(), hidden=cp.HiddenGroups.Contains(g.Key),
+        qualities=g.GroupBy(x=>DetectQuality(x.Name)).ToDictionary(x=>x.Key,x=>x.Count()),
+        quality=pref.Groups.TryGetValue(g.Key,out var q)?q:new GroupQualityRule()
+    }).OrderBy(x=>x.name).ToArray();
+    return Results.Ok(new { providerId, groups, channelCount=rows.Count, hiddenChannels=cp.HiddenChannels.Count,
+        hiddenMovieCategories=cat.HiddenVodCategories.Count, hiddenMovies=cat.HiddenVodItems.Count,
+        hiddenSeriesCategories=cat.HiddenSeriesCategories.Count, hiddenSeries=cat.HiddenSeriesItems.Count,
+        refresh=pref.Refresh });
+}).RequireAuthorization();
+
+app.MapPost("/api/library-management/{providerId}/quality", (string providerId, GroupQualityRuleRequest req, HttpContext ctx) =>
+{
+    if (!CanManageProviderId(ctx, providerId)) return Results.Forbid();
+    var all=LoadLibraryManagement(); var pref=all.TryGetValue(providerId,out var x)&&x is not null?x:new LibraryManagementPreferences();
+    pref.Groups[req.Group]=new GroupQualityRule { Allowed=(req.Allowed??Array.Empty<string>()).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(), BestOnly=req.BestOnly, Priority=(req.Priority??Array.Empty<string>()).ToArray() };
+    all[providerId]=pref; Save(libraryManagementFile,all); return Results.Ok(pref.Groups[req.Group]);
+}).RequireAuthorization();
+
+app.MapPost("/api/providers/{providerId}/refresh-live", async (string providerId, HttpContext ctx) =>
+{
+    if (!CanManageProviderId(ctx, providerId)) return Results.Forbid();
+    var p=LoadProviders().FirstOrDefault(x=>x.Id==providerId); if(p is null)return Results.NotFound();
+    var before=channelCache.TryGetValue(providerId,out var old)?old.Channels:(TryLoadLiveChannelDiskCache(providerId,TimeSpan.FromDays(7),out var disk)?disk:new List<LiveChannel>());
+    var fresh=await LoadProviderChannels(p); channelCache[providerId]=new ChannelCacheEntry(fresh,DateTimeOffset.UtcNow); SaveLiveChannelDiskCache(providerId,fresh);
+    var b=before.ToDictionary(x=>x.Key,StringComparer.OrdinalIgnoreCase); var f=fresh.ToDictionary(x=>x.Key,StringComparer.OrdinalIgnoreCase);
+    var added=f.Keys.Count(k=>!b.ContainsKey(k)); var removed=b.Keys.Count(k=>!f.ContainsKey(k));
+    var updated=f.Keys.Count(k=>b.TryGetValue(k,out var z)&&(z.Name!=f[k].Name||z.Group!=f[k].Group||z.SourceUrl!=f[k].SourceUrl));
+    var unchanged=Math.Max(0,fresh.Count-added-updated); var now=DateTimeOffset.UtcNow;
+    var all=LoadLibraryManagement(); var pref=all.TryGetValue(providerId,out var lm)&&lm is not null?lm:new LibraryManagementPreferences(); pref.Refresh.LastRefresh=now; pref.Refresh.LastAdded=added; pref.Refresh.LastUpdated=updated; pref.Refresh.LastRemoved=removed; pref.Refresh.LastUnchanged=unchanged; all[providerId]=pref; Save(libraryManagementFile,all);
+    return Results.Ok(new { added,updated,removed,unchanged,total=fresh.Count,lastRefresh=now });
+}).RequireAuthorization();
+
+app.MapPost("/api/providers/{providerId}/refresh-settings", (string providerId, RefreshSettings req, HttpContext ctx) =>
+{
+    if(!CanManageProviderId(ctx,providerId))return Results.Forbid(); var all=LoadLibraryManagement(); var pref=all.TryGetValue(providerId,out var x)&&x is not null?x:new LibraryManagementPreferences();
+    pref.Refresh.Mode=(req.Mode??"manual").ToLowerInvariant(); pref.Refresh.IntervalHours=Math.Clamp(req.IntervalHours,1,168); all[providerId]=pref; Save(libraryManagementFile,all); return Results.Ok(pref.Refresh);
+}).RequireAuthorization();
+
+app.MapPost("/api/library-management/{providerId}/bulk-channels", (string providerId, BulkLibraryChannelsRequest req, HttpContext ctx) =>
+{
+    if(!CanManageProviderId(ctx,providerId))return Results.Forbid(); var all=LoadChannelPreferences(); var pref=all.TryGetValue(providerId,out var x)?x:new ChannelPreferences(new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase));
+    foreach(var k in req.ChannelKeys??Array.Empty<string>()){if(req.Hidden)pref.HiddenChannels.Add(k);else pref.HiddenChannels.Remove(k);} all[providerId]=pref;Save(channelPreferencesFile,all);return Results.Ok(pref);
+}).RequireAuthorization();
 
 app.MapGet("/api/channel-preferences/{providerId}", (string providerId) => Results.Ok(PreferencesFor(providerId))).RequireAuthorization();
 app.MapPost("/api/channel-preferences/{providerId}/group", (string providerId, GroupVisibilityRequest req) =>
@@ -5032,6 +5124,17 @@ record CatalogueResetRequest(string? Kind);
 record ViewerProfile(string Id, string Name, bool IsKids, string Icon, string? OwnerUsername = null);
 record ViewerProfileInput(string? Id, string? Name, bool IsKids, string? Icon, string? OwnerUsername = null);
 record BulkChannelVisibilityRequest(string[]? HiddenGroups, string[]? HiddenChannels);
+sealed class LibraryManagementPreferences
+{
+    public Dictionary<string,GroupQualityRule> Groups { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public ProviderRefreshState Refresh { get; set; } = new();
+}
+sealed class GroupQualityRule { public string[] Allowed { get; set; } = Array.Empty<string>(); public bool BestOnly { get; set; } public string[] Priority { get; set; } = new[]{"RAW","4K","FHD","HD","SD","Unknown"}; }
+sealed class ProviderRefreshState { public string Mode { get; set; }="manual"; public int IntervalHours { get; set; }=24; public DateTimeOffset? LastRefresh { get; set; } public int LastAdded { get; set; } public int LastUpdated { get; set; } public int LastRemoved { get; set; } public int LastUnchanged { get; set; } }
+record GroupQualityRuleRequest(string Group,string[]? Allowed,bool BestOnly,string[]? Priority);
+record RefreshSettings(string? Mode,int IntervalHours);
+record BulkLibraryChannelsRequest(string[]? ChannelKeys,bool Hidden);
+
 record GroupVisibilityRequest(string Group, bool Hidden);
 record ChannelPreferenceRequest(string ChannelKey, bool Hidden, string? Alias);
 record SetupRequest(string? Username, string Password);
