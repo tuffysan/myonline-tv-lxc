@@ -1,3 +1,13 @@
+## 36.3.0 — Desktop Home Redesign
+
+- Removes the large desktop/laptop Hero and the permanent Up Next / Live Today side column.
+- Makes desktop Home a content-first browser with Continue Watching, Live Now, My List, Recently Added Movies and Continue Series.
+- Moves global search into the desktop top bar alongside Home/profile controls.
+- Uses compact landscape cards for Continue Watching and media rails, with progress and hover actions.
+- Keeps Live Now as a dedicated information-rich row with channel/programme progress.
+- Preserves the v36.1 cinematic TV Home and existing tablet/mobile layouts.
+- Keeps runtime VERSION -> backend -> Web UI version reporting unchanged.
+
 ## 36.2.6 — Desktop Hero Composition Fix
 
 - Fixes the duplicated/zoomed portrait artwork seen in the laptop Hero.
