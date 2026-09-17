@@ -1,3 +1,6 @@
+## v36.5.5 – Release ID Direct Creation
+- Fixed atomic GitHub Release creation/upload to use the numeric release ID end-to-end.
+
 # v36.5.4 – Atomic Release Draft-ID Fix
 
 - Fixes GitHub Release publication for draft releases by resolving and using the draft release ID.
