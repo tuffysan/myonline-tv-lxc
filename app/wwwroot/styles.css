@@ -1674,3 +1674,26 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
   .desktop362Hero>div{max-height:220px}
   .desktop362Hero p{display:none!important}
 }
+
+
+/* v36.2.4 — Desktop Hero Artwork + Brand Cleanup */
+.brand3624{display:block}
+.brand3624Row{display:flex;align-items:center;gap:9px;white-space:nowrap}
+.brand3624Row h1{margin:0;font-size:1.45rem;line-height:1;letter-spacing:-.04em}
+.brand3624Icon{width:34px!important;height:34px!important;flex:0 0 34px;object-fit:contain;margin:0!important}
+
+@media (min-width:1180px) and (pointer:fine) {
+  /* Keep the complete artwork visible instead of zooming/cropping it with cover. */
+  .desktop362Hero{
+    background-color:#07111a!important;
+    background-size:100% 100%,100% 100%,contain!important;
+    background-repeat:no-repeat,no-repeat,no-repeat!important;
+    background-position:center,center,right center!important;
+  }
+  /* Dark copy area blends into the unused space when source artwork is portrait/square. */
+  .desktop362Hero::after{
+    content:"";position:absolute;inset:0;z-index:0;pointer-events:none;
+    background:linear-gradient(90deg,rgba(4,11,17,.82) 0%,rgba(4,11,17,.48) 42%,transparent 72%);
+  }
+  .desktop362Hero>div{position:relative;z-index:1}
+}

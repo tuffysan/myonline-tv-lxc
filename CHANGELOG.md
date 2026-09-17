@@ -1,3 +1,8 @@
+## v36.2.4 – Desktop Hero Artwork & Brand Cleanup
+- Fixed desktop/laptop hero artwork scaling/cropping.
+- Simplified sidebar branding to MyOnlineTV + logo on one row.
+- Removed redundant sidebar Web/version subtitle.
+
 # v36.2.3 — Desktop Hero Hard Cap
 
 - Fixed the laptop/desktop Home hero sizing rule so the browser actually applies it.
