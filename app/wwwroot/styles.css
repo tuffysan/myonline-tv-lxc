@@ -1996,3 +1996,21 @@ aside nav button.active{background:#183f5a;border-color:#4aa8df;box-shadow:inset
 @media(min-width:1280px) and (pointer:coarse){
   aside nav button{scroll-margin-block:18px}
 }
+
+
+/* v38.2.0 Adaptive Navigation & Focus */
+.mobileMoreSection{padding:4px 0 12px}
+.mobileMoreSection h3{margin:8px 14px 7px;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;opacity:.58}
+:focus-visible{outline:3px solid var(--accent)!important;outline-offset:3px}
+html.isTV :focus-visible{outline-width:4px!important;outline-offset:5px;box-shadow:0 0 0 2px rgba(0,0,0,.45),0 0 24px rgba(74,168,223,.30)}
+html.isTV button,html.isTV a,html.isTV [tabindex="0"]{scroll-margin:28px}
+@media(min-width:720px) and (max-width:1179px) and (orientation:landscape){
+  html.navRailMode aside{display:flex!important;width:74px!important;min-width:74px!important}
+  html.navRailMode aside nav button{font-size:0;justify-content:center;min-height:52px}
+  html.navRailMode aside nav button::first-letter{font-size:1.2rem}
+  html.navRailMode #mobileBottomNav{display:none!important}
+  html.navRailMode main{padding-left:0}
+}
+@media(max-width:719px){
+  #mobileMoreSheet{max-height:min(76vh,680px);overflow:auto;overscroll-behavior:contain}
+}

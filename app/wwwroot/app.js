@@ -99,9 +99,14 @@ function toggleMobileMore(){
   if(!open){closeMobileMore();return}
   const primary=[...document.querySelectorAll('#mobileBottomNav [data-mobile-view]')].map(x=>x.dataset.mobileView);
   const items=configuredNavigationViews().filter(view=>!primary.includes(view));
-  sheet.innerHTML=`<div class="mobileMoreHandle"></div><div class="mobileMoreGrid">${
-    items.map(view=>`<button data-more-view="${view}" class="${currentView===view?'active':''}"><span>${navigationIcons[view]||'•'}</span><b>${esc(navigationLabels[view]||view)}</b></button>`).join('')
-  }</div>`;
+  const grouped=['Watch','Library','Settings'].map(section=>{
+    const views=items.filter(v=>navigationSection(v)===section);
+    if(!views.length)return '';
+    return `<section class="mobileMoreSection"><h3>${section}</h3><div class="mobileMoreGrid">${
+      views.map(view=>`<button data-more-view="${view}" class="${currentView===view?'active':''}"><span>${navigationIcons[view]||'•'}</span><b>${esc(navigationLabels[view]||view)}</b></button>`).join('')
+    }</div></section>`;
+  }).join('');
+  sheet.innerHTML=`<div class="mobileMoreHandle"></div>${grouped}`;
   sheet.classList.remove('hidden');
   sheet.setAttribute('aria-hidden','false');
   document.body.classList.add('mobileSheetOpen');
@@ -118,6 +123,10 @@ function updateNavigationChrome(){
   if(page)page.textContent=navigationLabels[currentView]||title?.textContent||currentView;
 }
 
+function ensureFocusedElementVisible(){
+  const active=document.activeElement;
+  if(active&&active!==document.body) active.scrollIntoView({block:'nearest',inline:'nearest',behavior:'smooth'});
+}
 window.addEventListener('keydown',e=>{
   if(e.key!=='Escape')return;
   const sheet=$('#mobileMoreSheet');
@@ -355,6 +364,47 @@ async function refreshMediaLibraryNav(){
   renderMediaLibraryNav();
 }
 
+const navigationState={
+  focusByView:new Map(),
+  scrollByView:new Map()
+};
+function rememberViewContext(view=currentView){
+  if(!view)return;
+  const active=document.activeElement;
+  if(active&&active!==document.body){
+    if(!active.dataset.navFocusId) active.dataset.navFocusId=`focus-${Math.random().toString(36).slice(2,10)}`;
+    navigationState.focusByView.set(view,active.dataset.navFocusId);
+  }
+  const main=document.querySelector('main');
+  navigationState.scrollByView.set(view,{
+    windowY:window.scrollY||0,
+    mainY:main?main.scrollTop:0
+  });
+}
+function restoreViewContext(view){
+  requestAnimationFrame(()=>{
+    const scroll=navigationState.scrollByView.get(view);
+    const main=document.querySelector('main');
+    if(scroll){
+      window.scrollTo({top:scroll.windowY||0,left:0,behavior:'instant'});
+      if(main)main.scrollTop=scroll.mainY||0;
+    }
+    const id=navigationState.focusByView.get(view);
+    let target=id?document.querySelector(`[data-nav-focus-id="${id}"]`):null;
+    if(!target && document.documentElement.classList.contains('isTV')){
+      target=document.querySelector(`#${view} button:not(.hidden),#${view} a[href]:not(.hidden),#${view} [tabindex="0"]`);
+    }
+    if(target&&typeof target.focus==='function'){
+      target.focus({preventScroll:true});
+      target.scrollIntoView({block:'nearest',inline:'nearest'});
+    }
+  });
+}
+function navigationSection(view){
+  if(['home','live','guide','movies','series','recordings','notifications','rooms'].includes(view))return 'Watch';
+  if(['plex','jellyfin','downloads','library','search','sources'].includes(view))return 'Library';
+  return 'Settings';
+}
 const viewHistory=[];
 function navigateBack(){
   closeMobileMore();
@@ -368,6 +418,7 @@ const mobileBack=$('#mobileBackButton');if(mobileBack)mobileBack.onclick=navigat
 
 async function show(v,opt={}){
   if(!viewAllowed(v)){v='home'}
+  if(currentView&&currentView!==v) rememberViewContext(currentView);
   if(!opt.fromHistory&&currentView&&currentView!==v){
     if(viewHistory[viewHistory.length-1]!==currentView)viewHistory.push(currentView);
     if(viewHistory.length>24)viewHistory.shift();
@@ -377,6 +428,7 @@ async function show(v,opt={}){
   closeMobileMore();
   title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'Recordings',platform:'Platform','profile-sync':'Profile Sync',diagnostics:'Diagnostics',appliance:'Appliance',notifications:'Notifications',rooms:'Rooms',library:'Library',search:'Search',sources:'My Sources',system:'System',completion:'Feature Completion',update:'System Update',admin:'Admin'})[v]||v;
   updateNavigationChrome();
+  restoreViewContext(v);
   if(v==='home')await home();
   if(v==='live')await live();
   if(v==='guide')await guide();
@@ -4528,3 +4580,19 @@ async function lmCatalogueCategory(kind,id,hidden){await jpost('/api/catalogue-p
 async function lmLoadItems(kind,cat,btn){const box=btn.parentElement.querySelector('.lmItems');box.innerHTML='Loading…';try{const rows=await api(`/api/${kind}/${encodeURIComponent(lmProviderId())}/items?categoryId=${encodeURIComponent(cat)}&includeHidden=true`);box.innerHTML=rows.slice(0,1000).map(x=>`<label><input type=checkbox onchange="lmCatalogueItem('${kind}','${escAttr(x.id)}',this.checked)"> Hide ${esc(x.name||x.title||x.id)}</label>`).join('')}catch(e){box.textContent=friendlyError(e)}}
 async function lmCatalogueItem(kind,id,hidden){await jpost('/api/catalogue-preferences/'+encodeURIComponent(lmProviderId())+'/item',{kind,itemId:id,hidden})}
 function lmRunCleanup(){const rows=lmState.channels||[],norm=n=>(n||'').toUpperCase().replace(/\b(RAW|4K|UHD|FHD|HD|SD|2160P?|1080P?|720P?)\b/g,'').replace(/\s+/g,' ').trim(),m=new Map();rows.forEach(c=>{const k=norm(c.name);if(!m.has(k))m.set(k,[]);m.get(k).push(c)});const dup=[...m.values()].filter(x=>x.length>1),missing=rows.filter(x=>!x.logo).length;$('#lmCleanup').innerHTML=`<div class=admin2StatusGrid><div class=admin2Card><b>${dup.length}</b><small>duplicate-looking channel sets</small></div><div class=admin2Card><b>${missing}</b><small>channels without logos</small></div><div class=admin2Card><b>${lmState.snapshot.groups.filter(g=>!g.name).length}</b><small>ungrouped sets</small></div></div><h4>Duplicate candidates</h4><div class=manageList>${dup.slice(0,200).map(g=>`<div><b>${esc(norm(g[0].name))}</b><small>${g.map(x=>esc(x.name)+' ['+esc(x.quality||'')+']').join(' · ')}</small></div>`).join('')||'<p>No duplicate-looking channels found.</p>'}</div>`}
+
+document.addEventListener('keydown',e=>{
+  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){
+    requestAnimationFrame(ensureFocusedElementVisible);
+  }
+},true);
+
+function applyAdaptiveNavigationMode(){
+  const tablet=document.documentElement.classList.contains('isTablet');
+  const tv=document.documentElement.classList.contains('isTV');
+  const landscape=matchMedia('(orientation: landscape)').matches;
+  document.documentElement.classList.toggle('navRailMode',tablet&&landscape&&!tv);
+}
+applyAdaptiveNavigationMode();
+addEventListener('resize',applyAdaptiveNavigationMode,{passive:true});
+addEventListener('orientationchange',()=>setTimeout(applyAdaptiveNavigationMode,50),{passive:true});

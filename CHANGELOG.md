@@ -1,3 +1,8 @@
+# v38.2.0
+
+- Adaptive Navigation & Focus across phone, tablet, desktop and TV.
+- Remembers focus/scroll context, improves TV focus visibility, groups compact navigation, and adds tablet landscape rail behavior.
+
 # v38.1.0
 
 - Navigation Reliability release across phone, tablet, desktop and TV.
