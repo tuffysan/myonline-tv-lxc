@@ -1,3 +1,11 @@
+## 36.2.6 — Desktop Hero Composition Fix
+
+- Fixes the duplicated/zoomed portrait artwork seen in the laptop Hero.
+- Landscape backdrops remain full-bleed with a controlled readability gradient.
+- Portrait-only media now uses one clean poster on the right over a neutral cinematic background.
+- Removes the blurred/duplicated poster background that made Hero look visually split.
+- Keeps the compact laptop Hero height and MyOnlineTV + logo branding.
+
 ## v36.2.5 — Desktop Hero Artwork Composition
 - Desktop Hero now prefers a matching library landscape backdrop for Continue Watching.
 - Portrait-only artwork uses an ambient blurred fill plus a deliberate framed poster instead of a tiny contained image.

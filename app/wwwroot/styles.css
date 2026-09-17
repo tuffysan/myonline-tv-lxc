@@ -1657,7 +1657,8 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
 
 
 /* v36.2.3 — Desktop Hero Hard Cap
-   Fixes v36.2.2 where literal \n tokens before the media rule made the browser discard the rule.
+   Fixes v36.2.2 where literal 
+ tokens before the media rule made the browser discard the rule.
    The desktop hero is now explicitly bounded; TV/touch layouts are untouched. */
 @media (min-width:1180px) and (pointer:fine) {
   .desktop362Lead{align-items:start}
@@ -1697,4 +1698,62 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
   }
   .desktop362Hero>div{position:relative;z-index:1}
 }
-\n\n/* v36.2.5 — Desktop Hero Artwork Composition\n   Prefer true landscape backdrops. Portrait-only artwork gets an intentional\n   blurred ambient fill plus a framed poster, instead of a tiny contained image. */\n@media (min-width:1180px) and (pointer:fine) {\n  .desktop362Hero{isolation:isolate;background-color:#07111a!important;background-repeat:no-repeat!important}\n  .desktop362Hero--backdrop{\n    background-image:linear-gradient(90deg,rgba(4,11,17,.94) 0%,rgba(4,11,17,.68) 43%,rgba(4,11,17,.12) 78%),linear-gradient(0deg,rgba(4,11,17,.55),transparent 64%),var(--desktop362-art)!important;\n    background-size:100% 100%,100% 100%,cover!important;\n    background-position:center,center,center 34%!important;\n  }\n  .desktop362Hero--poster{\n    background-image:linear-gradient(90deg,rgba(4,11,17,.96) 0%,rgba(4,11,17,.76) 48%,rgba(4,11,17,.42) 100%),var(--desktop362-art)!important;\n    background-size:100% 100%,cover!important;\n    background-position:center,center 34%!important;\n  }\n  .desktop362Hero--poster:before{content:"";position:absolute;inset:0;z-index:0;background:rgba(4,11,17,.30);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}\n  .desktop362HeroPoster{position:absolute;z-index:1;right:22px;top:14px;height:calc(100% - 28px);width:auto;max-width:185px;object-fit:cover;border-radius:12px;box-shadow:0 16px 38px rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.14)}\n  .desktop362Hero--poster>div{max-width:calc(100% - 225px)!important}\n  .desktop362Hero--none{background-image:linear-gradient(120deg,#0b2130,#07111a)!important}\n  .desktop362Hero::after{background:linear-gradient(90deg,rgba(4,11,17,.52) 0%,rgba(4,11,17,.18) 48%,transparent 76%)!important}\n  .desktop362Hero>div{z-index:2!important}\n}\n@media (min-width:1180px) and (pointer:fine) and (max-height:800px){\n  .desktop362HeroPoster{right:18px;top:10px;height:calc(100% - 20px);max-width:155px}\n  .desktop362Hero--poster>div{max-width:calc(100% - 190px)!important}\n}\n
+
+/* v36.2.6 — Desktop Hero Composition Fix
+   Landscape artwork is full-bleed. Portrait-only artwork is shown once as a
+   clean poster on the right — never duplicated/zoomed as a background. */
+@media (min-width:1180px) and (pointer:fine) {
+  .desktop362Hero{
+    isolation:isolate;
+    position:relative;
+    overflow:hidden;
+    background-color:#07111a!important;
+    background-repeat:no-repeat!important;
+  }
+  .desktop362Hero--backdrop{
+    background-image:
+      linear-gradient(90deg,rgba(4,11,17,.93) 0%,rgba(4,11,17,.72) 36%,rgba(4,11,17,.25) 68%,rgba(4,11,17,.08) 100%),
+      linear-gradient(0deg,rgba(4,11,17,.50),transparent 70%),
+      var(--desktop362-art)!important;
+    background-size:100% 100%,100% 100%,cover!important;
+    background-position:center,center,center 38%!important;
+  }
+  .desktop362Hero--poster{
+    background-image:
+      radial-gradient(circle at 86% 50%,rgba(39,119,166,.20),transparent 28%),
+      linear-gradient(110deg,#07111a 0%,#091a26 60%,#0b2230 100%)!important;
+    background-size:100% 100%,100% 100%!important;
+    background-position:center!important;
+  }
+  .desktop362Hero--poster::before{
+    content:"";
+    position:absolute;
+    z-index:0;
+    right:0;top:0;bottom:0;
+    width:34%;
+    background:linear-gradient(90deg,#07111a 0%,rgba(7,17,26,.22) 36%,rgba(7,17,26,0) 100%);
+    pointer-events:none;
+  }
+  .desktop362HeroPoster{
+    position:absolute;
+    z-index:1;
+    right:24px;
+    top:14px;
+    height:calc(100% - 28px);
+    width:auto;
+    max-width:170px;
+    object-fit:cover;
+    object-position:center;
+    border-radius:10px;
+    box-shadow:0 16px 38px rgba(0,0,0,.48);
+    border:1px solid rgba(255,255,255,.12);
+  }
+  .desktop362Hero--poster>div{max-width:calc(100% - 215px)!important}
+  .desktop362Hero--none{background-image:linear-gradient(120deg,#0b2130,#07111a)!important}
+  .desktop362Hero::after{display:none!important}
+  .desktop362Hero>div{position:relative;z-index:2!important}
+}
+@media (min-width:1180px) and (pointer:fine) and (max-height:800px){
+  .desktop362HeroPoster{right:20px;top:10px;height:calc(100% - 20px);max-width:145px}
+  .desktop362Hero--poster>div{max-width:calc(100% - 180px)!important}
+}
