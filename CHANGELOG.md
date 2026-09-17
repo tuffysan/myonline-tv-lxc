@@ -1,3 +1,10 @@
+# v36.5.7 — Release Asset Upload Fix
+
+- Removes the custom release-ID / `uploads.github.com` asset-upload implementation.
+- Uses the supported `gh release create TAG files...` flow so GitHub CLI handles draft creation, asset upload and publication as one release operation.
+- Verifies the public release and all four mandatory non-empty assets after creation.
+- Keeps the v36.5.6 Mobile & Tablet Scroll Fix unchanged.
+
 # v36.5.6 — Mobile & Tablet Scroll Fix
 
 - Restores reliable vertical touch scrolling on mobile and tablet layouts.

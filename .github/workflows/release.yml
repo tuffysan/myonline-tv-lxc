@@ -172,72 +172,48 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           APP="myonline-tv-web-v${VERSION}-linux-x64.tar.gz"
           SRC="myonline-tv-lxc-v${VERSION}-source.tar.gz"
-          API="repos/${GITHUB_REPOSITORY}"
 
-          # Resolve a previous draft/public release when rerunning. New releases are
-          # created directly through REST so GitHub returns the numeric release ID.
-          RELEASE_ID="$(gh api --paginate "${API}/releases?per_page=100" \
-            --jq ".[] | select(.tag_name == \"${TAG}\") | .id" | head -1)"
-
-          if [[ -z "${RELEASE_ID}" ]]; then
-            RELEASE_JSON="$(gh api --method POST "${API}/releases" \
-              -f tag_name="${TAG}" \
-              -f target_commitish="${GITHUB_SHA}" \
-              -f name="${TAG}" \
-              -F draft=true \
-              -F prerelease=false \
-              -F generate_release_notes=true)"
-            RELEASE_ID="$(jq -r '.id // empty' <<<"${RELEASE_JSON}")"
-          else
-            gh api --method PATCH "${API}/releases/${RELEASE_ID}" \
-              -F draft=true -F prerelease=false >/dev/null
-          fi
-
-          if [[ -z "${RELEASE_ID}" ]]; then
-            echo "::error::Could not create/resolve GitHub Release ID for ${TAG}."
-            exit 1
-          fi
-          echo "Release ID: ${RELEASE_ID}"
-
-          # Upload by numeric release ID, never by tag/draft URL. Delete any same-name
-          # asset first so a rerun is deterministic.
+          # GitHub CLI has a supported atomic path for this exact operation:
+          # when files are supplied to `gh release create`, it creates a draft,
+          # uploads every asset, and publishes only after the uploads succeed.
+          # Do not manually call uploads.github.com or try to resolve draft IDs.
           for f in "${APP}" "${SRC}" SHA256SUMS-RELEASE.txt release.json; do
             test -s "${f}"
-            OLD_ID="$(gh api "${API}/releases/${RELEASE_ID}/assets?per_page=100" \
-              --jq ".[] | select(.name == \"${f}\") | .id" | head -1)"
-            if [[ -n "${OLD_ID}" ]]; then
-              gh api --method DELETE "${API}/releases/assets/${OLD_ID}"
-            fi
-            curl --fail-with-body --silent --show-error --location \
-              -X POST \
-              -H "Accept: application/vnd.github+json" \
-              -H "Authorization: Bearer ${GH_TOKEN}" \
-              -H "X-GitHub-Api-Version: 2026-03-10" \
-              -H "Content-Type: application/octet-stream" \
-              --data-binary "@${f}" \
-              "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?name=${f}" \
-              | jq -e --arg name "${f}" '.name == $name and .state == "uploaded" and .size > 0' >/dev/null
           done
 
-          # Verify the complete asset set from GitHub before publication.
+          # Refuse to overwrite an already published release. A normal versioned
+          # publish should always use a new tag/version.
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "::error::A GitHub Release already exists for ${TAG}; refusing to replace it."
+            exit 1
+          fi
+
+          gh release create "${TAG}" \
+            "${APP}" \
+            "${SRC}" \
+            SHA256SUMS-RELEASE.txt \
+            release.json \
+            --verify-tag \
+            --generate-notes \
+            --title "${TAG}" \
+            --latest
+
+          # Verify the public release and its exact mandatory asset set.
+          RELEASE_JSON="$(gh release view "${TAG}" --json tagName,isDraft,isPrerelease,url,assets)"
+          jq -e --arg tag "${TAG}" \
+            '.tagName == $tag and .isDraft == false and .isPrerelease == false' \
+            <<<"${RELEASE_JSON}" >/dev/null
+
           for f in "${APP}" "${SRC}" SHA256SUMS-RELEASE.txt release.json; do
-            SIZE="$(gh api "${API}/releases/${RELEASE_ID}/assets?per_page=100" \
-              --jq ".[] | select(.name == \"${f}\") | .size" | head -1)"
-            if [[ -z "${SIZE}" || "${SIZE}" -le 0 ]]; then
-              echo "::error::Mandatory GitHub Release asset missing or empty: ${f}"
+            SIZE="$(jq -r --arg name "${f}" '.assets[] | select(.name == $name) | .size' <<<"${RELEASE_JSON}" | head -1)"
+            if [[ -z "${SIZE}" || "${SIZE}" == "null" || "${SIZE}" -le 0 ]]; then
+              echo "::error::Mandatory GitHub Release asset missing or empty after publication: ${f}"
               exit 1
             fi
             echo "Verified GitHub asset: ${f} (${SIZE} bytes)"
           done
 
-          # Only a fully verified release becomes public and Latest.
-          gh api --method PATCH "${API}/releases/${RELEASE_ID}" \
-            -F draft=false \
-            -F prerelease=false \
-            -f make_latest=true >/dev/null
-
-          gh api "${API}/releases/${RELEASE_ID}" \
-            --jq '{tag_name: .tag_name, draft: .draft, prerelease: .prerelease, html_url: .html_url, assets: [.assets[].name]}'
+          jq '{tagName, isDraft, isPrerelease, url, assets: [.assets[].name]}' <<<"${RELEASE_JSON}"
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
