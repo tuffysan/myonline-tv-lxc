@@ -1618,3 +1618,37 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
   .desktop362LiveRail{grid-auto-columns:185px}
   .desktop362Live{min-height:84px}
 }
+\n\n/* v36.2.2 — Laptop Home Density Fix
+   The v36.2.1 rule used min-height, so a long Continue Watching hero title
+   could still grow the hero to several hundred extra pixels. Laptop uses a
+   bounded hero and compact rails; large desktop and TV remain unchanged. */
+@media (min-width:1180px) and (pointer:fine) and (max-height:950px) {
+  .desktop362Lead{align-items:start}
+  .desktop362Hero{height:280px;min-height:0;max-height:280px;align-items:end}
+  .desktop362Hero>div{padding:20px 24px;max-width:58%;max-height:100%;overflow:hidden}
+  .desktop362Hero h1{font-size:clamp(1.85rem,2.7vw,2.8rem);line-height:.98;margin:.12em 0 .22em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .desktop362Hero p{font-size:.9rem;line-height:1.3;margin:.35rem 0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .desktop362Hero nav{margin-top:10px}
+  .desktop362Hero nav .btn{min-height:36px;padding:7px 11px}
+  .desktop362Side{height:280px;overflow:auto}
+  .desktop362Section{margin-top:12px}
+  .desktop362Section>header{margin-bottom:6px}
+  .desktop362Rail{grid-auto-columns:180px;gap:8px;padding-bottom:5px}
+  .desktop362Card{min-width:180px}
+  .desktop362CardMain>img,.desktop362CardMain>.posterPlaceholder{height:96px;max-height:96px;aspect-ratio:auto;object-fit:cover}
+  .desktop362CardMain>span{padding:5px 7px;font-size:.82rem;line-height:1.15}
+  .desktop362CardMain small{font-size:.72rem}
+  .desktop362Progress{height:3px;margin-top:4px}
+  .desktop362LiveRail{grid-auto-columns:190px}
+  .desktop362Live{min-height:78px;padding:8px}
+  .desktop362Live img{width:38px;height:38px}
+}
+@media (min-width:1180px) and (pointer:fine) and (max-height:800px) {
+  .desktop362Hero,.desktop362Side{height:230px;max-height:230px}
+  .desktop362Hero>div{padding:16px 20px}
+  .desktop362Hero h1{font-size:clamp(1.65rem,2.35vw,2.35rem)}
+  .desktop362Hero p{display:none}
+  .desktop362Rail{grid-auto-columns:165px}
+  .desktop362Card{min-width:165px}
+  .desktop362CardMain>img,.desktop362CardMain>.posterPlaceholder{height:88px;max-height:88px}
+}

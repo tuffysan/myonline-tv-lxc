@@ -1,3 +1,10 @@
+## v36.2.2 – Laptop Home Density Fix
+- Fixes oversized Continue Watching hero on laptop: hero now has a bounded height instead of min-height.
+- Caps long hero titles to two lines and descriptions to two lines.
+- Continue Watching cards use a compact 16:9 thumbnail height on laptop.
+- Compresses Live Now and section spacing on short laptop viewports.
+- TV and large-screen desktop layouts are unchanged.
+
 # v36.2.1 — Laptop Layout Fix
 
 - Compact laptop-specific Desktop Home layout for common 1366×768 and 1920×1080 browser viewports.
