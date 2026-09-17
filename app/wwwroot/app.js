@@ -61,59 +61,68 @@ function updateResponsiveMode(){
   document.body.dataset.clientMode=w<720?'mobile':w<1180?'tablet':likelyTenFoot?'tv':'desktop';
 }
 
+const navigationIcons={home:'⌂',live:'▣',guide:'▤',movies:'▶',series:'▦',plex:'◆',jellyfin:'◇',downloads:'↓',recordings:'●',notifications:'●',rooms:'▣',library:'▦',search:'⌕',sources:'⚙',platform:'◆',diagnostics:'✓',appliance:'⚙',system:'◉',completion:'✓',update:'↑',admin:'🛡'};
+
+function navigationItemVisible(view){
+  const desktop=document.querySelector(`aside nav button[data-view="${view}"]`);
+  if(!desktop)return false;
+  if(desktop.classList.contains('hidden')||desktop.classList.contains('navConfigHidden'))return false;
+  if(desktop.hasAttribute('data-admin-only')&&authState.role!=='Admin')return false;
+  return viewAllowed(view);
+}
+function configuredNavigationViews(){
+  const configured=(navigationConfig?.items||[])
+    .filter(x=>x.enabled!==false)
+    .sort((a,b)=>(Number.isFinite(a.order)?a.order:999)-(Number.isFinite(b.order)?b.order:999))
+    .map(x=>x.id);
+  const dom=[...document.querySelectorAll('aside nav button[data-view]')].map(x=>x.dataset.view);
+  return [...new Set([...configured,...dom])].filter(navigationItemVisible);
+}
 function renderMobileNavigation(){
   const host=$('#mobileBottomNav');
   if(!host)return;
-  const primary=[
-    ['home','⌂','Home'],
-    ['live','▣','Live'],
-    ['guide','▤','Guide'],
-    ['movies','▶','Movies']
-  ];
-  host.innerHTML=primary.map(([view,icon,label])=>`<button data-mobile-view="${view}" class="${currentView===view?'active':''}"><span>${icon}</span><small>${label}</small></button>`).join('')+
-    `<button id=mobileMoreButton class="${['series','plex','jellyfin','downloads','recordings','sources','system','admin'].includes(currentView)?'active':''}"><span>•••</span><small>More</small></button>`;
+  const available=configuredNavigationViews();
+  const preferred=['home','live','guide','movies'];
+  const primary=preferred.filter(x=>available.includes(x));
+  for(const view of available){if(primary.length>=4)break;if(!primary.includes(view))primary.push(view)}
+  const moreViews=available.filter(x=>!primary.includes(x));
+  host.innerHTML=primary.map(view=>`<button data-mobile-view="${view}" class="${currentView===view?'active':''}" aria-label="${escAttr(navigationLabels[view]||view)}"><span>${navigationIcons[view]||'•'}</span><small>${esc(navigationLabels[view]||view)}</small></button>`).join('')+
+    `<button id="mobileMoreButton" class="${moreViews.includes(currentView)?'active':''}" aria-label="More"><span>•••</span><small>More</small></button>`;
   host.querySelectorAll('[data-mobile-view]').forEach(b=>b.onclick=()=>show(b.dataset.mobileView));
   $('#mobileMoreButton').onclick=toggleMobileMore;
+  updateNavigationChrome();
 }
-
 function toggleMobileMore(){
   const sheet=$('#mobileMoreSheet');
   if(!sheet)return;
   const open=sheet.classList.contains('hidden');
-  if(!open){sheet.classList.add('hidden');sheet.setAttribute('aria-hidden','true');document.body.classList.remove('mobileSheetOpen');return}
-  const items=[
-    ['series','▦','Series'],
-    ['search','⌕','Search'],
-    ['plex','◆','Plex'],
-    ['jellyfin','◇','Jellyfin'],
-    ['downloads','↓','Downloads'],
-    ['recordings','●','DVR'],
-    ['sources','⚙','My Sources'],
-    ['system','◉','System'],
-    ['completion','✓','Completion'],
-    ['admin','🛡','Admin']
-  ];
-  sheet.innerHTML=`<div class=mobileMoreHandle></div><div class=mobileMoreGrid>${
-    items.map(([view,icon,label])=>{
-      const desktop=document.querySelector(`nav button[data-view="${view}"]`);
-      if(desktop?.classList.contains('hidden'))return '';
-      if((view==='system'||view==='completion'||view==='admin')&&authState.role!=='Admin')return '';
-      return `<button data-more-view="${view}"><span>${icon}</span><b>${label}</b></button>`;
-    }).join('')
+  if(!open){closeMobileMore();return}
+  const primary=[...document.querySelectorAll('#mobileBottomNav [data-mobile-view]')].map(x=>x.dataset.mobileView);
+  const items=configuredNavigationViews().filter(view=>!primary.includes(view));
+  sheet.innerHTML=`<div class="mobileMoreHandle"></div><div class="mobileMoreGrid">${
+    items.map(view=>`<button data-more-view="${view}" class="${currentView===view?'active':''}"><span>${navigationIcons[view]||'•'}</span><b>${esc(navigationLabels[view]||view)}</b></button>`).join('')
   }</div>`;
   sheet.classList.remove('hidden');
   sheet.setAttribute('aria-hidden','false');
   document.body.classList.add('mobileSheetOpen');
-  sheet.querySelectorAll('[data-more-view]').forEach(b=>b.onclick=()=>{sheet.classList.add('hidden');show(b.dataset.moreView)});
+  sheet.querySelectorAll('[data-more-view]').forEach(b=>b.onclick=()=>{closeMobileMore();show(b.dataset.moreView)});
+}
+function closeMobileMore(){
+  const sheet=$('#mobileMoreSheet');if(!sheet)return;
+  sheet.classList.add('hidden');sheet.setAttribute('aria-hidden','true');document.body.classList.remove('mobileSheetOpen');
+}
+function updateNavigationChrome(){
+  document.querySelectorAll('aside nav button[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===currentView));
+  const back=$('#mobileBackButton'), page=$('#mobilePageTitle');
+  if(back)back.classList.toggle('hidden',currentView==='home');
+  if(page)page.textContent=navigationLabels[currentView]||title?.textContent||currentView;
 }
 
 window.addEventListener('keydown',e=>{
   if(e.key!=='Escape')return;
   const sheet=$('#mobileMoreSheet');
   if(sheet&&!sheet.classList.contains('hidden')){
-    sheet.classList.add('hidden');
-    sheet.setAttribute('aria-hidden','true');
-    document.body.classList.remove('mobileSheetOpen');
+    closeMobileMore();
   }
 });
 window.addEventListener('resize',debounce(()=>{updateResponsiveMode();renderMobileNavigation()},120));
@@ -149,6 +158,7 @@ function applyNavigationConfig(){
  const n=document.querySelector('aside nav')||document.querySelector('nav');
  if(n&&items.length){const o=new Map(items.map((x,i)=>[x.id,Number.isFinite(x.order)?x.order:i]));[...n.querySelectorAll('button[data-view]')].sort((a,b)=>(o.get(a.dataset.view)??999)-(o.get(b.dataset.view)??999)).forEach(b=>n.appendChild(b))}
  renderMobileNavigation();
+ updateNavigationChrome();
 }
 async function saveNavigationManager(){
  const rows=[...document.querySelectorAll('#navigationManager [data-nav-id]')].map((r,i)=>({id:r.dataset.navId,enabled:r.querySelector('input[type=checkbox]').checked,order:i}));
@@ -345,12 +355,28 @@ async function refreshMediaLibraryNav(){
   renderMediaLibraryNav();
 }
 
-async function show(v){
+const viewHistory=[];
+function navigateBack(){
+  closeMobileMore();
+  while(viewHistory.length){
+    const previous=viewHistory.pop();
+    if(previous&&previous!==currentView){show(previous,{fromHistory:true});return}
+  }
+  if(currentView!=='home')show('home',{fromHistory:true});
+}
+const mobileBack=$('#mobileBackButton');if(mobileBack)mobileBack.onclick=navigateBack;
+
+async function show(v,opt={}){
   if(!viewAllowed(v)){v='home'}
+  if(!opt.fromHistory&&currentView&&currentView!==v){
+    if(viewHistory[viewHistory.length-1]!==currentView)viewHistory.push(currentView);
+    if(viewHistory.length>24)viewHistory.shift();
+  }
   currentView=v;destroyPlayer();
   renderMobileNavigation();
-  const moreSheet=$('#mobileMoreSheet');if(moreSheet){moreSheet.classList.add('hidden');moreSheet.setAttribute('aria-hidden','true');document.body.classList.remove('mobileSheetOpen')}
+  closeMobileMore();
   title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'Recordings',platform:'Platform','profile-sync':'Profile Sync',diagnostics:'Diagnostics',appliance:'Appliance',notifications:'Notifications',rooms:'Rooms',library:'Library',search:'Search',sources:'My Sources',system:'System',completion:'Feature Completion',update:'System Update',admin:'Admin'})[v]||v;
+  updateNavigationChrome();
   if(v==='home')await home();
   if(v==='live')await live();
   if(v==='guide')await guide();
@@ -381,6 +407,7 @@ function applyPermissions(){
   document.querySelectorAll('nav button[data-view]').forEach(b=>{
     if(Object.prototype.hasOwnProperty.call(map,b.dataset.view))b.classList.toggle('hidden',!map[b.dataset.view]);
   });
+  renderMobileNavigation();
   if(Array.isArray(p.allowedProviderIds)&&p.allowedProviderIds.length){
     providers=providers.filter(x=>p.allowedProviderIds.includes(x.id));
     if(!providers.some(x=>x.id===currentProvider))currentProvider=providers[0]?.id||null;
@@ -2550,7 +2577,7 @@ document.addEventListener('focusin',e=>{
 document.addEventListener('keydown',e=>{
   const tag=document.activeElement?.tagName;
   const editing=tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT';
-  const remoteKey=['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Enter','Escape','Backspace'].includes(e.key);
+  const remoteKey=['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Enter','Escape','Backspace','BrowserBack'].includes(e.key);
   const coarse=window.matchMedia?.('(pointer:coarse)')?.matches===true;
   const focusedControl=document.activeElement?.matches?.('button,a[href],[tabindex],video')===true;
   const remoteEligible=document.documentElement.classList.contains('isTV')||coarse||focusedControl;
@@ -2577,10 +2604,10 @@ document.addEventListener('keydown',e=>{
   else if(e.key==='Enter'){
     if(document.activeElement?.tagName!=='VIDEO' && tvActivateFocused())e.preventDefault();
   }
-  else if((e.key==='Escape'||e.key==='Backspace')&&!document.fullscreenElement){
+  else if((e.key==='Escape'||e.key==='Backspace'||e.key==='BrowserBack')&&!document.fullscreenElement){
     const picker=$('#profilePicker');
     if(picker){picker.remove();e.preventDefault();return}
-    if(currentView!=='home'){show('home');e.preventDefault()}
+    if(currentView!=='home'){navigateBack();e.preventDefault()}
   }
 });
 

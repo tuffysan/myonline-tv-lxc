@@ -1,3 +1,8 @@
+# v38.1.0
+
+- Navigation Reliability release across phone, tablet, desktop and TV.
+- Dynamic mobile More menu, shared visibility rules, Back history, active state and scrollable side navigation.
+
 ## 38.0.0 - Core Consolidation
 
 - Centralized runtime product identity on the assembly version generated from `VERSION`.

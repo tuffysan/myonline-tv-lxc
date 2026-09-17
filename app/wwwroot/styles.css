@@ -1971,3 +1971,28 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
 }
 /* v37.0.0 Library Management */
 .libraryMgmtTabs{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.libraryMgmtTabs button{border:1px solid rgba(255,255,255,.12);background:#0d1b27;color:inherit;border-radius:10px;padding:10px 14px}.libraryMgmtTabs button.active{background:#19354b}.lmGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}.lmGroupCard{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:14px;display:grid;gap:12px}.lmTitle{display:flex;justify-content:space-between;gap:12px}.lmTitle small{display:block;color:var(--muted);margin-top:4px}.lmQualities{display:flex;flex-wrap:wrap;gap:10px}.lmTable{display:grid;gap:5px;margin-top:12px;max-height:65vh;overflow:auto}.lmChannelRow{display:grid;grid-template-columns:28px 36px minmax(160px,1fr) minmax(120px,.6fr) 70px;gap:8px;align-items:center;padding:7px 9px;border-bottom:1px solid rgba(255,255,255,.06)}.lmChannelRow img{width:30px;height:24px;object-fit:contain}.lmChannelRow em{font-style:normal;font-size:12px;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:2px 5px;text-align:center}.lmItems{display:grid;gap:5px;max-height:320px;overflow:auto}.lmItems label{font-size:13px}@media(max-width:719px){.lmGrid{grid-template-columns:1fr}.lmChannelRow{grid-template-columns:24px 30px 1fr 56px}.lmChannelRow small{display:none}.libraryMgmtTabs{overflow-x:auto;flex-wrap:nowrap}.libraryMgmtTabs button{white-space:nowrap}}
+
+
+/* v38.1.0 Navigation Reliability */
+.navConfigHidden{display:none!important}
+aside{min-height:0}
+aside nav{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+aside nav button.active{background:#183f5a;border-color:#4aa8df;box-shadow:inset 3px 0 0 var(--accent)}
+.mobileBackButton{display:none;width:38px;height:38px;min-width:38px;border-radius:999px;border:1px solid var(--line);background:#10283a;color:#fff;font-size:1.8rem;line-height:1;place-items:center;cursor:pointer}
+.mobileBrandText{min-width:0}
+#mobilePageTitle{display:block;max-width:48vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.65;font-size:.70rem}
+.mobileMoreGrid button.active{outline:2px solid var(--accent);background:#143149}
+@media(max-width:719px){
+  .mobile364HeaderBrand{display:flex;align-items:center;gap:8px}
+  .mobileBackButton:not(.hidden){display:grid}
+}
+@media(min-width:720px) and (max-width:1179px){
+  html.isTablet:not(.isTV) .mobile364HeaderBrand{display:flex!important;align-items:center;gap:8px}
+  html.isTablet:not(.isTV) .mobileBackButton:not(.hidden){display:grid!important}
+}
+@media(min-width:1180px){
+  aside nav{max-height:calc(100vh - 150px)}
+}
+@media(min-width:1280px) and (pointer:coarse){
+  aside nav button{scroll-margin-block:18px}
+}
