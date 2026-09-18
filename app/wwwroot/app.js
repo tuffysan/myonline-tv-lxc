@@ -4864,3 +4864,21 @@ addEventListener('resize',()=>DeviceExperience.detect());
 addEventListener('pointerdown',e=>{DeviceExperience.input=e.pointerType==='touch'?'touch':'mouse';document.documentElement.dataset.inputMode=DeviceExperience.input});
 addEventListener('keydown',()=>{if(DeviceExperience.mode==='tv')DeviceExperience.input='remote';else DeviceExperience.input='keyboard';document.documentElement.dataset.inputMode=DeviceExperience.input});
 document.addEventListener('DOMContentLoaded',()=>DeviceExperience.detect(),{once:true});
+
+
+
+// v38.9.0 Simple Home
+async function buildSimpleHome(){
+  const host=document.querySelector('#home,#homeView,[data-view="home"]'); if(!host)return;
+  let cont=[];try{cont=await api('/api/continue')}catch{}
+  const favs=loadMyStuff?.()?.filter?.(x=>x.kind==='favorite')||[];
+  const recent=(()=>{try{return JSON.parse(localStorage.getItem('myonline-recent')||'[]')}catch{return []}})();
+  const row=(title,items,empty)=>`<section class=simpleHomeRow><div class=sectionHead><h2>${esc(title)}</h2></div><div class=homeRail>${items.slice(0,12).map(x=>`<button class=homeTile onclick="openQuickActions(${JSON.stringify({name:x.name||x.title||'Item'}).replace(/"/g,'&quot;')})"><b>${esc(x.name||x.title||'Untitled')}</b><small>${esc(x.subtitle||x.group||'')}</small></button>`).join('')||`<span class=muted>${empty}</span>`}</div></section>`;
+  const panel=document.createElement('div');panel.id='simpleHome';panel.innerHTML=
+    row('Continue Watching',cont,'Start watching something and it will appear here.')+
+    row('Favorites',favs,'Add favorites from Live TV, Movies or Series.')+
+    row('Recently Watched',recent,'Your recent items will appear here.')+
+    `<section class=simpleHomeShortcuts><button onclick="show('live')">Live now</button><button onclick="show('guide')">Guide</button><button onclick="show('movies')">Movies</button><button onclick="show('series')">Series</button><button onclick="show('mystuff')">My Stuff</button><button onclick="show('search')">Search</button></section>`;
+  host.prepend(panel);
+}
+document.addEventListener('DOMContentLoaded',()=>setTimeout(buildSimpleHome,400),{once:true});

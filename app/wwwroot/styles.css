@@ -2055,3 +2055,13 @@ button,a,input,select,[tabindex]{min-height:var(--tap-target)}
 .adaptiveActionSheet{background:var(--panel,#151922);padding:18px;border-radius:18px 18px 0 0;width:min(680px,100%);max-height:80vh;overflow:auto}
 .adaptiveActionMenu.desktop{align-items:center}.adaptiveActionMenu.desktop .adaptiveActionSheet{border-radius:18px;width:min(520px,90vw)}
 [data-device-mode="tv"] .adaptiveActionSheet{font-size:1.2rem}
+
+
+
+/* v38.9 Simple Home */
+.simpleHomeRow{margin:18px 0}.homeRail{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(170px,22%);gap:12px;overflow-x:auto;scroll-snap-type:x proximity;padding:4px 2px 12px}
+.homeTile{scroll-snap-align:start;text-align:left;border:1px solid var(--border,#303747);border-radius:14px;background:var(--panel2,#111827);padding:16px;min-height:110px}
+.homeTile b,.homeTile small{display:block}.homeTile small{color:var(--muted);margin-top:7px}
+.simpleHomeShortcuts{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:20px 0}.simpleHomeShortcuts button{border-radius:14px}
+@media(max-width:700px){.homeRail{grid-auto-columns:72%}.simpleHomeShortcuts{grid-template-columns:repeat(3,1fr)}}
+[data-device-mode="tv"] .homeRail{grid-auto-columns:24%}
