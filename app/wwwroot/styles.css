@@ -2044,3 +2044,14 @@ html.isTV button,html.isTV a,html.isTV [tabindex="0"]{scroll-margin:28px}
 .iptvHelp{margin-top:18px}
 @media(max-width:850px){.iptvStats,.iptvDashboard{grid-template-columns:repeat(2,minmax(0,1fr))}.iptvRuleBuilder{grid-template-columns:1fr 1fr}.iptvRuleBuilder input{grid-column:1/-1}.iptvManagerHead{flex-direction:column}}
 @media(max-width:520px){.iptvStats,.iptvDashboard{grid-template-columns:1fr 1fr}.iptvFilterToolbar>*{max-width:100%}.iptvFilterToolbar input{width:100%}.iptvRuleBuilder{grid-template-columns:1fr}.iptvRuleBuilder input{grid-column:auto}}
+
+
+/* v38.8 Device Experience Engine */
+:root{--tap-target:44px;--focus-ring:3px}
+[data-device-mode="mobile"]{--tap-target:48px}[data-device-mode="tv"]{--tap-target:56px;--focus-ring:4px}
+button,a,input,select,[tabindex]{min-height:var(--tap-target)}
+[data-input-mode="remote"] :focus-visible,[data-input-mode="keyboard"] :focus-visible{outline:var(--focus-ring) solid currentColor;outline-offset:3px}
+.adaptiveActionMenu{position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:flex-end;justify-content:center}
+.adaptiveActionSheet{background:var(--panel,#151922);padding:18px;border-radius:18px 18px 0 0;width:min(680px,100%);max-height:80vh;overflow:auto}
+.adaptiveActionMenu.desktop{align-items:center}.adaptiveActionMenu.desktop .adaptiveActionSheet{border-radius:18px;width:min(520px,90vw)}
+[data-device-mode="tv"] .adaptiveActionSheet{font-size:1.2rem}

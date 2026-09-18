@@ -4836,3 +4836,31 @@ function liveConnectionMessage(error){
   if(msg.includes('network')||msg.includes('fetch'))return 'The TV provider cannot be reached right now.';
   return 'Live TV is temporarily unavailable.';
 }
+
+
+// v38.8.0 Device Experience Engine
+const DeviceExperience={
+  mode:'desktop', input:'mouse',
+  detect(){
+    const coarse=matchMedia('(pointer:coarse)').matches, hover=matchMedia('(hover:hover)').matches;
+    const tv=matchMedia('(min-width:1100px)').matches && !hover && !coarse;
+    const narrow=matchMedia('(max-width:640px)').matches;
+    const tablet=coarse && matchMedia('(min-width:641px) and (max-width:1180px)').matches;
+    this.mode=tv?'tv':narrow?'mobile':tablet?'tablet':'desktop';
+    this.input=tv?'remote':coarse?'touch':hover?'mouse':'keyboard';
+    document.documentElement.dataset.deviceMode=this.mode;
+    document.documentElement.dataset.inputMode=this.input;
+    document.body?.classList.toggle('remoteFirst',this.mode==='tv');
+    window.dispatchEvent(new CustomEvent('deviceexperiencechange',{detail:{mode:this.mode,input:this.input}}));
+  },
+  actionMenu(anchor,html){
+    const old=document.querySelector('.adaptiveActionMenu'); if(old)old.remove();
+    const d=document.createElement('div');d.className=`adaptiveActionMenu ${this.mode}`;
+    d.innerHTML=`<div class=adaptiveActionSheet role=dialog aria-modal=true>${html}<button class=btn onclick="this.closest('.adaptiveActionMenu').remove()">Close</button></div>`;
+    document.body.appendChild(d); d.querySelector('button,[tabindex]')?.focus();
+  }
+};
+addEventListener('resize',()=>DeviceExperience.detect());
+addEventListener('pointerdown',e=>{DeviceExperience.input=e.pointerType==='touch'?'touch':'mouse';document.documentElement.dataset.inputMode=DeviceExperience.input});
+addEventListener('keydown',()=>{if(DeviceExperience.mode==='tv')DeviceExperience.input='remote';else DeviceExperience.input='keyboard';document.documentElement.dataset.inputMode=DeviceExperience.input});
+document.addEventListener('DOMContentLoaded',()=>DeviceExperience.detect(),{once:true});
