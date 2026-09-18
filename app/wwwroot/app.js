@@ -1364,8 +1364,8 @@ function renderGuide(start,hours){
   const by=new Map();epg.forEach(x=>{if(!by.has(x.channel))by.set(x.channel,[]);by.get(x.channel).push(x)});
   const rows=channels.filter(c=>!isChannelHidden(c)&&by.has(c.id)).slice(0,180);
   const ticks=[];for(let d=new Date(start);d<end;d=new Date(d.getTime()+3600000))ticks.push(d);
-  content.innerHTML=`<div class="guideHeader"><div><span class=kicker>TV GUIDE</span><h2>Programme guide</h2></div><div class=toolbar>${providerSelect()}<button class="btn ${guideWindow==='now'?'activeBtn':''}" onclick="guideWindow='now';guide()">Now</button><button class="btn ${guideWindow==='tonight'?'activeBtn':''}" onclick="guideWindow='tonight';guide()">Tonight</button><button class="btn ${guideWindow==='tomorrow'?'activeBtn':''}" onclick="guideWindow='tomorrow';guide()">Tomorrow</button><button class=btn id=guideNow>◎ Now</button><button class=btn id=refreshGuide>↻ Refresh</button></div></div><div id=playerWrap></div><div class="timelineWrap premiumGuide"><div class=timelineHead><div class=channelHead>Channel</div><div class=timeAxis style="grid-template-columns:repeat(${ticks.length},1fr)">${ticks.map(x=>`<span>${x.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>`).join('')}</div></div><div class=timeline>${rows.map(c=>timelineRowV319(c,by.get(c.id)||[],start,end,span)).join('')}</div></div>`;
-  $('#provider').onchange=async e=>{currentProvider=e.target.value;await guide()};$('#refreshGuide').onclick=guide;$('#guideNow').onclick=scrollGuideToNow;setTimeout(()=>{if(guideWindow==='now')scrollGuideToNow()},80);
+  content.innerHTML=`<div class="guideHeader"><div><span class=kicker>TV GUIDE</span><h2>Programme guide</h2></div><div class=toolbar>${providerSelect()}<button class="btn ${guideWindow==='now'?'activeBtn':''}" onclick="guideWindow='now';guide()">Now</button><button class="btn ${guideWindow==='tonight'?'activeBtn':''}" onclick="guideWindow='tonight';guide()">Tonight</button><button class="btn ${guideWindow==='tomorrow'?'activeBtn':''}" onclick="guideWindow='tomorrow';guide()">Tomorrow</button><button class=btn id=guideFavs>★ Favorites</button><button class=btn id=guideNow>◎ Now</button><button class=btn id=refreshGuide>↻ Refresh</button></div></div><div id=playerWrap></div><div class="timelineWrap premiumGuide"><div class=timelineHead><div class=channelHead>Channel</div><div class=timeAxis style="grid-template-columns:repeat(${ticks.length},1fr)">${ticks.map(x=>`<span>${x.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>`).join('')}</div></div><div class=timeline>${rows.map(c=>timelineRowV319(c,by.get(c.id)||[],start,end,span)).join('')}</div></div>`;
+  $('#provider').onchange=async e=>{currentProvider=e.target.value;await guide()};$('#refreshGuide').onclick=guide;$('#guideNow').onclick=scrollGuideToNow;$('#guideFavs').onclick=toggleGuideFavoritesOnly;applyGuideFavoritesFilter();setTimeout(()=>{if(guideWindow==='now')scrollGuideToNow()},80);
 }
 function timelineRowV319(c,progs,start,end,span){
   const nowPct=(Date.now()-start.getTime())/span*100;
@@ -4662,3 +4662,33 @@ function installGlobalSearchShortcut(){
   });
 }
 installGlobalSearchShortcut();
+
+
+// v38.5.0 - Live TV & Guide Experience
+let guideFavoritesOnly=false;
+function toggleGuideFavoritesOnly(){
+  guideFavoritesOnly=!guideFavoritesOnly;
+  const b=document.getElementById('guideFavs');if(b)b.classList.toggle('activeBtn',guideFavoritesOnly);
+  applyGuideFavoritesFilter();
+}
+function applyGuideFavoritesFilter(){
+  const b=document.getElementById('guideFavs');if(b)b.classList.toggle('activeBtn',guideFavoritesOnly);
+  if(!guideFavoritesOnly){document.querySelectorAll('.timeline>*,.timelineRow').forEach(x=>x.style.display='');return}
+  let fav=new Set();
+  try{fav=new Set(JSON.parse(localStorage.getItem('favorites')||'[]').map(String))}catch{}
+  document.querySelectorAll('.timeline>*,.timelineRow').forEach(row=>{
+    const key=String(row.dataset?.channelId||row.getAttribute?.('data-channel')||'');
+    row.style.display=(!key||fav.has(key))?'':'none';
+  });
+}
+document.addEventListener('keydown',e=>{
+  if(currentView!=='guide')return;
+  if(e.key.toLowerCase()==='n'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();guideWindow='now';guide().then(scrollGuideToNow)}
+  if(e.key.toLowerCase()==='f'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();toggleGuideFavoritesOnly()}
+});
+function liveConnectionMessage(error){
+  const msg=String(error?.message||error||'').toLowerCase();
+  if(msg.includes('timeout'))return 'Your TV provider is taking too long to respond.';
+  if(msg.includes('network')||msg.includes('fetch'))return 'The TV provider cannot be reached right now.';
+  return 'Live TV is temporarily unavailable.';
+}

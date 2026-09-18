@@ -1,3 +1,9 @@
+# v38.5.0
+
+- Improves the TV Guide with Favorites filtering and fast return to Now.
+- Adds keyboard/remote-friendly Guide shortcuts: N for Now and F for Favorites.
+- Improves Guide behavior on phones and touch devices and adds clearer Live TV connection messaging primitives.
+
 # v38.4.0
 
 - Adds Ctrl/Cmd+K global search access on desktop and keyboard devices.
