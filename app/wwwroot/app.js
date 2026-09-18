@@ -477,7 +477,7 @@ function updateDesktop363Clock(){
   dateEl.textContent=new Intl.DateTimeFormat(undefined,{weekday:'short',day:'numeric',month:'short',year:'numeric'}).format(now);
   timeEl.textContent=new Intl.DateTimeFormat(undefined,{hour:'2-digit',minute:'2-digit',hour12:false}).format(now);
 }
-setInterval(updateDesktop363Clock,15000);
+setInterval(updateDesktop363Clock,1000);
 document.addEventListener('DOMContentLoaded',updateDesktop363Clock);
 setTimeout(updateDesktop363Clock,0);
 
@@ -4663,6 +4663,23 @@ function installGlobalSearchShortcut(){
 }
 installGlobalSearchShortcut();
 
+
+
+// v38.5.0 - Live clock ticker
+function updateVisibleClocks(){
+  const now=new Date();
+  const time=new Intl.DateTimeFormat(undefined,{hour:'2-digit',minute:'2-digit',hour12:false}).format(now);
+  document.querySelectorAll('.liveClock,[data-live-clock]').forEach(el=>{
+    if(el.textContent!==time)el.textContent=time;
+  });
+  // Also keeps the header date correct across midnight without a page reload.
+  updateDesktop363Clock();
+}
+if(!window.__myOnlineLiveClockTimer){
+  window.__myOnlineLiveClockTimer=setInterval(updateVisibleClocks,1000);
+  document.addEventListener('DOMContentLoaded',updateVisibleClocks,{once:true});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)updateVisibleClocks()});
+}
 
 // v38.5.0 - Live TV & Guide Experience
 let guideFavoritesOnly=false;
