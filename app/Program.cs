@@ -2819,6 +2819,24 @@ app.MapPost("/api/catalogue-preferences/{providerId}/item", (string providerId, 
     return Results.Ok(pref);
 }).RequireAuthorization();
 
+app.MapPost("/api/catalogue-preferences/{providerId}/bulk", (string providerId, BulkCatalogueVisibilityRequest req, HttpContext ctx) =>
+{
+    if (!CanManageProviderId(ctx, providerId)) return Results.Forbid();
+    var kind = (req.Kind ?? "").Trim().ToLowerInvariant();
+    if (kind is not ("vod" or "series")) return Results.BadRequest("Kind must be vod or series.");
+    var all = LoadCataloguePreferences();
+    var pref = all.TryGetValue(providerId, out var existing) && existing is not null ? existing : new CataloguePreferences();
+    var categories = new HashSet<string>((req.HiddenCategories ?? Array.Empty<string>()).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.OrdinalIgnoreCase);
+    if (kind == "vod") pref.HiddenVodCategories = categories; else pref.HiddenSeriesCategories = categories;
+    if (req.ReplaceItems)
+    {
+        var items = new HashSet<string>((req.HiddenItems ?? Array.Empty<string>()).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.OrdinalIgnoreCase);
+        if (kind == "vod") pref.HiddenVodItems = items; else pref.HiddenSeriesItems = items;
+    }
+    all[providerId] = pref; Save(cataloguePreferencesFile, all);
+    return Results.Ok(pref);
+}).RequireAuthorization();
+
 app.MapPost("/api/catalogue-preferences/{providerId}/reset", (string providerId, CatalogueResetRequest req, HttpContext ctx) =>
 {
     if (!CanManageProviderId(ctx, providerId)) return Results.Forbid();
@@ -5121,6 +5139,7 @@ sealed class CataloguePreferences
 record CatalogueCategoryVisibilityRequest(string? Kind, string CategoryId, bool Hidden);
 record CatalogueItemVisibilityRequest(string? Kind, string ItemId, bool Hidden);
 record CatalogueResetRequest(string? Kind);
+record BulkCatalogueVisibilityRequest(string? Kind, string[]? HiddenCategories, string[]? HiddenItems, bool ReplaceItems = false);
 record ViewerProfile(string Id, string Name, bool IsKids, string Icon, string? OwnerUsername = null);
 record ViewerProfileInput(string? Id, string? Name, bool IsKids, string? Icon, string? OwnerUsername = null);
 record BulkChannelVisibilityRequest(string[]? HiddenGroups, string[]? HiddenChannels);

@@ -2028,3 +2028,19 @@ html.isTV button,html.isTV a,html.isTV [tabindex="0"]{scroll-margin:28px}
 .premiumGuide .timeline{scroll-behavior:smooth}.premiumGuide .activeBtn{outline:2px solid currentColor}
 @media(max-width:700px){.guideHeader .toolbar{overflow-x:auto;flex-wrap:nowrap;padding-bottom:6px}.guideHeader .toolbar .btn{flex:0 0 auto}}
 @media (hover:none){.premiumGuide button,.liveNowCard{min-height:48px}}
+
+/* v38.7.0 Unified IPTV Manager */
+.iptvManagerTabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;scrollbar-width:thin}
+.iptvManagerTabs .btn{flex:0 0 auto}.iptvManagerHead{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:18px}
+.iptvManagerHeadActions,.iptvFilterToolbar,.iptvPresetRow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.iptvFilterToolbar{position:sticky;top:0;z-index:2;background:var(--panel,#151922);padding:10px 0}.iptvFilterToolbar input{min-width:min(320px,100%)}
+.iptvStats,.iptvDashboard{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0 20px}
+.iptvStats>div,.iptvDashboard>button{border:1px solid var(--border,#303747);background:var(--panel2,#111827);border-radius:14px;padding:14px;text-align:left}
+.iptvStats b,.iptvDashboard b{display:block;font-size:1.45rem}.iptvStats small,.iptvDashboard small,.iptvDashboard span{display:block;color:var(--muted)}
+.iptvCategoryList{max-height:44vh;overflow:auto}.iptvCategoryRow{display:flex!important;gap:10px;align-items:center;padding:9px 8px;border-bottom:1px solid var(--border,#303747)}
+.iptvCategoryRow span{display:flex;justify-content:space-between;gap:16px;width:100%}.iptvCategoryRow small{color:var(--muted)}
+.iptvItemManager{margin-top:24px}.iptvItemStats{padding:8px 0;color:var(--muted)}.iptvRuleBuilder{display:grid;grid-template-columns:auto auto auto 1fr auto;gap:8px;margin-bottom:12px}
+.iptvExamples{display:flex;gap:8px;flex-wrap:wrap}.iptvExamples button{border:1px solid var(--border,#303747);border-radius:999px;background:transparent;color:inherit;padding:7px 12px;cursor:pointer}
+.iptvHelp{margin-top:18px}
+@media(max-width:850px){.iptvStats,.iptvDashboard{grid-template-columns:repeat(2,minmax(0,1fr))}.iptvRuleBuilder{grid-template-columns:1fr 1fr}.iptvRuleBuilder input{grid-column:1/-1}.iptvManagerHead{flex-direction:column}}
+@media(max-width:520px){.iptvStats,.iptvDashboard{grid-template-columns:1fr 1fr}.iptvFilterToolbar>*{max-width:100%}.iptvFilterToolbar input{width:100%}.iptvRuleBuilder{grid-template-columns:1fr}.iptvRuleBuilder input{grid-column:auto}}

@@ -1,3 +1,9 @@
+# v38.7.0
+
+- Unified IPTV Manager with consistent Live TV, Movies and Series visibility filtering.
+- Adds bulk filtering, search/match actions, hidden-only views, Smart Filters, presets and filter import/export.
+- Adds a bulk catalogue-preferences API for efficient Movie and Series filter updates.
+
 # v38.6.0
 
 - Live Clock: application time now updates automatically every second.

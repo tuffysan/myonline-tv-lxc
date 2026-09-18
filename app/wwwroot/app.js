@@ -2295,19 +2295,22 @@ async function openPersonalIptvEditor(id,prefetched=null){
     const p=prefetched||await api('/api/providers/'+encodeURIComponent(id)+'/edit');
     personalSourceEditorProviderId=id;currentProvider=id;
     content.innerHTML=`<div class=hero><span class=kicker>IPTV SOURCE</span><h2>Edit ${esc(p.name)}</h2><p class=muted>Change the connection and choose exactly which Live TV groups/channels, Movies and Series are visible.</p><div class=row><button class=btn onclick="sourcesView()">← My Sources</button></div></div>
-    <div class="sourceEditTabs">
-      <button class="btn active" data-source-tab=connection onclick="showPersonalSourceTab('connection',this)">Connection</button>
+    <div class="sourceEditTabs iptvManagerTabs">
+      <button class="btn active" data-source-tab=overview onclick="showPersonalSourceTab('overview',this)">Overview</button>
+      <button class=btn data-source-tab=connection onclick="showPersonalSourceTab('connection',this)">Connection</button>
       <button class=btn data-source-tab=live onclick="showPersonalSourceTab('live',this)">Live TV</button>
-      ${p.type==='xtream'?`<button class=btn data-source-tab=vod onclick="showPersonalSourceTab('vod',this)">Movies</button><button class=btn data-source-tab=series onclick="showPersonalSourceTab('series',this)">Series</button>`:''}
+      ${p.type==='xtream'?`<button class=btn data-source-tab=vod onclick="showPersonalSourceTab('vod',this)">Movies</button><button class=btn data-source-tab=series onclick="showPersonalSourceTab('series',this)">Series</button><button class=btn data-source-tab=rules onclick="showPersonalSourceTab('rules',this)">Smart Filters</button>`:''}
     </div>
     <section id=personalSourcePanel class=card></section>`;
-    window._personalProvider=p;showPersonalSourceTab('connection',document.querySelector('[data-source-tab=connection]'));
+    window._personalProvider=p;showPersonalSourceTab('overview',document.querySelector('[data-source-tab=overview]'));
   }catch(e){alert(friendlyError(e))}
 }
 
 async function showPersonalSourceTab(tab,button){
   document.querySelectorAll('[data-source-tab]').forEach(x=>x.classList.toggle('active',x===button));
   const p=window._personalProvider,box=$('#personalSourcePanel');if(!p||!box)return;
+  if(tab==='overview'){await renderIptvManagerOverview();return}
+  if(tab==='rules'){renderIptvSmartFilters();return}
   if(tab==='connection'){
     box.innerHTML=`<h3>Connection</h3><div class=grid2><div class=field><label>Name</label><input id=srcName value="${escAttr(p.name)}"></div><div class=field><label>Type</label><select id=srcType disabled><option>${esc(p.type)}</option></select></div></div>
       ${p.type==='m3u'?`<div class=field><label>M3U URL</label><input id=srcPlaylist value="${escAttr(p.playlistUrl||'')}"></div><div class=field><label>EPG URL</label><input id=srcEpg value="${escAttr(p.epgUrl||'')}"></div>`:`<div class=field><label>Xtream server URL</label><input id=srcBase value="${escAttr(p.baseUrl||'')}"></div><div class=grid2><div class=field><label>Username</label><input id=srcUser value="${escAttr(p.username||'')}"></div><div class=field><label>Password</label><input id=srcPass type=password placeholder="${p.passwordStored?'Leave blank to keep existing password':'Password'}"></div></div>`}
@@ -2345,19 +2348,144 @@ async function loadCataloguePrefs(){
   cataloguePrefs.hiddenVodCategories=cataloguePrefs.hiddenVodCategories||[];cataloguePrefs.hiddenVodItems=cataloguePrefs.hiddenVodItems||[];cataloguePrefs.hiddenSeriesCategories=cataloguePrefs.hiddenSeriesCategories||[];cataloguePrefs.hiddenSeriesItems=cataloguePrefs.hiddenSeriesItems||[];
 }
 async function renderPersonalCatalogueVisibility(kind){
-  const box=$('#personalSourcePanel'),label=kind==='vod'?'Movies':'Series';box.innerHTML=`<p class=muted>Loading ${label.toLowerCase()} groups…</p>`;
-  try{await loadCataloguePrefs();const cats=await api(`/api/${kind}/${encodeURIComponent(personalSourceEditorProviderId)}/categories?includeHidden=true`,{timeoutMs:30000});const hidden=kind==='vod'?cataloguePrefs.hiddenVodCategories:cataloguePrefs.hiddenSeriesCategories;
-    box.innerHTML=`<div class=sectionHead><div><h3>${label} visibility</h3><p class=muted>Hide whole groups/categories or individual ${label.toLowerCase()}. Hidden content is removed from normal browsing and search lists that use the IPTV catalogue.</p></div><button class=btn onclick="resetPersonalCatalogueVisibility('${kind}')">Reset</button></div><h4>Groups / categories</h4><div class=manageList>${cats.map(c=>`<label><input type=checkbox ${hidden.includes(c.id)?'checked':''} onchange='setCatalogueCategory(${JSON.stringify(kind)},${JSON.stringify(c.id)},this.checked)'> Hide ${esc(c.name)}</label>`).join('')||'<span class=muted>No categories found.</span>'}</div><h4>${label}</h4><div class=row><select id=sourceCatalogueCategory onchange="loadPersonalCatalogueItems('${kind}',this.value)"><option value="">Choose group/category…</option>${cats.map(c=>`<option value="${escAttr(c.id)}">${esc(c.name)}</option>`).join('')}</select></div><div id=sourceCatalogueItems class=manageList><span class=muted>Choose a group to manage individual titles.</span></div>`;
+  const box=$('#personalSourcePanel'),label=kind==='vod'?'Movies':'Series';
+  box.innerHTML=`<p class=muted>Loading ${label.toLowerCase()} groups…</p>`;
+  try{
+    await loadCataloguePrefs();
+    const cats=await api(`/api/${kind}/${encodeURIComponent(personalSourceEditorProviderId)}/categories?includeHidden=true`,{timeoutMs:30000});
+    const hidden=kind==='vod'?cataloguePrefs.hiddenVodCategories:cataloguePrefs.hiddenSeriesCategories;
+    window._iptvCatalogueCategories=cats;
+    window._iptvCatalogueKind=kind;
+    box.innerHTML=`<div class=iptvManagerHead><div><span class=kicker>UNIFIED IPTV FILTER</span><h3>${label} visibility</h3><p class=muted>Exactly like Live TV: checked = visible. Uncheck groups or individual titles you do not want to see.</p></div><div class=iptvManagerHeadActions><button class=btn onclick="iptvExportFilters()">Export</button><button class=btn onclick="iptvImportFilters()">Import</button><button class=btn onclick="resetPersonalCatalogueVisibility('${kind}')">Show all</button></div></div>
+      <div class=iptvStats id=iptvCatalogueStats></div>
+      <div class=iptvFilterToolbar>
+        <input id=iptvCategorySearch placeholder="Search ${label.toLowerCase()} groups…" oninput="iptvFilterCategories(this.value)">
+        <label class=checkline><input id=iptvShowHidden type=checkbox onchange="iptvFilterCategories($('#iptvCategorySearch').value)"> Hidden only</label>
+        <button class=btn onclick="iptvSetAllCategories('${kind}',true)">Select all</button>
+        <button class=btn onclick="iptvSetAllCategories('${kind}',false)">Uncheck all</button>
+        <button class=btn onclick="iptvSelectCategoryMatches('${kind}',true)">Select matches</button>
+        <button class=btn onclick="iptvSelectCategoryMatches('${kind}',false)">Uncheck matches</button>
+      </div>
+      <div class="manageList iptvCategoryList" id=iptvCategoryList>${cats.map(c=>iptvCategoryRow(kind,c,!hidden.includes(String(c.id)))).join('')||'<span class=muted>No categories found.</span>'}</div>
+      <div class=iptvItemManager>
+        <div class=sectionHead><div><h4>${label}</h4><p class=muted>Choose a group, then fine-tune individual titles.</p></div></div>
+        <div class=iptvFilterToolbar><select id=sourceCatalogueCategory onchange="loadPersonalCatalogueItems('${kind}',this.value)"><option value="">Choose group/category…</option>${cats.map(c=>`<option value="${escAttr(c.id)}">${esc(c.name)}</option>`).join('')}</select></div>
+        <div id=sourceCatalogueItems class=manageList><span class=muted>Choose a group to manage individual titles.</span></div>
+      </div>`;
+    iptvCatalogueSummary(kind);
   }catch(e){box.innerHTML=errorCard(e)}
 }
-async function loadPersonalCatalogueItems(kind,categoryId){
-  const box=$('#sourceCatalogueItems');if(!box)return;if(!categoryId){box.innerHTML='<span class=muted>Choose a group to manage individual titles.</span>';return}box.innerHTML='<span class=muted>Loading…</span>';
-  try{await loadCataloguePrefs();const rows=await api(`/api/${kind}/${encodeURIComponent(personalSourceEditorProviderId)}/items?categoryId=${encodeURIComponent(categoryId)}&includeHidden=true`,{timeoutMs:120000,attempts:1});const hidden=kind==='vod'?cataloguePrefs.hiddenVodItems:cataloguePrefs.hiddenSeriesItems;box.innerHTML=`<input id=sourceCatalogueSearch placeholder="Search" oninput=filterPersonalCatalogueItems(this.value)>`+rows.map(x=>`<div class=manageChannel data-source-search="${escAttr((x.name||'').toLowerCase())}"><label><input type=checkbox ${hidden.includes(String(x.id))?'checked':''} onchange='setCatalogueItem(${JSON.stringify(kind)},${JSON.stringify(String(x.id))},this.checked)'> Hide</label><span><b>${esc(x.name)}</b><small>${esc(x.year||'')}</small></span></div>`).join('')||'<span class=muted>No titles found.</span>';}catch(e){box.innerHTML=errorCard(e)}
+function iptvCategoryRow(kind,c,visible){
+  const id=String(c.id),name=c.name||c.categoryName||id;
+  return `<label class=iptvCategoryRow data-iptv-category data-filter="${escAttr(name.toLowerCase())}" data-visible="${visible?'1':'0'}"><input data-iptv-category-check value="${escAttr(id)}" type=checkbox ${visible?'checked':''} onchange="iptvCatalogueCategoryChanged('${kind}',this)"> <span><b>${esc(name)}</b><small>${visible?'Visible':'Hidden'}</small></span></label>`;
 }
-function filterPersonalCatalogueItems(q){q=(q||'').toLowerCase();document.querySelectorAll('#sourceCatalogueItems [data-source-search]').forEach(x=>x.style.display=x.dataset.sourceSearch.includes(q)?'':'none')}
+function iptvFilterCategories(q){
+  q=(q||'').trim().toLowerCase();const hiddenOnly=$('#iptvShowHidden')?.checked;
+  document.querySelectorAll('[data-iptv-category]').forEach(row=>{const cb=row.querySelector('input'),match=!q||row.dataset.filter.includes(q),hidden=!cb.checked;row.hidden=!match||(hiddenOnly&&!hidden)});
+}
+function iptvCatalogueSummary(kind){
+  const rows=[...document.querySelectorAll('[data-iptv-category-check]')],visible=rows.filter(x=>x.checked).length;
+  const el=$('#iptvCatalogueStats');if(el)el.innerHTML=`<div><b>${rows.length}</b><small>groups</small></div><div><b>${visible}</b><small>visible</small></div><div><b>${rows.length-visible}</b><small>hidden</small></div><div><b>${kind==='vod'?'Movies':'Series'}</b><small>filter scope</small></div>`;
+}
+async function iptvCatalogueCategoryChanged(kind,cb){
+  cb.closest('[data-iptv-category]').dataset.visible=cb.checked?'1':'0';
+  cb.closest('[data-iptv-category]').querySelector('small').textContent=cb.checked?'Visible':'Hidden';
+  await iptvSaveCategorySelection(kind);iptvCatalogueSummary(kind);
+}
+async function iptvSaveCategorySelection(kind){
+  const hidden=[...document.querySelectorAll('[data-iptv-category-check]')].filter(x=>!x.checked).map(x=>x.value);
+  await jpost('/api/catalogue-preferences/'+encodeURIComponent(personalSourceEditorProviderId)+'/bulk',{kind,hiddenCategories:hidden});
+  await loadCataloguePrefs();
+}
+async function iptvSetAllCategories(kind,checked){
+  document.querySelectorAll('[data-iptv-category-check]').forEach(x=>x.checked=checked);
+  await iptvSaveCategorySelection(kind);await renderPersonalCatalogueVisibility(kind);
+}
+async function iptvSelectCategoryMatches(kind,checked){
+  document.querySelectorAll('[data-iptv-category]:not([hidden]) [data-iptv-category-check]').forEach(x=>x.checked=checked);
+  await iptvSaveCategorySelection(kind);await renderPersonalCatalogueVisibility(kind);
+}
+async function loadPersonalCatalogueItems(kind,categoryId){
+  const box=$('#sourceCatalogueItems');if(!box)return;if(!categoryId){box.innerHTML='<span class=muted>Choose a group to manage individual titles.</span>';return}
+  box.innerHTML='<span class=muted>Loading…</span>';
+  try{
+    await loadCataloguePrefs();
+    const rows=await api(`/api/${kind}/${encodeURIComponent(personalSourceEditorProviderId)}/items?categoryId=${encodeURIComponent(categoryId)}&includeHidden=true`,{timeoutMs:120000,attempts:1});
+    const hidden=kind==='vod'?cataloguePrefs.hiddenVodItems:cataloguePrefs.hiddenSeriesItems;
+    window._iptvCatalogueItems=rows;
+    box.innerHTML=`<div class=iptvFilterToolbar><input id=sourceCatalogueSearch placeholder="Search titles…" oninput=filterPersonalCatalogueItems(this.value)><label class=checkline><input id=iptvItemsHiddenOnly type=checkbox onchange="filterPersonalCatalogueItems($('#sourceCatalogueSearch').value)"> Hidden only</label><button class=btn onclick="iptvSetVisibleItems('${kind}',true)">Select all</button><button class=btn onclick="iptvSetVisibleItems('${kind}',false)">Uncheck all</button><button class=btn onclick="iptvSetMatchedItems('${kind}',true)">Select matches</button><button class=btn onclick="iptvSetMatchedItems('${kind}',false)">Uncheck matches</button></div><div class=iptvItemStats id=iptvItemStats></div>`+
+      rows.map(x=>{const id=String(x.id),visible=!hidden.includes(id),name=x.name||x.title||id;return `<label class=manageChannel data-iptv-item data-source-search="${escAttr((name+' '+(x.year||'')).toLowerCase())}"><input data-iptv-item-check value="${escAttr(id)}" type=checkbox ${visible?'checked':''} onchange="iptvItemChanged('${kind}',this)"> <span><b>${esc(name)}</b><small>${esc(x.year||'')} · ${visible?'Visible':'Hidden'}</small></span></label>`}).join('')||'<span class=muted>No titles found.</span>';
+    iptvItemSummary();
+  }catch(e){box.innerHTML=errorCard(e)}
+}
+function filterPersonalCatalogueItems(q){q=(q||'').toLowerCase();const hiddenOnly=$('#iptvItemsHiddenOnly')?.checked;document.querySelectorAll('#sourceCatalogueItems [data-iptv-item]').forEach(x=>{const cb=x.querySelector('[data-iptv-item-check]');x.hidden=(!x.dataset.sourceSearch.includes(q))||(hiddenOnly&&cb.checked)})}
+function iptvItemSummary(){const x=[...document.querySelectorAll('[data-iptv-item-check]')],v=x.filter(i=>i.checked).length;if($('#iptvItemStats'))$('#iptvItemStats').textContent=`${v} of ${x.length} titles visible · ${x.length-v} hidden`}
+async function iptvItemChanged(kind,cb){await setCatalogueItem(kind,cb.value,!cb.checked);cb.closest('[data-iptv-item]').querySelector('small').textContent=(cb.closest('[data-iptv-item]').querySelector('small').textContent.split(' · ')[0]||'')+' · '+(cb.checked?'Visible':'Hidden');iptvItemSummary()}
+async function iptvSaveItemSelection(kind){
+  const hidden=[...document.querySelectorAll('[data-iptv-item-check]')].filter(x=>!x.checked).map(x=>x.value);
+  await jpost('/api/catalogue-preferences/'+encodeURIComponent(personalSourceEditorProviderId)+'/bulk',{kind,hiddenItems:hidden,replaceItems:true});
+  await loadCataloguePrefs();
+}
+async function iptvSetVisibleItems(kind,checked){document.querySelectorAll('[data-iptv-item-check]').forEach(x=>x.checked=checked);await iptvSaveItemSelection(kind);await loadPersonalCatalogueItems(kind,$('#sourceCatalogueCategory').value)}
+async function iptvSetMatchedItems(kind,checked){document.querySelectorAll('[data-iptv-item]:not([hidden]) [data-iptv-item-check]').forEach(x=>x.checked=checked);await iptvSaveItemSelection(kind);await loadPersonalCatalogueItems(kind,$('#sourceCatalogueCategory').value)}
 async function setCatalogueCategory(kind,categoryId,hidden){await jpost('/api/catalogue-preferences/'+encodeURIComponent(personalSourceEditorProviderId)+'/category',{kind,categoryId,hidden});await loadCataloguePrefs()}
 async function setCatalogueItem(kind,itemId,hidden){await jpost('/api/catalogue-preferences/'+encodeURIComponent(personalSourceEditorProviderId)+'/item',{kind,itemId,hidden});await loadCataloguePrefs()}
 async function resetPersonalCatalogueVisibility(kind){if(!confirm(`Show all ${kind==='vod'?'movies':'series'} again?`))return;await jpost('/api/catalogue-preferences/'+encodeURIComponent(personalSourceEditorProviderId)+'/reset',{kind});await renderPersonalCatalogueVisibility(kind)}
+
+function iptvRuleStorageKey(){return `myonline-iptv-rules-${personalSourceEditorProviderId}`}
+function iptvLoadRules(){try{return JSON.parse(localStorage.getItem(iptvRuleStorageKey())||'[]')}catch{return []}}
+function iptvSaveRules(rules){localStorage.setItem(iptvRuleStorageKey(),JSON.stringify(rules))}
+function renderIptvSmartFilters(){
+  const box=$('#personalSourcePanel'),rules=iptvLoadRules();
+  box.innerHTML=`<div class=iptvManagerHead><div><span class=kicker>SMART FILTERS</span><h3>Automatic group rules</h3><p class=muted>Create simple rules and apply them to Live TV, Movies or Series. Rules are stored per IPTV provider.</p></div></div>
+  <div class="card iptvRuleBuilder"><select id=iptvRuleScope><option value=all>All</option><option value=live>Live TV</option><option value=vod>Movies</option><option value=series>Series</option></select><select id=iptvRuleAction><option value=show>Show</option><option value=hide>Hide</option></select><select id=iptvRuleMatch><option value=contains>contains</option><option value=starts>starts with</option><option value=ends>ends with</option></select><input id=iptvRuleText placeholder="e.g. Sweden, Sport, Adult, 4K"><button class=btn onclick=iptvAddRule()>Add rule</button></div>
+  <div class=iptvPresetRow><button class=btn onclick="iptvAddPreset('nordic')">+ Nordic</button><button class=btn onclick="iptvAddPreset('sports')">+ Sports</button><button class=btn onclick="iptvAddPreset('kids')">+ Kids</button><button class=btn onclick="iptvAddPreset('hideadult')">Hide Adult</button></div>
+  <div id=iptvRulesList class=manageList>${rules.map((r,i)=>`<div class=manageChannel><span><b>${esc(r.action.toUpperCase())} ${esc(r.scope)}</b><small>${esc(r.match)} "${esc(r.text)}"</small></span><button class=btn onclick="iptvDeleteRule(${i})">Remove</button></div>`).join('')||'<span class=muted>No smart filters yet.</span>'}</div>
+  <div class=row><button class="btn primaryBtn" onclick=iptvApplyRules()>Apply rules now</button><button class=btn onclick=iptvExportFilters()>Export filters</button><button class=btn onclick=iptvImportFilters()>Import filters</button></div>`;
+}
+function iptvAddRule(){const text=$('#iptvRuleText').value.trim();if(!text)return;const r=iptvLoadRules();r.push({scope:$('#iptvRuleScope').value,action:$('#iptvRuleAction').value,match:$('#iptvRuleMatch').value,text});iptvSaveRules(r);renderIptvSmartFilters()}
+function iptvDeleteRule(i){const r=iptvLoadRules();r.splice(i,1);iptvSaveRules(r);renderIptvSmartFilters()}
+function iptvAddPreset(name){const p={nordic:[['all','show','contains','Sweden'],['all','show','contains','Nordic']],sports:[['all','show','contains','Sport']],kids:[['all','show','contains','Kids']],hideadult:[['all','hide','contains','Adult']]};const r=iptvLoadRules();(p[name]||[]).forEach(x=>r.push({scope:x[0],action:x[1],match:x[2],text:x[3]}));iptvSaveRules(r);renderIptvSmartFilters()}
+function iptvRuleMatches(name,r){name=(name||'').toLowerCase();const q=(r.text||'').toLowerCase();return r.match==='starts'?name.startsWith(q):r.match==='ends'?name.endsWith(q):name.includes(q)}
+async function iptvApplyRules(){
+  const rules=iptvLoadRules();if(!rules.length){alert('Add at least one rule first.');return}
+  const id=personalSourceEditorProviderId;
+  try{
+    const live=await api('/api/channels/'+encodeURIComponent(id)),groups=[...new Set(live.map(x=>x.group).filter(Boolean))];
+    await loadChannelPrefs();let hiddenLive=new Set(channelPrefs.hiddenGroups);
+    for(const r of rules.filter(x=>x.scope==='all'||x.scope==='live'))for(const g of groups)if(iptvRuleMatches(g,r)){if(r.action==='hide')hiddenLive.add(g);else hiddenLive.delete(g)}
+    await jpost('/api/channel-preferences/'+encodeURIComponent(id)+'/bulk',{hiddenGroups:[...hiddenLive],hiddenChannels:channelPrefs.hiddenChannels||[]});
+    for(const kind of ['vod','series']){
+      const cats=await api(`/api/${kind}/${encodeURIComponent(id)}/categories?includeHidden=true`),pref=await api('/api/catalogue-preferences/'+encodeURIComponent(id));
+      const current=kind==='vod'?pref.hiddenVodCategories:pref.hiddenSeriesCategories,hidden=new Set(current||[]);
+      for(const r of rules.filter(x=>x.scope==='all'||x.scope===kind))for(const c of cats)if(iptvRuleMatches(c.name||'',r)){if(r.action==='hide')hidden.add(String(c.id));else hidden.delete(String(c.id))}
+      await jpost('/api/catalogue-preferences/'+encodeURIComponent(id)+'/bulk',{kind,hiddenCategories:[...hidden]});
+    }
+    alert('Smart filters applied to Live TV, Movies and Series.');
+    await renderIptvManagerOverview();
+  }catch(e){alert(friendlyError(e))}
+}
+async function renderIptvManagerOverview(){
+  const box=$('#personalSourcePanel'),p=window._personalProvider;box.innerHTML='<p class=muted>Loading IPTV Manager…</p>';
+  try{
+    currentProvider=personalSourceEditorProviderId;await loadChannelPrefs();await loadCataloguePrefs();
+    const live=await api('/api/channels/'+encodeURIComponent(currentProvider));
+    let vod=[],series=[];if(p?.type==='xtream'){vod=await api(`/api/vod/${encodeURIComponent(currentProvider)}/categories?includeHidden=true`);series=await api(`/api/series/${encodeURIComponent(currentProvider)}/categories?includeHidden=true`)}
+    const liveGroups=[...new Set(live.map(x=>x.group).filter(Boolean))],visibleChannels=live.filter(x=>!channelPrefs.hiddenGroups.includes(x.group)&&!channelPrefs.hiddenChannels.includes(x.key)).length;
+    box.innerHTML=`<div class=iptvManagerHead><div><span class=kicker>IPTV MANAGER</span><h3>${esc(p?.name||'IPTV')} content control</h3><p class=muted>One place to decide what is visible in Live TV, Guide, Movies and Series.</p></div><div class=iptvManagerHeadActions><button class=btn onclick=iptvExportFilters()>Export</button><button class=btn onclick=iptvImportFilters()>Import</button></div></div>
+    <div class=iptvDashboard>
+      <button onclick="showPersonalSourceTab('live',document.querySelector('[data-source-tab=live]'))"><b>${visibleChannels}/${live.length}</b><span>Live channels</span><small>${liveGroups.length-channelPrefs.hiddenGroups.length}/${liveGroups.length} groups visible</small></button>
+      ${p?.type==='xtream'?`<button onclick="showPersonalSourceTab('vod',document.querySelector('[data-source-tab=vod]'))"><b>${vod.length-cataloguePrefs.hiddenVodCategories.length}/${vod.length}</b><span>Movie groups</span><small>${cataloguePrefs.hiddenVodCategories.length} hidden</small></button><button onclick="showPersonalSourceTab('series',document.querySelector('[data-source-tab=series]'))"><b>${series.length-cataloguePrefs.hiddenSeriesCategories.length}/${series.length}</b><span>Series groups</span><small>${cataloguePrefs.hiddenSeriesCategories.length} hidden</small></button>`:''}
+      <button onclick="showPersonalSourceTab('rules',document.querySelector('[data-source-tab=rules]'))"><b>${iptvLoadRules().length}</b><span>Smart rules</span><small>Automatic filtering</small></button>
+    </div>
+    <div class="card iptvHelp"><h4>Fast filtering examples</h4><div class=iptvExamples><button onclick="iptvQuickRule('all','show','Sweden')">Show Sweden</button><button onclick="iptvQuickRule('all','show','Sport')">Show Sport</button><button onclick="iptvQuickRule('all','hide','Adult')">Hide Adult</button><button onclick="iptvQuickRule('live','show','4K')">Show Live 4K</button><button onclick="iptvQuickRule('vod','show','Kids')">Show Kids Movies</button><button onclick="iptvQuickRule('series','show','Nordic')">Show Nordic Series</button></div><p class=muted>Tip: use Search + “Uncheck matches” when you want manual control; use Smart Filters when the provider refreshes its groups often.</p></div>`;
+  }catch(e){box.innerHTML=errorCard(e)}
+}
+function iptvQuickRule(scope,action,text){const r=iptvLoadRules();r.push({scope,action,match:'contains',text});iptvSaveRules(r);showPersonalSourceTab('rules',document.querySelector('[data-source-tab=rules]'))}
+async function iptvExportFilters(){
+  try{await loadChannelPrefs();await loadCataloguePrefs();const data={version:1,providerId:personalSourceEditorProviderId,exported:new Date().toISOString(),live:{hiddenGroups:channelPrefs.hiddenGroups||[],hiddenChannels:channelPrefs.hiddenChannels||[]},movies:{hiddenCategories:cataloguePrefs.hiddenVodCategories||[],hiddenItems:cataloguePrefs.hiddenVodItems||[]},series:{hiddenCategories:cataloguePrefs.hiddenSeriesCategories||[],hiddenItems:cataloguePrefs.hiddenSeriesItems||[]},rules:iptvLoadRules()};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`iptv-filters-${personalSourceEditorProviderId}.json`;a.click();URL.revokeObjectURL(a.href)}catch(e){alert(friendlyError(e))}
+}
+function iptvImportFilters(){const i=document.createElement('input');i.type='file';i.accept='.json,application/json';i.onchange=async()=>{try{const data=JSON.parse(await i.files[0].text());await jpost('/api/channel-preferences/'+encodeURIComponent(personalSourceEditorProviderId)+'/bulk',{hiddenGroups:data.live?.hiddenGroups||[],hiddenChannels:data.live?.hiddenChannels||[]});await jpost('/api/catalogue-preferences/'+encodeURIComponent(personalSourceEditorProviderId)+'/bulk',{kind:'vod',hiddenCategories:data.movies?.hiddenCategories||[],hiddenItems:data.movies?.hiddenItems||[],replaceItems:true});await jpost('/api/catalogue-preferences/'+encodeURIComponent(personalSourceEditorProviderId)+'/bulk',{kind:'series',hiddenCategories:data.series?.hiddenCategories||[],hiddenItems:data.series?.hiddenItems||[],replaceItems:true});iptvSaveRules(data.rules||[]);alert('IPTV filters imported.');await renderIptvManagerOverview()}catch(e){alert('Could not import filters: '+friendlyError(e))}};i.click()}
 
 async function saveProvider(){
   const p={id:editingProviderId||'',name:$('#pname').value,type:$('#ptype').value,playlistUrl:$('#purl').value,epgUrl:$('#pepg').value,baseUrl:$('#pbase').value,username:$('#puser').value,password:$('#ppass').value,keepExistingConnection:false,keepExistingPassword:!!editingProviderId&&!$('#ppass').value};

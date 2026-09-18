@@ -1,0 +1,26 @@
+# v38.7.0 – Unified IPTV Manager
+
+- Unified IPTV Manager overview for Live TV, Movies and Series.
+- Movies now use the same checked = visible interaction model as Live TV.
+- Series now use the same checked = visible interaction model as Live TV.
+- Per-provider dashboard with visible/hidden counts.
+- Search Live TV channels and groups.
+- Search Movie groups/categories.
+- Search Series groups/categories.
+- Search individual Movie and Series titles.
+- Select All and Uncheck All for groups/categories.
+- Select All and Uncheck All for individual titles.
+- Select Matches and Uncheck Matches after searching.
+- Hidden-only view for Movie and Series groups.
+- Hidden-only view for Movie and Series titles.
+- Bulk catalogue preference API for fast saves.
+- Smart Filter rules with scope Live TV / Movies / Series / All.
+- Smart Filter actions Show and Hide.
+- Smart Filter matching Contains / Starts with / Ends with.
+- One-click presets for Nordic, Sports, Kids and Hide Adult.
+- Quick filter examples directly on the IPTV Manager overview.
+- Export all IPTV visibility filters and smart rules to JSON.
+- Import IPTV visibility filters and smart rules from JSON.
+- Provider-specific rule storage.
+- Responsive IPTV Manager for phone, tablet, desktop and TV-sized layouts.
+- Existing hidden catalogue filtering remains enforced by backend browsing/search endpoints.
