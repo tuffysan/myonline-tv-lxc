@@ -4843,11 +4843,13 @@ const DeviceExperience={
   mode:'desktop', input:'mouse',
   detect(){
     const coarse=matchMedia('(pointer:coarse)').matches, hover=matchMedia('(hover:hover)').matches;
-    const tv=matchMedia('(min-width:1100px)').matches && !hover && !coarse;
+    // UI Recovery: never guess "tv" from viewport/pointer alone.
+    // TV mode becomes active only after an actual remote-style key is observed.
+    const explicitTv=document.documentElement.dataset.remoteDetected==='true';
     const narrow=matchMedia('(max-width:640px)').matches;
     const tablet=coarse && matchMedia('(min-width:641px) and (max-width:1180px)').matches;
-    this.mode=tv?'tv':narrow?'mobile':tablet?'tablet':'desktop';
-    this.input=tv?'remote':coarse?'touch':hover?'mouse':'keyboard';
+    this.mode=explicitTv?'tv':narrow?'mobile':tablet?'tablet':'desktop';
+    this.input=explicitTv?'remote':coarse?'touch':hover?'mouse':'keyboard';
     document.documentElement.dataset.deviceMode=this.mode;
     document.documentElement.dataset.inputMode=this.input;
     document.body?.classList.toggle('remoteFirst',this.mode==='tv');
@@ -4862,27 +4864,23 @@ const DeviceExperience={
 };
 addEventListener('resize',()=>DeviceExperience.detect());
 addEventListener('pointerdown',e=>{DeviceExperience.input=e.pointerType==='touch'?'touch':'mouse';document.documentElement.dataset.inputMode=DeviceExperience.input});
-addEventListener('keydown',()=>{if(DeviceExperience.mode==='tv')DeviceExperience.input='remote';else DeviceExperience.input='keyboard';document.documentElement.dataset.inputMode=DeviceExperience.input});
+addEventListener('keydown',e=>{
+  const remoteKeys=['MediaPlayPause','MediaTrackNext','MediaTrackPrevious','BrowserBack','GoBack'];
+  if(remoteKeys.includes(e.key)){
+    document.documentElement.dataset.remoteDetected='true';
+    DeviceExperience.detect();
+    DeviceExperience.input='remote';
+  }else if(DeviceExperience.mode!=='tv'){
+    DeviceExperience.input='keyboard';
+  }
+  document.documentElement.dataset.inputMode=DeviceExperience.input;
+});
 document.addEventListener('DOMContentLoaded',()=>DeviceExperience.detect(),{once:true});
 
 
 
-// v38.9.0 Simple Home
-async function buildSimpleHome(){
-  const host=document.querySelector('#home,#homeView,[data-view="home"]'); if(!host)return;
-  let cont=[];try{cont=await api('/api/continue')}catch{}
-  const favs=loadMyStuff?.()?.filter?.(x=>x.kind==='favorite')||[];
-  const recent=(()=>{try{return JSON.parse(localStorage.getItem('myonline-recent')||'[]')}catch{return []}})();
-  const row=(title,items,empty)=>`<section class=simpleHomeRow><div class=sectionHead><h2>${esc(title)}</h2></div><div class=homeRail>${items.slice(0,12).map(x=>`<button class=homeTile onclick="openQuickActions(${JSON.stringify({name:x.name||x.title||'Item'}).replace(/"/g,'&quot;')})"><b>${esc(x.name||x.title||'Untitled')}</b><small>${esc(x.subtitle||x.group||'')}</small></button>`).join('')||`<span class=muted>${empty}</span>`}</div></section>`;
-  const panel=document.createElement('div');panel.id='simpleHome';panel.innerHTML=
-    row('Continue Watching',cont,'Start watching something and it will appear here.')+
-    row('Favorites',favs,'Add favorites from Live TV, Movies or Series.')+
-    row('Recently Watched',recent,'Your recent items will appear here.')+
-    `<section class=simpleHomeShortcuts><button onclick="show('live')">Live now</button><button onclick="show('guide')">Guide</button><button onclick="show('movies')">Movies</button><button onclick="show('series')">Series</button><button onclick="show('mystuff')">My Stuff</button><button onclick="show('search')">Search</button></section>`;
-  host.prepend(panel);
-}
-document.addEventListener('DOMContentLoaded',()=>setTimeout(buildSimpleHome,400),{once:true});
-
+// v38.9 Simple Home disabled in v39.5.1 UI Recovery.
+// The established authenticated home() implementation remains authoritative.
 
 
 // v39.0.0 One Search
@@ -4925,26 +4923,8 @@ addEventListener('keydown',e=>{if(['MediaTrackNext','PageDown'].includes(e.key))
 
 
 
-// v39.2.0 Setup Wizard
-const SetupWizard={
-  key:'myonline-setup-wizard-v1',
-  shouldRun(){return !localStorage.getItem(this.key)},
-  open(){
-    const d=document.createElement('div');d.className='setupWizard';d.id='setupWizard';d.innerHTML=`<div class=setupWizardCard>
-      <div class=setupProgress><i class=active></i><i></i><i></i><i></i></div><div id=setupStep></div></div>`;document.body.appendChild(d);this.step(0);
-  },
-  step(n){this.n=n;document.querySelectorAll('.setupProgress i').forEach((x,i)=>x.classList.toggle('active',i<=n));const h=$('#setupStep');
-    const steps=[
-      `<h2>Welcome to MyOnline TV</h2><p>We will configure the app for this device in a few simple steps.</p><button class=primaryBtn onclick="SetupWizard.step(1)">Get started</button>`,
-      `<h2>Your device</h2><p>Detected: <b>${esc(DeviceExperience.mode)}</b> using <b>${esc(DeviceExperience.input)}</b>.</p><p class=muted>The interface will adapt automatically.</p><button class=primaryBtn onclick="SetupWizard.step(2)">Continue</button>`,
-      `<h2>What do you want to see?</h2><div class=setupChoices><label><input type=checkbox checked value=Sweden> Sweden / Nordic</label><label><input type=checkbox checked value=Sport> Sports</label><label><input type=checkbox checked value=Kids> Kids / Family</label><label><input type=checkbox checked value=Movies> Movies</label><label><input type=checkbox checked value=Series> Series</label></div><button class=primaryBtn onclick="SetupWizard.step(3)">Continue</button>`,
-      `<h2>Ready</h2><p>You can change providers and filters at any time under Settings → Edit IPTV.</p><button class=primaryBtn onclick="SetupWizard.finish()">Start watching</button>`
-    ];h.innerHTML=steps[n];
-  },
-  finish(){localStorage.setItem(this.key,new Date().toISOString());$('#setupWizard')?.remove();show('home')}
-};
-document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{if(SetupWizard.shouldRun())SetupWizard.open()},900),{once:true});
-
+// v39.2 Setup Wizard removed in v39.5.1 UI Recovery.
+// Authenticated firstLoginGuide()/onboardingRequired is the only onboarding flow.
 
 
 // v39.3.0 Profiles Everywhere
@@ -4984,4 +4964,4 @@ const Accessibility={
   save(v){localStorage.setItem(this.key,JSON.stringify(v));this.apply(v)},
   panel(){const v=this.load();DeviceExperience.actionMenu(null,`<h3>Accessibility</h3>${[['largeText','Larger text'],['highContrast','High contrast'],['reduceMotion','Reduce motion'],['extraFocus','Extra focus visibility']].map(([k,l])=>`<label class=accessibilityOption><input type=checkbox ${v[k]?'checked':''} onchange="const v=Accessibility.load();v['${k}']=this.checked;Accessibility.save(v)"> ${l}</label>`).join('')}`)}
 };
-document.addEventListener('DOMContentLoaded',()=>{Accessibility.apply();document.querySelectorAll('img:not([alt])').forEach(x=>x.alt='');document.querySelectorAll('button:not([type])').forEach(x=>x.type='button')},{once:true});
+document.addEventListener('DOMContentLoaded',()=>{Accessibility.apply()},{once:true});

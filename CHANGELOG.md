@@ -1,3 +1,10 @@
+# v39.5.1
+
+- UI Recovery: restore established layout and authenticated onboarding behavior.
+- Remove duplicate pre-login Setup Wizard and Simple Home bootstrap.
+- Scope multi-device/accessibility CSS to avoid global legacy UI regressions.
+- Conservative TV detection and opt-in accessibility behavior.
+
 # v39.5.0
 
 - User controls for larger text, high contrast, reduced motion and stronger focus.

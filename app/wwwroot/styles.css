@@ -2049,22 +2049,10 @@ html.isTV button,html.isTV a,html.isTV [tabindex="0"]{scroll-margin:28px}
 /* v38.8 Device Experience Engine */
 :root{--tap-target:44px;--focus-ring:3px}
 [data-device-mode="mobile"]{--tap-target:48px}[data-device-mode="tv"]{--tap-target:56px;--focus-ring:4px}
-button,a,input,select,[tabindex]{min-height:var(--tap-target)}
-[data-input-mode="remote"] :focus-visible,[data-input-mode="keyboard"] :focus-visible{outline:var(--focus-ring) solid currentColor;outline-offset:3px}
 .adaptiveActionMenu{position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:flex-end;justify-content:center}
 .adaptiveActionSheet{background:var(--panel,#151922);padding:18px;border-radius:18px 18px 0 0;width:min(680px,100%);max-height:80vh;overflow:auto}
 .adaptiveActionMenu.desktop{align-items:center}.adaptiveActionMenu.desktop .adaptiveActionSheet{border-radius:18px;width:min(520px,90vw)}
-[data-device-mode="tv"] .adaptiveActionSheet{font-size:1.2rem}
 
-
-
-/* v38.9 Simple Home */
-.simpleHomeRow{margin:18px 0}.homeRail{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(170px,22%);gap:12px;overflow-x:auto;scroll-snap-type:x proximity;padding:4px 2px 12px}
-.homeTile{scroll-snap-align:start;text-align:left;border:1px solid var(--border,#303747);border-radius:14px;background:var(--panel2,#111827);padding:16px;min-height:110px}
-.homeTile b,.homeTile small{display:block}.homeTile small{color:var(--muted);margin-top:7px}
-.simpleHomeShortcuts{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:20px 0}.simpleHomeShortcuts button{border-radius:14px}
-@media(max-width:700px){.homeRail{grid-auto-columns:72%}.simpleHomeShortcuts{grid-template-columns:repeat(3,1fr)}}
-[data-device-mode="tv"] .homeRail{grid-auto-columns:24%}
 
 
 
@@ -2079,21 +2067,12 @@ button,a,input,select,[tabindex]{min-height:var(--tap-target)}
 /* v39.1 Instant Player */
 .instantPlayerControls{position:fixed;z-index:10500;left:50%;bottom:5vh;transform:translateX(-50%);display:flex;gap:8px;background:#080b10dd;border-radius:18px;padding:10px;box-shadow:0 12px 40px #0008}
 .instantPlayerControls button{border-radius:12px;padding:10px 14px}[data-device-mode="mobile"] .instantPlayerControls{left:8px;right:8px;transform:none;overflow-x:auto;justify-content:flex-start}
-[data-device-mode="tv"] .instantPlayerControls{bottom:8vh;font-size:1.15rem}
 
-
-
-/* v39.2 Setup Wizard */
-.setupWizard{position:fixed;inset:0;z-index:12000;background:#080b10f5;display:grid;place-items:center;padding:18px}.setupWizardCard{width:min(620px,100%);background:var(--panel,#151922);border-radius:22px;padding:26px}
-.setupProgress{display:flex;gap:8px;margin-bottom:22px}.setupProgress i{height:5px;flex:1;border-radius:4px;background:#ffffff20}.setupProgress i.active{background:currentColor}
-.setupChoices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:18px 0}.setupChoices label{border:1px solid var(--border,#303747);padding:14px;border-radius:12px}
-@media(max-width:600px){.setupWizard{padding:0}.setupWizardCard{min-height:100vh;border-radius:0;padding-top:10vh}.setupChoices{grid-template-columns:1fr}}
 
 
 
 /* v39.3 Profiles Everywhere */
 .profileBadge{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:7px 11px;border:1px solid var(--border,#303747)}
-[data-device-mode="tv"] .profileBadge{padding:10px 16px}
 
 
 
@@ -2106,7 +2085,19 @@ button,a,input,select,[tabindex]{min-height:var(--tap-target)}
 
 /* v39.5 Accessibility & Living-Room Polish */
 .largeText{font-size:112.5%}.highContrast{--muted:#e1e5eb;--border:#9aa4b2}.reduceMotion *{scroll-behavior:auto!important;animation-duration:.001ms!important;transition-duration:.001ms!important}
-.extraFocus :focus-visible,[data-device-mode="tv"] :focus-visible{outline:4px solid currentColor!important;outline-offset:4px!important}
+.extraFocus :focus-visible{outline:4px solid currentColor!important;outline-offset:4px!important}
 .accessibilityOption{display:block;padding:14px 8px;border-bottom:1px solid var(--border,#303747);min-height:52px}
 @media(max-width:600px){body{padding-left:max(0px,env(safe-area-inset-left));padding-right:max(0px,env(safe-area-inset-right));padding-bottom:max(0px,env(safe-area-inset-bottom))}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation-duration:.001ms!important;transition-duration:.001ms!important}}
+
+/* v39.5.1 UI Recovery
+   Preserve the established application layout. New accessibility/device features
+   must be opt-in or component-scoped and must not globally resize legacy controls. */
+.adaptiveActionMenu .adaptiveActionSheet button,
+.adaptiveActionMenu .adaptiveActionSheet input,
+.adaptiveActionMenu .adaptiveActionSheet select{min-height:44px}
+@media(max-width:600px){
+  .adaptiveActionMenu .adaptiveActionSheet button,
+  .adaptiveActionMenu .adaptiveActionSheet input,
+  .adaptiveActionMenu .adaptiveActionSheet select{min-height:48px}
+}
