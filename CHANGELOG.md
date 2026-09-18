@@ -1,3 +1,9 @@
+# v39.5.2
+
+- Full UI Recovery audit and removal of remaining conflicting v39.x experimental UI layers.
+- Restore established Search and Live TV implementations as authoritative.
+- Reset experimental accessibility state once and scope safe-area styling.
+
 # v39.5.1
 
 - UI Recovery: restore established layout and authenticated onboarding behavior.

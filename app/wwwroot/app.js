@@ -4883,44 +4883,12 @@ document.addEventListener('DOMContentLoaded',()=>DeviceExperience.detect(),{once
 // The established authenticated home() implementation remains authoritative.
 
 
-// v39.0.0 One Search
-async function oneSearch(query){
-  query=(query||'').trim(); if(!query)return [];
-  const sources=[
-    ['Live',`/api/search/live?q=${encodeURIComponent(query)}`],
-    ['Guide',`/api/search/guide?q=${encodeURIComponent(query)}`],
-    ['Movies',`/api/search/vod?q=${encodeURIComponent(query)}`],
-    ['Series',`/api/search/series?q=${encodeURIComponent(query)}`]
-  ];
-  const results=await Promise.all(sources.map(async([type,url])=>{try{return (await api(url)).map(x=>({...x,_searchType:type}))}catch{return []}}));
-  return results.flat();
-}
-function openOneSearch(){
-  let d=document.querySelector('#oneSearchOverlay');
-  if(!d){d=document.createElement('div');d.id='oneSearchOverlay';d.className='oneSearchOverlay';d.innerHTML=`<div class=oneSearchBox><div class=oneSearchHead><input id=oneSearchInput placeholder="Search Live, Guide, Movies and Series…" autocomplete=off><button class=btn onclick="$('#oneSearchOverlay').remove()">Close</button></div><div id=oneSearchResults class=oneSearchResults><p class=muted>Start typing to search everything.</p></div></div>`;document.body.appendChild(d);
-    let t;$('#oneSearchInput').oninput=()=>{clearTimeout(t);t=setTimeout(async()=>{const q=$('#oneSearchInput').value,r=await oneSearch(q),g=Object.groupBy?Object.groupBy(r,x=>x._searchType):r.reduce((a,x)=>((a[x._searchType]??=[]).push(x),a),{});$('#oneSearchResults').innerHTML=Object.entries(g).map(([k,v])=>`<section><h3>${esc(k)}</h3><div class=searchResultGrid>${v.slice(0,20).map(x=>`<button onclick="openQuickActions(${JSON.stringify({name:x.name||x.title||'',url:x.url||''}).replace(/"/g,'&quot;')})"><b>${esc(x.name||x.title||'Untitled')}</b><small>${esc(x.group||x.subtitle||'')}</small></button>`).join('')}</div></section>`).join('')||'<p class=muted>No results.</p>'},180)};
-  }
-  setTimeout(()=>$('#oneSearchInput')?.focus(),20);
-}
-addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openOneSearch()}});
+// v39.0 experimental One Search removed by v39.5.2 UI Recovery.
+// The established authenticated searchView() is authoritative.
 
 
-
-// v39.1.0 Instant Player Experience
-const PlayerExperience={
-  historyKey:'myonline-channel-history',
-  remember(item){try{const h=JSON.parse(localStorage.getItem(this.historyKey)||'[]').filter(x=>x.key!==item.key);h.unshift({key:item.key,name:item.name,group:item.group,at:Date.now()});localStorage.setItem(this.historyKey,JSON.stringify(h.slice(0,20)))}catch{}},
-  history(){try{return JSON.parse(localStorage.getItem(this.historyKey)||'[]')}catch{return []}},
-  showControls(item={}){
-    let d=document.querySelector('#instantPlayerControls');if(d)d.remove();d=document.createElement('div');d.id='instantPlayerControls';d.className='instantPlayerControls';
-    d.innerHTML=`<button onclick="PlayerExperience.channel(-1)">◀ Prev</button><button onclick="toggleMyStuff('favorite',${JSON.stringify(item).replace(/"/g,'&quot;')})">★ Favorite</button><button onclick="show('guide')">Guide</button><button onclick="PlayerExperience.recent()">Recent</button><button onclick="PlayerExperience.channel(1)">Next ▶</button>`;
-    document.body.appendChild(d);clearTimeout(this._hide);this._hide=setTimeout(()=>d.remove(),7000);
-  },
-  channel(delta){window.dispatchEvent(new CustomEvent('playerchannelstep',{detail:{delta}}))},
-  recent(){DeviceExperience.actionMenu(null,`<h3>Recent channels</h3>${this.history().map(x=>`<button class=btn>${esc(x.name||x.key)}</button>`).join('')||'<p class=muted>No recent channels.</p>'}`)}
-};
-addEventListener('keydown',e=>{if(['MediaTrackNext','PageDown'].includes(e.key))PlayerExperience.channel(1);if(['MediaTrackPrevious','PageUp'].includes(e.key))PlayerExperience.channel(-1)});
-
+// v39.1 experimental Instant Player overlay removed by v39.5.2 UI Recovery.
+// Existing Live TV player and remote handling remain authoritative.
 
 
 // v39.2 Setup Wizard removed in v39.5.1 UI Recovery.
@@ -4964,4 +4932,11 @@ const Accessibility={
   save(v){localStorage.setItem(this.key,JSON.stringify(v));this.apply(v)},
   panel(){const v=this.load();DeviceExperience.actionMenu(null,`<h3>Accessibility</h3>${[['largeText','Larger text'],['highContrast','High contrast'],['reduceMotion','Reduce motion'],['extraFocus','Extra focus visibility']].map(([k,l])=>`<label class=accessibilityOption><input type=checkbox ${v[k]?'checked':''} onchange="const v=Accessibility.load();v['${k}']=this.checked;Accessibility.save(v)"> ${l}</label>`).join('')}`)}
 };
-document.addEventListener('DOMContentLoaded',()=>{Accessibility.apply()},{once:true});
+document.addEventListener('DOMContentLoaded',()=>{
+  const recoveryKey='myonline-v3952-accessibility-recovered';
+  if(!localStorage.getItem(recoveryKey)){
+    localStorage.removeItem(Accessibility.key);
+    localStorage.setItem(recoveryKey,'1');
+  }
+  Accessibility.apply();
+},{once:true});
