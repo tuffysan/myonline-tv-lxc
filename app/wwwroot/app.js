@@ -61,7 +61,7 @@ function updateResponsiveMode(){
   document.body.dataset.clientMode=w<720?'mobile':w<1180?'tablet':likelyTenFoot?'tv':'desktop';
 }
 
-const navigationIcons={home:'⌂',live:'▣',guide:'▤',movies:'▶',series:'▦',plex:'◆',jellyfin:'◇',downloads:'↓',recordings:'●',notifications:'●',rooms:'▣',library:'▦',search:'⌕',sources:'⚙',platform:'◆',diagnostics:'✓',appliance:'⚙',system:'◉',completion:'✓',update:'↑',admin:'🛡'};
+const navigationIcons={home:'⌂',live:'▣',guide:'▤',movies:'▶',series:'▦',mystuff:'★',plex:'◆',jellyfin:'◇',downloads:'↓',recordings:'●',notifications:'●',rooms:'▣',library:'▦',search:'⌕',sources:'⚙',platform:'◆',diagnostics:'✓',appliance:'⚙',system:'◉',completion:'✓',update:'↑',admin:'🛡'};
 
 function navigationItemVisible(view){
   const desktop=document.querySelector(`aside nav button[data-view="${view}"]`);
@@ -159,7 +159,7 @@ async function boot(){
 
 let sourceAccess={adminIptv:true,adminPlex:true,adminJellyfin:true};
 let navigationConfig={items:[]};
-const navigationLabels={home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'DVR',notifications:'Alerts',rooms:'Rooms',library:'Library',search:'Search',sources:'My Sources',system:'System',platform:'System overview',diagnostics:'Diagnostics',appliance:'Appliance',completion:'Feature Completion',admin:'Admin'};
+const navigationLabels={home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',mystuff:'My Stuff',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'DVR',notifications:'Alerts',rooms:'Rooms',library:'Library',search:'Search',sources:'My Sources',system:'System',platform:'System overview',diagnostics:'Diagnostics',appliance:'Appliance',completion:'Feature Completion',admin:'Admin'};
 async function loadNavigationConfig(){try{navigationConfig=await api('/api/navigation')}catch{navigationConfig={items:[]}}applyNavigationConfig()}
 function applyNavigationConfig(){
  const items=navigationConfig?.items||[],map=new Map(items.map(x=>[x.id,x]));
@@ -401,7 +401,7 @@ function restoreViewContext(view){
   });
 }
 function navigationSection(view){
-  if(['home','live','guide','movies','series','recordings','notifications','rooms'].includes(view))return 'Watch';
+  if(['home','live','guide','movies','series','mystuff','recordings','notifications','rooms'].includes(view))return 'Watch';
   if(['plex','jellyfin','downloads','library','search','sources'].includes(view))return 'Library';
   return 'Settings';
 }
@@ -426,12 +426,13 @@ async function show(v,opt={}){
   currentView=v;destroyPlayer();
   renderMobileNavigation();
   closeMobileMore();
-  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'Recordings',platform:'Platform','profile-sync':'Profile Sync',diagnostics:'Diagnostics',appliance:'Appliance',notifications:'Notifications',rooms:'Rooms',library:'Library',search:'Search',sources:'My Sources',system:'System',completion:'Feature Completion',update:'System Update',admin:'Admin'})[v]||v;
+  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',mystuff:'My Stuff',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'Recordings',platform:'Platform','profile-sync':'Profile Sync',diagnostics:'Diagnostics',appliance:'Appliance',notifications:'Notifications',rooms:'Rooms',library:'Library',search:'Search',sources:'My Sources',system:'System',completion:'Feature Completion',update:'System Update',admin:'Admin'})[v]||v;
   updateNavigationChrome();
   restoreViewContext(v);
   if(v==='home')await home();
   if(v==='live')await live();
   if(v==='guide')await guide();
+  if(v==='mystuff')await myStuffView();
   if(v==='movies')await movies();
   if(v==='series')await series();
   if(v==='plex')await mediaLibraryView('plex');
@@ -4596,3 +4597,31 @@ function applyAdaptiveNavigationMode(){
 applyAdaptiveNavigationMode();
 addEventListener('resize',applyAdaptiveNavigationMode,{passive:true});
 addEventListener('orientationchange',()=>setTimeout(applyAdaptiveNavigationMode,50),{passive:true});
+
+
+// v38.3.0 - Personal Home & My Stuff
+function myStuffKey(){return 'myonlinetv-my-stuff-'+(authState?.user||'default')}
+function loadMyStuff(){
+  try{return JSON.parse(localStorage.getItem(myStuffKey())||'{"favorites":[],"watchlist":[]}')}catch{return {favorites:[],watchlist:[]}}
+}
+function saveMyStuff(v){localStorage.setItem(myStuffKey(),JSON.stringify(v))}
+function myStuffIdentity(x){return String(x?.id||x?.url||x?.name||x?.title||'')}
+function toggleMyStuff(kind,item){
+  const state=loadMyStuff(),key=kind==='favorites'?'favorites':'watchlist',id=myStuffIdentity(item);
+  const i=state[key].findIndex(x=>myStuffIdentity(x)===id);
+  if(i>=0)state[key].splice(i,1);else state[key].unshift({...item,added:new Date().toISOString()});
+  saveMyStuff(state); if(currentView==='mystuff')myStuffView();
+}
+async function myStuffView(){
+  const state=loadMyStuff();
+  let cont=[],history=[];
+  try{cont=await api('/api/continue',{timeoutMs:5000,attempts:1})}catch{}
+  try{history=JSON.parse(localStorage.getItem('myonline-media-history')||'[]')}catch{}
+  const cards=(items,empty)=>items.length?`<div class="posterRail">${items.slice(0,24).map(x=>`<button class="posterCard" onclick='playUnifiedItem(${JSON.stringify(x)})'>${mediaPosterMarkup(x.poster,x.name||x.title)}<div class=posterBody><b>${esc(x.name||x.title||'Media')}</b><small>${esc(x.source||x.kind||'')}</small></div></button>`).join('')}</div>`:`<div class="card myStuffEmpty">${empty}</div>`;
+  content.innerHTML=`<div class="hero myStuffHero"><span class=kicker>PERSONAL</span><h1>My Stuff</h1><p class=muted>Your personal place for things you want to continue, save and revisit.</p></div>
+  <div class=sectionHead><h2>Continue watching</h2></div>${cards(cont,'Nothing to continue yet.')}
+  <div class=sectionHead><h2>★ Favorites</h2></div>${cards(state.favorites,'Add favorites from Quick Actions.')}
+  <div class=sectionHead><h2>＋ Watchlist</h2></div>${cards(state.watchlist,'Your watchlist is empty.')}
+  <div class=sectionHead><h2>Recently watched</h2></div>${cards(history,'No recent activity yet.')}
+  <div class="myStuffLinks"><button class=btn onclick="show('recordings')">Recordings</button><button class=btn onclick="show('downloads')">Downloads</button></div>`;
+}

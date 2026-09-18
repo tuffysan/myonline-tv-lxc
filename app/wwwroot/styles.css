@@ -2014,3 +2014,7 @@ html.isTV button,html.isTV a,html.isTV [tabindex="0"]{scroll-margin:28px}
 @media(max-width:719px){
   #mobileMoreSheet{max-height:min(76vh,680px);overflow:auto;overscroll-behavior:contain}
 }
+
+/* v38.3.0 Personal Home & My Stuff */
+.myStuffHero{margin-bottom:18px}.myStuffEmpty{min-height:88px;display:flex;align-items:center;color:var(--muted)}
+.myStuffLinks{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0 36px}
