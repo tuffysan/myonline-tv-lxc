@@ -4922,3 +4922,25 @@ const PlayerExperience={
   recent(){DeviceExperience.actionMenu(null,`<h3>Recent channels</h3>${this.history().map(x=>`<button class=btn>${esc(x.name||x.key)}</button>`).join('')||'<p class=muted>No recent channels.</p>'}`)}
 };
 addEventListener('keydown',e=>{if(['MediaTrackNext','PageDown'].includes(e.key))PlayerExperience.channel(1);if(['MediaTrackPrevious','PageUp'].includes(e.key))PlayerExperience.channel(-1)});
+
+
+
+// v39.2.0 Setup Wizard
+const SetupWizard={
+  key:'myonline-setup-wizard-v1',
+  shouldRun(){return !localStorage.getItem(this.key)},
+  open(){
+    const d=document.createElement('div');d.className='setupWizard';d.id='setupWizard';d.innerHTML=`<div class=setupWizardCard>
+      <div class=setupProgress><i class=active></i><i></i><i></i><i></i></div><div id=setupStep></div></div>`;document.body.appendChild(d);this.step(0);
+  },
+  step(n){this.n=n;document.querySelectorAll('.setupProgress i').forEach((x,i)=>x.classList.toggle('active',i<=n));const h=$('#setupStep');
+    const steps=[
+      `<h2>Welcome to MyOnline TV</h2><p>We will configure the app for this device in a few simple steps.</p><button class=primaryBtn onclick="SetupWizard.step(1)">Get started</button>`,
+      `<h2>Your device</h2><p>Detected: <b>${esc(DeviceExperience.mode)}</b> using <b>${esc(DeviceExperience.input)}</b>.</p><p class=muted>The interface will adapt automatically.</p><button class=primaryBtn onclick="SetupWizard.step(2)">Continue</button>`,
+      `<h2>What do you want to see?</h2><div class=setupChoices><label><input type=checkbox checked value=Sweden> Sweden / Nordic</label><label><input type=checkbox checked value=Sport> Sports</label><label><input type=checkbox checked value=Kids> Kids / Family</label><label><input type=checkbox checked value=Movies> Movies</label><label><input type=checkbox checked value=Series> Series</label></div><button class=primaryBtn onclick="SetupWizard.step(3)">Continue</button>`,
+      `<h2>Ready</h2><p>You can change providers and filters at any time under Settings → Edit IPTV.</p><button class=primaryBtn onclick="SetupWizard.finish()">Start watching</button>`
+    ];h.innerHTML=steps[n];
+  },
+  finish(){localStorage.setItem(this.key,new Date().toISOString());$('#setupWizard')?.remove();show('home')}
+};
+document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{if(SetupWizard.shouldRun())SetupWizard.open()},900),{once:true});
