@@ -2129,3 +2129,7 @@ html.isTV button,html.isTV a,html.isTV [tabindex="0"]{scroll-margin:28px}
 .liveBoardRows>button>span{display:grid;gap:3px}.liveBoardRows img{width:42px;height:30px;object-fit:contain}.liveBoardRows small{color:var(--muted,#9ca3af)}
 .liveBoardRows>button:focus-visible{outline:3px solid currentColor;outline-offset:2px}
 @media(max-width:700px){.liveNowNextBoard{inset:2vh 10px;padding:12px}.liveBoardRows>button{grid-template-columns:1fr}.liveToolbar #liveLastQuick{display:none}}
+
+/* v39.8.1 Adult Group Control */
+.adultGroupBadge{display:inline-flex;align-items:center;justify-content:center;padding:2px 6px;margin-left:6px;border:1px solid currentColor;border-radius:999px;font-size:.72em;font-weight:800}
+.lmGroupCard[data-adult="true"]{border-style:dashed}

@@ -1,3 +1,8 @@
+# v39.8.1
+
+- Added protected Adult/18+ IPTV group control.
+- Adult groups require explicit activation and stay protected during bulk activation/reload.
+
 # v39.8.0
 
 - Adds a fast Now & Next board for the currently filtered Live TV channels.

@@ -2677,6 +2677,24 @@ void AddProviderSyncEvent(string providerId,string trigger,bool ok,int added,int
     Save(providerSyncHistoryFile,rows.Take(200).ToList());
 }
 
+// v39.8.1 Adult / 18+ group control
+static bool IsAdultGroupName(string? group)
+{
+    if(string.IsNullOrWhiteSpace(group)) return false;
+    var g=group.Trim().ToLowerInvariant();
+    string[] tokens={"adult","adults","xxx","18+","18 +","18plus","18 plus","erotic","erotica","porn","porno","sex","playboy"};
+    return tokens.Any(t=>g.Contains(t,StringComparison.OrdinalIgnoreCase));
+}
+void EnsureAdultGroupsHidden(string providerId,IEnumerable<LiveChannel> channels)
+{
+    var groups=channels.Select(x=>x.Group??"").Where(IsAdultGroupName).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    if(groups.Length==0)return;
+    var all=LoadChannelPreferences();
+    var cp=all.TryGetValue(providerId,out var old)?old:new ChannelPreferences(new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase));
+    var changed=false;foreach(var g in groups)if(cp.HiddenGroups.Add(g))changed=true;
+    if(changed){all[providerId]=cp;Save(channelPreferencesFile,all);}
+}
+
 // v37.0.0 Library Management & Provider Refresh
 Dictionary<string, LibraryManagementPreferences> LoadLibraryManagement() =>
     Load<Dictionary<string, LibraryManagementPreferences>>(libraryManagementFile) ?? new(StringComparer.OrdinalIgnoreCase);
@@ -2732,6 +2750,20 @@ app.MapPost("/api/library-management/{providerId}/quality", (string providerId, 
     all[providerId]=pref; Save(libraryManagementFile,all); return Results.Ok(pref.Groups[req.Group]);
 }).RequireAuthorization();
 
+app.MapPost("/api/providers/{providerId}/adult-groups", async (string providerId,HttpContext ctx) =>
+{
+    if(!CanManageProviderId(ctx,providerId))return Results.Forbid();
+    var req=await ctx.Request.ReadFromJsonAsync<AdultGroupControlRequest>();if(req is null)return Results.BadRequest();
+    var p=LoadProviders().FirstOrDefault(x=>x.Id==providerId);if(p is null)return Results.NotFound();
+    var channels=channelCache.TryGetValue(providerId,out var c)?c.Channels:await LoadProviderChannels(p);
+    var groups=channels.Select(x=>x.Group??"").Where(IsAdultGroupName).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    var all=LoadChannelPreferences();
+    var cp=all.TryGetValue(providerId,out var old)?old:new ChannelPreferences(new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase));
+    foreach(var g in groups){if(req.Active)cp.HiddenGroups.Remove(g);else cp.HiddenGroups.Add(g);}
+    all[providerId]=cp;Save(channelPreferencesFile,all);
+    return Results.Ok(new{active=req.Active,groups=groups.Length,names=groups});
+}).RequireAuthorization();
+
 app.MapPost("/api/providers/{providerId}/refresh-live-preview", async (string providerId, HttpContext ctx) =>
 {
     if (!CanManageProviderId(ctx, providerId)) return Results.Forbid();
@@ -2756,7 +2788,7 @@ app.MapPost("/api/providers/{providerId}/refresh-live", async (string providerId
     if (!CanManageProviderId(ctx, providerId)) return Results.Forbid();
     var p=LoadProviders().FirstOrDefault(x=>x.Id==providerId); if(p is null)return Results.NotFound();
     var before=channelCache.TryGetValue(providerId,out var old)?old.Channels:(TryLoadLiveChannelDiskCache(providerId,TimeSpan.FromDays(7),out var disk)?disk:new List<LiveChannel>());
-    var fresh=await LoadProviderChannels(p); channelCache[providerId]=new ChannelCacheEntry(fresh,DateTimeOffset.UtcNow); SaveLiveChannelDiskCache(providerId,fresh);
+    var fresh=await LoadProviderChannels(p); channelCache[providerId]=new ChannelCacheEntry(fresh,DateTimeOffset.UtcNow); SaveLiveChannelDiskCache(providerId,fresh); EnsureAdultGroupsHidden(providerId,fresh);
     var b=before.ToDictionary(x=>x.Key,StringComparer.OrdinalIgnoreCase); var f=fresh.ToDictionary(x=>x.Key,StringComparer.OrdinalIgnoreCase);
     var addedKeys=f.Keys.Where(k=>!b.ContainsKey(k)).ToArray(); var added=addedKeys.Length; var removed=b.Keys.Count(k=>!f.ContainsKey(k));
     var updated=f.Keys.Count(k=>b.TryGetValue(k,out var z)&&(z.Name!=f[k].Name||z.Group!=f[k].Group||z.SourceUrl!=f[k].SourceUrl));
@@ -4548,7 +4580,7 @@ async Task ProviderRefreshSchedulerLoop()
                     var removed=b.Keys.Count(k=>!f.ContainsKey(k));
                     var updated=f.Keys.Count(k=>b.TryGetValue(k,out var z)&&(z.Name!=f[k].Name||z.Group!=f[k].Group||z.SourceUrl!=f[k].SourceUrl));
                     var unchanged=Math.Max(0,fresh.Count-added-updated);
-                    channelCache[p.Id]=new ChannelCacheEntry(fresh,DateTimeOffset.UtcNow);SaveLiveChannelDiskCache(p.Id,fresh);
+                    channelCache[p.Id]=new ChannelCacheEntry(fresh,DateTimeOffset.UtcNow);SaveLiveChannelDiskCache(p.Id,fresh);EnsureAdultGroupsHidden(p.Id,fresh);
                     if(!r.NewChannelsActive&&addedKeys.Length>0){var cpAll=LoadChannelPreferences();var cp=cpAll.TryGetValue(p.Id,out var cpx)?cpx:new ChannelPreferences(new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase));foreach(var k in addedKeys)cp.HiddenChannels.Add(k);cpAll[p.Id]=cp;Save(channelPreferencesFile,cpAll);}
                     r.LastRefresh=DateTimeOffset.UtcNow;r.LastAdded=added;r.LastUpdated=updated;r.LastRemoved=removed;r.LastUnchanged=unchanged;all[p.Id]=pref;Save(libraryManagementFile,all);
                     AddProviderSyncEvent(p.Id,"scheduled",true,added,updated,removed,unchanged);
@@ -5235,6 +5267,7 @@ sealed class GroupQualityRule { public string[] Allowed { get; set; } = Array.Em
 sealed class ProviderRefreshState { public string Mode { get; set; }="manual"; public int IntervalHours { get; set; }=24; public bool NewChannelsActive { get; set; }=true; public DateTimeOffset? LastRefresh { get; set; } public int LastAdded { get; set; } public int LastUpdated { get; set; } public int LastRemoved { get; set; } public int LastUnchanged { get; set; } }
 record GroupQualityRuleRequest(string Group,string[]? Allowed,bool BestOnly,string[]? Priority);
 record RefreshSettings(string? Mode,int IntervalHours,bool NewChannelsActive=true);
+record AdultGroupControlRequest(bool Active);
 record ProviderSyncEvent(DateTimeOffset At,string ProviderId,string Trigger,bool Ok,int Added,int Updated,int Removed,int Unchanged,string? Error);
 record BulkLibraryChannelsRequest(string[]? ChannelKeys,bool Hidden);
 
