@@ -1,3 +1,12 @@
+# v39.7.1
+
+- Makes interval/daily IPTV Live TV refresh settings operational with a background scheduler.
+- Scheduled sync preserves visibility choices and respects the “new channels active” setting.
+- Adds persistent provider sync history for manual and scheduled reloads.
+- Adds provider sync diagnostics with recent failures and change counts.
+- Keeps manual preview/reload from v39.7.0.
+- Scheduler checks every five minutes and only refreshes providers that are due.
+
 # v39.7.0
 
 - Strong Live TV group filtering: All / Active / Inactive, search and bulk activate/deactivate matching groups.

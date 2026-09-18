@@ -71,6 +71,7 @@ var channelPreferencesFile = Path.Combine(dataDir, "channel-preferences.json");
 var cataloguePreferencesFile = Path.Combine(dataDir, "catalogue-preferences.json");
 var libraryManagementFile = Path.Combine(dataDir, "library-management.json");
 var providerRefreshFile = Path.Combine(dataDir, "provider-refresh.json");
+var providerSyncHistoryFile = Path.Combine(dataDir, "provider-sync-history.json");
 var profilesFile = Path.Combine(dataDir, "profiles.json");
 var adminFile = Path.Combine(dataDir, "admin.json");
 var usersFile = Path.Combine(dataDir, "users.json");
@@ -2667,6 +2668,15 @@ app.MapDelete("/api/profiles/{id}", (string id) =>
 }).RequireAuthorization(p => p.RequireRole("Admin"));
 
 
+// v39.7.1 IPTV Sync & Diagnostics
+List<ProviderSyncEvent> LoadProviderSyncHistory() => Load<List<ProviderSyncEvent>>(providerSyncHistoryFile) ?? new();
+void AddProviderSyncEvent(string providerId,string trigger,bool ok,int added,int updated,int removed,int unchanged,string? error=null)
+{
+    var rows=LoadProviderSyncHistory();
+    rows.Insert(0,new ProviderSyncEvent(DateTimeOffset.UtcNow,providerId,trigger,ok,added,updated,removed,unchanged,error));
+    Save(providerSyncHistoryFile,rows.Take(200).ToList());
+}
+
 // v37.0.0 Library Management & Provider Refresh
 Dictionary<string, LibraryManagementPreferences> LoadLibraryManagement() =>
     Load<Dictionary<string, LibraryManagementPreferences>>(libraryManagementFile) ?? new(StringComparer.OrdinalIgnoreCase);
@@ -2751,8 +2761,25 @@ app.MapPost("/api/providers/{providerId}/refresh-live", async (string providerId
     var addedKeys=f.Keys.Where(k=>!b.ContainsKey(k)).ToArray(); var added=addedKeys.Length; var removed=b.Keys.Count(k=>!f.ContainsKey(k));
     var updated=f.Keys.Count(k=>b.TryGetValue(k,out var z)&&(z.Name!=f[k].Name||z.Group!=f[k].Group||z.SourceUrl!=f[k].SourceUrl));
     var unchanged=Math.Max(0,fresh.Count-added-updated); var now=DateTimeOffset.UtcNow;
-    var all=LoadLibraryManagement(); var pref=all.TryGetValue(providerId,out var lm)&&lm is not null?lm:new LibraryManagementPreferences(); if(!pref.Refresh.NewChannelsActive&&addedKeys.Length>0){var cpAll=LoadChannelPreferences();var cp=cpAll.TryGetValue(providerId,out var cpx)?cpx:new ChannelPreferences(new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase));foreach(var k in addedKeys)cp.HiddenChannels.Add(k);cpAll[providerId]=cp;Save(channelPreferencesFile,cpAll);} pref.Refresh.LastRefresh=now; pref.Refresh.LastAdded=added; pref.Refresh.LastUpdated=updated; pref.Refresh.LastRemoved=removed; pref.Refresh.LastUnchanged=unchanged; all[providerId]=pref; Save(libraryManagementFile,all);
+    var all=LoadLibraryManagement(); var pref=all.TryGetValue(providerId,out var lm)&&lm is not null?lm:new LibraryManagementPreferences(); if(!pref.Refresh.NewChannelsActive&&addedKeys.Length>0){var cpAll=LoadChannelPreferences();var cp=cpAll.TryGetValue(providerId,out var cpx)?cpx:new ChannelPreferences(new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase));foreach(var k in addedKeys)cp.HiddenChannels.Add(k);cpAll[providerId]=cp;Save(channelPreferencesFile,cpAll);} pref.Refresh.LastRefresh=now; pref.Refresh.LastAdded=added; pref.Refresh.LastUpdated=updated; pref.Refresh.LastRemoved=removed; pref.Refresh.LastUnchanged=unchanged; all[providerId]=pref; Save(libraryManagementFile,all); AddProviderSyncEvent(providerId,"manual",true,added,updated,removed,unchanged);
     return Results.Ok(new { added,updated,removed,unchanged,total=fresh.Count,lastRefresh=now });
+}).RequireAuthorization();
+
+app.MapGet("/api/providers/{providerId}/sync-history", (string providerId,HttpContext ctx) =>
+{
+    if(!CanManageProviderId(ctx,providerId))return Results.Forbid();
+    return Results.Ok(LoadProviderSyncHistory().Where(x=>x.ProviderId.Equals(providerId,StringComparison.OrdinalIgnoreCase)).Take(50));
+}).RequireAuthorization();
+
+app.MapGet("/api/providers/{providerId}/sync-diagnostics", (string providerId,HttpContext ctx) =>
+{
+    if(!CanManageProviderId(ctx,providerId))return Results.Forbid();
+    var p=LoadProviders().FirstOrDefault(x=>x.Id==providerId);if(p is null)return Results.NotFound();
+    var pref=LibraryManagementFor(providerId).Refresh;
+    var history=LoadProviderSyncHistory().Where(x=>x.ProviderId.Equals(providerId,StringComparison.OrdinalIgnoreCase)).Take(20).ToArray();
+    return Results.Ok(new { providerId,provider=p.Name,type=p.Type,mode=pref.Mode,intervalHours=pref.IntervalHours,lastRefresh=pref.LastRefresh,
+        lastAdded=pref.LastAdded,lastUpdated=pref.LastUpdated,lastRemoved=pref.LastRemoved,lastUnchanged=pref.LastUnchanged,
+        recentFailures=history.Count(x=>!x.Ok),history });
 }).RequireAuthorization();
 
 app.MapPost("/api/providers/{providerId}/refresh-settings", (string providerId, RefreshSettings req, HttpContext ctx) =>
@@ -4497,6 +4524,43 @@ app.MapGet("/api/iptv/transport/capabilities", () => Results.Ok(new
     paidAiRequired = false
 })).RequireAuthorization();
 
+async Task ProviderRefreshSchedulerLoop()
+{
+    while(true)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromMinutes(5));
+            foreach(var p in LoadProviders())
+            {
+                var all=LoadLibraryManagement();
+                var pref=all.TryGetValue(p.Id,out var lm)&&lm is not null?lm:new LibraryManagementPreferences();
+                var r=pref.Refresh;
+                if(r.Mode=="manual")continue;
+                var due=!r.LastRefresh.HasValue || DateTimeOffset.UtcNow-r.LastRefresh.Value >= TimeSpan.FromHours(r.Mode=="daily"?24:Math.Clamp(r.IntervalHours,1,168));
+                if(!due)continue;
+                try
+                {
+                    var before=channelCache.TryGetValue(p.Id,out var old)?old.Channels:(TryLoadLiveChannelDiskCache(p.Id,TimeSpan.FromDays(7),out var disk)?disk:new List<LiveChannel>());
+                    var fresh=await LoadProviderChannels(p);
+                    var b=before.ToDictionary(x=>x.Key,StringComparer.OrdinalIgnoreCase);var f=fresh.ToDictionary(x=>x.Key,StringComparer.OrdinalIgnoreCase);
+                    var addedKeys=f.Keys.Where(k=>!b.ContainsKey(k)).ToArray();var added=addedKeys.Length;
+                    var removed=b.Keys.Count(k=>!f.ContainsKey(k));
+                    var updated=f.Keys.Count(k=>b.TryGetValue(k,out var z)&&(z.Name!=f[k].Name||z.Group!=f[k].Group||z.SourceUrl!=f[k].SourceUrl));
+                    var unchanged=Math.Max(0,fresh.Count-added-updated);
+                    channelCache[p.Id]=new ChannelCacheEntry(fresh,DateTimeOffset.UtcNow);SaveLiveChannelDiskCache(p.Id,fresh);
+                    if(!r.NewChannelsActive&&addedKeys.Length>0){var cpAll=LoadChannelPreferences();var cp=cpAll.TryGetValue(p.Id,out var cpx)?cpx:new ChannelPreferences(new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase));foreach(var k in addedKeys)cp.HiddenChannels.Add(k);cpAll[p.Id]=cp;Save(channelPreferencesFile,cpAll);}
+                    r.LastRefresh=DateTimeOffset.UtcNow;r.LastAdded=added;r.LastUpdated=updated;r.LastRemoved=removed;r.LastUnchanged=unchanged;all[p.Id]=pref;Save(libraryManagementFile,all);
+                    AddProviderSyncEvent(p.Id,"scheduled",true,added,updated,removed,unchanged);
+                }
+                catch(Exception ex){app.Logger.LogWarning(ex,"Scheduled IPTV refresh failed for {ProviderId}",p.Id);AddProviderSyncEvent(p.Id,"scheduled",false,0,0,0,0,ex.Message);}
+            }
+        }
+        catch(Exception ex){app.Logger.LogWarning(ex,"IPTV provider refresh scheduler iteration failed.");}
+    }
+}
+_ = Task.Run(ProviderRefreshSchedulerLoop);
+
 app.Run();
 
 async Task StopLiveSession(string sessionId)
@@ -5171,6 +5235,7 @@ sealed class GroupQualityRule { public string[] Allowed { get; set; } = Array.Em
 sealed class ProviderRefreshState { public string Mode { get; set; }="manual"; public int IntervalHours { get; set; }=24; public bool NewChannelsActive { get; set; }=true; public DateTimeOffset? LastRefresh { get; set; } public int LastAdded { get; set; } public int LastUpdated { get; set; } public int LastRemoved { get; set; } public int LastUnchanged { get; set; } }
 record GroupQualityRuleRequest(string Group,string[]? Allowed,bool BestOnly,string[]? Priority);
 record RefreshSettings(string? Mode,int IntervalHours,bool NewChannelsActive=true);
+record ProviderSyncEvent(DateTimeOffset At,string ProviderId,string Trigger,bool Ok,int Added,int Updated,int Removed,int Unchanged,string? Error);
 record BulkLibraryChannelsRequest(string[]? ChannelKeys,bool Hidden);
 
 record GroupVisibilityRequest(string Group, bool Hidden);

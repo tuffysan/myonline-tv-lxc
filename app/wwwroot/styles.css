@@ -2118,3 +2118,6 @@ html.isTV button,html.isTV a,html.isTV [tabindex="0"]{scroll-margin:28px}
 .lmRefreshPanel{display:grid;gap:10px;padding:12px 0}.lmRefreshPanel>div:first-child{display:grid;gap:3px}
 .lmRefreshPanel input[type=number]{width:84px}.lmDiff{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:10px 12px;border:1px solid var(--border,#303747);border-radius:10px}.lmDiff small{flex-basis:100%}
 .lmFilterBar{position:sticky;top:0;z-index:3;padding:10px;background:var(--bg,#0b0f16);border-radius:10px}
+
+/* v39.7.1 IPTV Sync & Diagnostics */
+.lmSyncDiag{padding:12px;border:1px solid var(--border,#303747);border-radius:10px}.lmSyncDiag .manageList{max-height:320px;overflow:auto}

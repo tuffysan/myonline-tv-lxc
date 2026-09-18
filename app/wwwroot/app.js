@@ -4693,7 +4693,7 @@ async function libraryManagementView(){const id=lmProviderId();if(!id)return;cur
 function renderLmRefresh(r){
  const x=$('#lmRefreshStatus');if(!x||!r)return;
  x.innerHTML=`<div class=lmRefreshPanel><div><b>Live TV provider sync</b><small>Last reload: ${r.lastRefresh?new Date(r.lastRefresh).toLocaleString():'Never'}${r.lastRefresh?` · +${r.lastAdded||0} new · ~${r.lastUpdated||0} changed · −${r.lastRemoved||0} removed`:''}</small></div>
- <div class=row><button class=btn onclick="previewLiveLibrary(this)">Preview provider changes</button><button class="btn primaryBtn" onclick="refreshLiveLibrary(this)">↻ Reload Live TV now</button></div>
+ <div class=row><button class=btn onclick="previewLiveLibrary(this)">Preview provider changes</button><button class="btn primaryBtn" onclick="refreshLiveLibrary(this)">↻ Reload Live TV now</button><button class=btn onclick="showLmSyncDiagnostics()">Sync diagnostics</button></div>
  <div class=row><label>Automatic sync <select id=lmRefreshMode onchange="saveLmRefreshSettings()"><option value=manual ${r.mode==='manual'?'selected':''}>Manual</option><option value=interval ${r.mode==='interval'?'selected':''}>Every X hours</option><option value=daily ${r.mode==='daily'?'selected':''}>Daily</option></select></label>
  <label>Hours <input id=lmRefreshHours type=number min=1 max=168 value="${r.intervalHours||24}" onchange="saveLmRefreshSettings()"></label>
  <label class=checkline><input id=lmNewChannelsActive type=checkbox ${r.newChannelsActive!==false?'checked':''} onchange="saveLmRefreshSettings()"> New channels active</label></div><div id=lmRefreshPreview></div></div>`;
@@ -4712,6 +4712,12 @@ async function refreshLiveLibrary(btn){
  try{const r=await jpost('/api/providers/'+encodeURIComponent(id)+'/refresh-live',{});
  if(x)x.innerHTML=`<div class=lmDiff><b>Reload complete</b><span>+${r.added} new</span><span>~${r.updated} updated</span><span>−${r.removed} removed</span><span>${r.unchanged} unchanged</span></div>`;
  await libraryManagementView()}catch(e){if(x)x.innerHTML=errorCard(e)}finally{btn&&(btn.disabled=false)}
+}
+async function showLmSyncDiagnostics(){
+ const id=lmProviderId(),box=$('#lmRefreshPreview');box.innerHTML='<p class=muted>Loading sync history…</p>';
+ try{const d=await api('/api/providers/'+encodeURIComponent(id)+'/sync-diagnostics');
+ const rows=d.history||[];box.innerHTML=`<div class=lmSyncDiag><h4>IPTV sync diagnostics</h4><p>${esc(d.mode)} · every ${d.intervalHours}h · ${d.recentFailures} recent failures</p><div class=manageList>${rows.map(x=>`<div><b>${x.ok?'✓':'!'} ${new Date(x.at).toLocaleString()} · ${esc(x.trigger)}</b><small>${x.ok?`+${x.added} · ~${x.updated} · −${x.removed} · ${x.unchanged} unchanged`:esc(x.error||'Sync failed')}</small></div>`).join('')||'<span class=muted>No sync history yet.</span>'}</div></div>`}
+ catch(e){box.innerHTML=errorCard(e)}
 }
 function qualityChecks(g){const allowed=g.quality?.allowed||[];return ['RAW','4K','FHD','HD','SD','Unknown'].map(q=>`<label><input type=checkbox data-q="${q}" ${!allowed.length||allowed.includes(q)?'checked':''}> ${q}</label>`).join('')}
 async function saveGroupQuality(group,el){const card=el.closest('.lmGroupCard'),allowed=[...card.querySelectorAll('[data-q]:checked')].map(x=>x.dataset.q),bestOnly=card.querySelector('[data-best]').checked,priority=card.querySelector('[data-priority]').value.split(',').map(x=>x.trim()).filter(Boolean);await jpost('/api/library-management/'+encodeURIComponent(lmProviderId())+'/quality',{group,allowed,bestOnly,priority});el.textContent='Saved ✓';setTimeout(()=>el.textContent='Save quality',1200)}
