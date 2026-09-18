@@ -4959,3 +4959,17 @@ const ProfileState={
 function profileStatePanel(){
   DeviceExperience.actionMenu(null,`<h3>Profile state</h3><p>Active profile: <b>${esc(ProfileState.current())}</b></p><p class=muted>Favorites, watchlist, navigation preferences and future profile-aware settings can use this shared namespace.</p><button class=btn onclick="navigator.clipboard?.writeText(JSON.stringify(ProfileState.export(),null,2))">Copy profile state</button>`);
 }
+
+
+
+// v39.4.0 Performance & Perceived Speed
+const UiPerformance={
+  cache:new Map(),
+  async cached(key,loader,ttl=60000){const x=this.cache.get(key);if(x&&Date.now()-x.at<ttl)return x.value;const value=await loader();this.cache.set(key,{at:Date.now(),value});return value},
+  skeleton(host,count=6){if(typeof host==='string')host=$(host);if(host)host.innerHTML=`<div class=skeletonGrid>${Array.from({length:count},()=>'<i class=skeletonCard></i>').join('')}</div>`},
+  lazyImages(root=document){root.querySelectorAll('img[data-src]').forEach(img=>{img.loading='lazy';img.decoding='async';img.src=img.dataset.src;delete img.dataset.src})},
+  idle(fn){('requestIdleCallback'in window?requestIdleCallback:setTimeout)(fn)}
+};
+const _apiBase=window.api;
+if(typeof _apiBase==='function'){window.cachedApi=(url,opts={},ttl=60000)=>UiPerformance.cached(url,()=>_apiBase(url,opts),ttl)}
+document.addEventListener('DOMContentLoaded',()=>UiPerformance.idle(()=>UiPerformance.lazyImages()),{once:true});

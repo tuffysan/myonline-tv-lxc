@@ -1,3 +1,11 @@
+# v39.4.0
+
+- Shared TTL cache for repeated UI data requests.
+- Reusable skeleton-loading grids improve perceived speed.
+- Lazy image loading and asynchronous image decoding.
+- Idle-time enhancement work avoids blocking navigation.
+- Reduced-motion users automatically avoid skeleton animation.
+
 # v39.3.0
 
 - Shared per-profile state namespace for all device types.

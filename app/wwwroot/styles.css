@@ -2094,3 +2094,10 @@ button,a,input,select,[tabindex]{min-height:var(--tap-target)}
 /* v39.3 Profiles Everywhere */
 .profileBadge{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:7px 11px;border:1px solid var(--border,#303747)}
 [data-device-mode="tv"] .profileBadge{padding:10px 16px}
+
+
+
+/* v39.4 Performance */
+.skeletonGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}.skeletonCard{height:210px;border-radius:14px;background:linear-gradient(90deg,#ffffff0a,#ffffff18,#ffffff0a);background-size:200% 100%;animation:skeletonMove 1.2s linear infinite}
+@keyframes skeletonMove{to{background-position:-200% 0}}@media(prefers-reduced-motion:reduce){.skeletonCard{animation:none}}
+.content-visibility-auto{content-visibility:auto;contain-intrinsic-size:300px}
