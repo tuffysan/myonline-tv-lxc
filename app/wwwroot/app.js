@@ -1426,7 +1426,8 @@ async function mediaLibraryView(type){
 
   try{
     const endpoint=tab==='movies'?'/api/unified/movies':'/api/unified/series';
-    const rows=(await api(endpoint,{timeoutMs:65000}))
+    const cacheKey=tab==='movies'?'unified:movies':'unified:series';
+    const rows=(await perfCachedApi(cacheKey,endpoint,900000,{timeoutMs:65000}))
       .filter(x=>String(x.source||'').toLowerCase()===source);
 
     const host=$('#sourceLibraryContent');
@@ -3805,12 +3806,16 @@ async function prefetchViewData(view){
       ]);
     }else if(view==='library'){
       await Promise.all([
-        perfCachedApi('unified:movies','/api/unified/movies',120000,{timeoutMs:20000,attempts:1}),
-        perfCachedApi('unified:series','/api/unified/series',120000,{timeoutMs:20000,attempts:1})
+        perfCachedApi('unified:movies','/api/unified/movies',900000,{timeoutMs:20000,attempts:1}),
+        perfCachedApi('unified:series','/api/unified/series',900000,{timeoutMs:20000,attempts:1})
       ]);
     }
   }catch{}
 }
+// v39.8.2 VOD buffering helper.
+function enhanceVodVideoBuffering(root=document){root.querySelectorAll?.('video').forEach(v=>{if(v.dataset.vodBufferEnhanced)return;v.dataset.vodBufferEnhanced='true';v.preload='auto';v.setAttribute('playsinline','')})}
+const vodVideoObserver=new MutationObserver(ms=>ms.forEach(m=>m.addedNodes?.forEach(n=>{if(n.nodeType===1)enhanceVodVideoBuffering(n)})));
+vodVideoObserver.observe(document.documentElement,{childList:true,subtree:true});enhanceVodVideoBuffering();
 document.addEventListener('pointerover',e=>{
   const b=e.target.closest?.('[data-view]');
   if(b?.dataset?.view)prefetchViewData(b.dataset.view);
@@ -4753,7 +4758,7 @@ if(lmState.tab==='channels'){
 if(lmState.tab==='movies'||lmState.tab==='series'){const kind=lmState.tab==='movies'?'vod':'series',label=lmState.tab==='movies'?'Movies':'Series';body.innerHTML=`<div class=admin2CardHead><div><h3>${label}</h3><p>Hide categories or individual titles. Hidden items remain blocked after provider refresh.</p></div><button class=btn onclick="lmLoadCatalogue('${kind}')">Load ${label}</button></div><div id=lmCatalogue><p class=muted>Press Load ${label} to fetch the current provider catalogue.</p></div>`;return}
 body.innerHTML=`<div class=admin2CardHead><div><h3>Cleanup Center</h3><p>Find duplicate-looking channels, empty groups and missing metadata before hiding anything.</p></div><button class=btn onclick=lmRunCleanup()>Scan library</button></div><div id=lmCleanup></div>`}
 function lmFilterCards(q){q=(q||'').toLowerCase();document.querySelectorAll('[data-lm-filter]').forEach(x=>x.hidden=!x.dataset.lmFilter.includes(q))}
-function lmIsAdultGroup(name){const g=String(name||'').trim().toLowerCase();return ['adult','adults','xxx','18+','18 +','18plus','18 plus','erotic','erotica','porn','porno','sex','playboy'].some(x=>g.includes(x))}
+function lmIsAdultGroup(name){const g=String(name||'').trim().toLowerCase();return ['adult','adults','xxx','xx ','18+','18 +','18plus','18 plus','18 years','erotic','erotica','porn','porno','sex','playboy','redlight','red light','hot xxx'].some(x=>g.includes(x))}
 function lmApplyGroupFilters(){const q=($('#lmSearch')?.value||'').toLowerCase(),s=$('#lmGroupState')?.value||'all';document.querySelectorAll('.lmGroupCard[data-lm-filter]').forEach(x=>{const text=x.dataset.lmFilter||'',hidden=x.dataset.hidden==='true',adult=x.dataset.adult==='true';x.hidden=!(text.includes(q)&&(s==='all'||(s==='active'&&!hidden)||(s==='inactive'&&hidden)||(s==='adult'&&adult)))})}
 async function lmSetVisibleGroups(hidden){const cards=[...document.querySelectorAll('.lmGroupCard[data-lm-filter]:not([hidden])')],adultSkipped=!hidden?cards.filter(x=>x.dataset.adult==='true').length:0,names=cards.filter(x=>hidden||x.dataset.adult!=='true').map(x=>x.querySelector('.lmTitle b')?.childNodes[0]?.textContent?.trim()||'').filter(Boolean);if(!names.length){if(adultSkipped)alert('Adult (18+) groups are protected. Use Enable Adult (18+) explicitly.');return}if(!confirm(`${hidden?'Deactivate':'Activate'} ${names.length} matching groups?${adultSkipped?` ${adultSkipped} Adult group(s) stay inactive.`:''}`))return;for(const group of names)await jpost('/api/channel-preferences/'+encodeURIComponent(lmProviderId())+'/group',{group,hidden});await libraryManagementView()}
 async function lmSetAdultGroups(active){if(active&&!confirm('Enable all detected Adult (18+) groups for this IPTV provider?'))return;const r=await jpost('/api/providers/'+encodeURIComponent(lmProviderId())+'/adult-groups',{active});if(window.UXConsistency)UXConsistency.toast(`${r.groups||0} Adult group(s) ${active?'enabled':'disabled'}`,active?'info':'success');await libraryManagementView()}

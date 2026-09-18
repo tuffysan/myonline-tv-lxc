@@ -72,6 +72,7 @@ var cataloguePreferencesFile = Path.Combine(dataDir, "catalogue-preferences.json
 var libraryManagementFile = Path.Combine(dataDir, "library-management.json");
 var providerRefreshFile = Path.Combine(dataDir, "provider-refresh.json");
 var providerSyncHistoryFile = Path.Combine(dataDir, "provider-sync-history.json");
+var adultGroupStateFile = Path.Combine(dataDir, "adult-group-state.json");
 var profilesFile = Path.Combine(dataDir, "profiles.json");
 var adminFile = Path.Combine(dataDir, "admin.json");
 var usersFile = Path.Combine(dataDir, "users.json");
@@ -2682,16 +2683,19 @@ static bool IsAdultGroupName(string? group)
 {
     if(string.IsNullOrWhiteSpace(group)) return false;
     var g=group.Trim().ToLowerInvariant();
-    string[] tokens={"adult","adults","xxx","18+","18 +","18plus","18 plus","erotic","erotica","porn","porno","sex","playboy"};
+    string[] tokens={"adult","adults","xxx","xx ","18+","18 +","18plus","18 plus","18 years","erotic","erotica","porn","porno","sex","playboy","redlight","red light","hot xxx"};
     return tokens.Any(t=>g.Contains(t,StringComparison.OrdinalIgnoreCase));
 }
 void EnsureAdultGroupsHidden(string providerId,IEnumerable<LiveChannel> channels)
 {
     var groups=channels.Select(x=>x.Group??"").Where(IsAdultGroupName).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     if(groups.Length==0)return;
+    var states=Load<Dictionary<string,HashSet<string>>>(adultGroupStateFile)??new(StringComparer.OrdinalIgnoreCase);
+    var known=states.TryGetValue(providerId,out var k)?k:new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     var all=LoadChannelPreferences();
     var cp=all.TryGetValue(providerId,out var old)?old:new ChannelPreferences(new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase));
-    var changed=false;foreach(var g in groups)if(cp.HiddenGroups.Add(g))changed=true;
+    var changed=false;foreach(var g in groups)if(known.Add(g)){cp.HiddenGroups.Add(g);changed=true;}
+    states[providerId]=known;Save(adultGroupStateFile,states);
     if(changed){all[providerId]=cp;Save(channelPreferencesFile,all);}
 }
 
@@ -2760,7 +2764,7 @@ app.MapPost("/api/providers/{providerId}/adult-groups", async (string providerId
     var all=LoadChannelPreferences();
     var cp=all.TryGetValue(providerId,out var old)?old:new ChannelPreferences(new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase));
     foreach(var g in groups){if(req.Active)cp.HiddenGroups.Remove(g);else cp.HiddenGroups.Add(g);}
-    all[providerId]=cp;Save(channelPreferencesFile,all);
+    all[providerId]=cp;Save(channelPreferencesFile,all); var states=Load<Dictionary<string,HashSet<string>>>(adultGroupStateFile)??new(StringComparer.OrdinalIgnoreCase); states[providerId]=new HashSet<string>(groups,StringComparer.OrdinalIgnoreCase); Save(adultGroupStateFile,states);
     return Results.Ok(new{active=req.Active,groups=groups.Length,names=groups});
 }).RequireAuthorization();
 

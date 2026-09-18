@@ -1,3 +1,8 @@
+# v39.8.2
+
+- Improved Movies/Series cache and buffering.
+- Fixed Adult/XXX Live TV persistence and detection.
+
 # v39.8.1
 
 - Added protected Adult/18+ IPTV group control.
