@@ -2722,6 +2722,25 @@ app.MapPost("/api/library-management/{providerId}/quality", (string providerId, 
     all[providerId]=pref; Save(libraryManagementFile,all); return Results.Ok(pref.Groups[req.Group]);
 }).RequireAuthorization();
 
+app.MapPost("/api/providers/{providerId}/refresh-live-preview", async (string providerId, HttpContext ctx) =>
+{
+    if (!CanManageProviderId(ctx, providerId)) return Results.Forbid();
+    var p=LoadProviders().FirstOrDefault(x=>x.Id==providerId); if(p is null)return Results.NotFound();
+    var before=channelCache.TryGetValue(providerId,out var old)?old.Channels:(TryLoadLiveChannelDiskCache(providerId,TimeSpan.FromDays(7),out var disk)?disk:new List<LiveChannel>());
+    var fresh=await LoadProviderChannels(p);
+    var b=before.ToDictionary(x=>x.Key,StringComparer.OrdinalIgnoreCase); var f=fresh.ToDictionary(x=>x.Key,StringComparer.OrdinalIgnoreCase);
+    var added=f.Keys.Where(k=>!b.ContainsKey(k)).ToArray();
+    var removed=b.Keys.Where(k=>!f.ContainsKey(k)).ToArray();
+    var updated=f.Keys.Where(k=>b.TryGetValue(k,out var z)&&(z.Name!=f[k].Name||z.Group!=f[k].Group||z.SourceUrl!=f[k].SourceUrl)).ToArray();
+    return Results.Ok(new {
+        added=added.Length, updated=updated.Length, removed=removed.Length,
+        unchanged=Math.Max(0,fresh.Count-added.Length-updated.Length), total=fresh.Count,
+        sampleAdded=added.Take(20).Select(k=>new { key=k,name=f[k].Name,group=f[k].Group }),
+        sampleUpdated=updated.Take(20).Select(k=>new { key=k,name=f[k].Name,group=f[k].Group }),
+        sampleRemoved=removed.Take(20).Select(k=>new { key=k,name=b[k].Name,group=b[k].Group })
+    });
+}).RequireAuthorization();
+
 app.MapPost("/api/providers/{providerId}/refresh-live", async (string providerId, HttpContext ctx) =>
 {
     if (!CanManageProviderId(ctx, providerId)) return Results.Forbid();
@@ -2729,17 +2748,17 @@ app.MapPost("/api/providers/{providerId}/refresh-live", async (string providerId
     var before=channelCache.TryGetValue(providerId,out var old)?old.Channels:(TryLoadLiveChannelDiskCache(providerId,TimeSpan.FromDays(7),out var disk)?disk:new List<LiveChannel>());
     var fresh=await LoadProviderChannels(p); channelCache[providerId]=new ChannelCacheEntry(fresh,DateTimeOffset.UtcNow); SaveLiveChannelDiskCache(providerId,fresh);
     var b=before.ToDictionary(x=>x.Key,StringComparer.OrdinalIgnoreCase); var f=fresh.ToDictionary(x=>x.Key,StringComparer.OrdinalIgnoreCase);
-    var added=f.Keys.Count(k=>!b.ContainsKey(k)); var removed=b.Keys.Count(k=>!f.ContainsKey(k));
+    var addedKeys=f.Keys.Where(k=>!b.ContainsKey(k)).ToArray(); var added=addedKeys.Length; var removed=b.Keys.Count(k=>!f.ContainsKey(k));
     var updated=f.Keys.Count(k=>b.TryGetValue(k,out var z)&&(z.Name!=f[k].Name||z.Group!=f[k].Group||z.SourceUrl!=f[k].SourceUrl));
     var unchanged=Math.Max(0,fresh.Count-added-updated); var now=DateTimeOffset.UtcNow;
-    var all=LoadLibraryManagement(); var pref=all.TryGetValue(providerId,out var lm)&&lm is not null?lm:new LibraryManagementPreferences(); pref.Refresh.LastRefresh=now; pref.Refresh.LastAdded=added; pref.Refresh.LastUpdated=updated; pref.Refresh.LastRemoved=removed; pref.Refresh.LastUnchanged=unchanged; all[providerId]=pref; Save(libraryManagementFile,all);
+    var all=LoadLibraryManagement(); var pref=all.TryGetValue(providerId,out var lm)&&lm is not null?lm:new LibraryManagementPreferences(); if(!pref.Refresh.NewChannelsActive&&addedKeys.Length>0){var cpAll=LoadChannelPreferences();var cp=cpAll.TryGetValue(providerId,out var cpx)?cpx:new ChannelPreferences(new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase));foreach(var k in addedKeys)cp.HiddenChannels.Add(k);cpAll[providerId]=cp;Save(channelPreferencesFile,cpAll);} pref.Refresh.LastRefresh=now; pref.Refresh.LastAdded=added; pref.Refresh.LastUpdated=updated; pref.Refresh.LastRemoved=removed; pref.Refresh.LastUnchanged=unchanged; all[providerId]=pref; Save(libraryManagementFile,all);
     return Results.Ok(new { added,updated,removed,unchanged,total=fresh.Count,lastRefresh=now });
 }).RequireAuthorization();
 
 app.MapPost("/api/providers/{providerId}/refresh-settings", (string providerId, RefreshSettings req, HttpContext ctx) =>
 {
     if(!CanManageProviderId(ctx,providerId))return Results.Forbid(); var all=LoadLibraryManagement(); var pref=all.TryGetValue(providerId,out var x)&&x is not null?x:new LibraryManagementPreferences();
-    pref.Refresh.Mode=(req.Mode??"manual").ToLowerInvariant(); pref.Refresh.IntervalHours=Math.Clamp(req.IntervalHours,1,168); all[providerId]=pref; Save(libraryManagementFile,all); return Results.Ok(pref.Refresh);
+    pref.Refresh.Mode=(req.Mode??"manual").ToLowerInvariant(); pref.Refresh.IntervalHours=Math.Clamp(req.IntervalHours,1,168); pref.Refresh.NewChannelsActive=req.NewChannelsActive; all[providerId]=pref; Save(libraryManagementFile,all); return Results.Ok(pref.Refresh);
 }).RequireAuthorization();
 
 app.MapPost("/api/library-management/{providerId}/bulk-channels", (string providerId, BulkLibraryChannelsRequest req, HttpContext ctx) =>
@@ -5149,9 +5168,9 @@ sealed class LibraryManagementPreferences
     public ProviderRefreshState Refresh { get; set; } = new();
 }
 sealed class GroupQualityRule { public string[] Allowed { get; set; } = Array.Empty<string>(); public bool BestOnly { get; set; } public string[] Priority { get; set; } = new[]{"RAW","4K","FHD","HD","SD","Unknown"}; }
-sealed class ProviderRefreshState { public string Mode { get; set; }="manual"; public int IntervalHours { get; set; }=24; public DateTimeOffset? LastRefresh { get; set; } public int LastAdded { get; set; } public int LastUpdated { get; set; } public int LastRemoved { get; set; } public int LastUnchanged { get; set; } }
+sealed class ProviderRefreshState { public string Mode { get; set; }="manual"; public int IntervalHours { get; set; }=24; public bool NewChannelsActive { get; set; }=true; public DateTimeOffset? LastRefresh { get; set; } public int LastAdded { get; set; } public int LastUpdated { get; set; } public int LastRemoved { get; set; } public int LastUnchanged { get; set; } }
 record GroupQualityRuleRequest(string Group,string[]? Allowed,bool BestOnly,string[]? Priority);
-record RefreshSettings(string? Mode,int IntervalHours);
+record RefreshSettings(string? Mode,int IntervalHours,bool NewChannelsActive=true);
 record BulkLibraryChannelsRequest(string[]? ChannelKeys,bool Hidden);
 
 record GroupVisibilityRequest(string Group, bool Hidden);
