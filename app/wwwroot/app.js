@@ -803,6 +803,41 @@ async function loadLiveEpgQuiet(){
   try{epg=await api('/api/epg/'+currentProvider+'?hours=6')}catch(_){}
 }
 
+// v39.8.3 Live TV group filtering
+function liveGroupStorageKey(){return `myonline-live-group:${currentProfile||'default'}:${currentProvider||'none'}`}
+function rememberedLiveGroup(){try{return localStorage.getItem(liveGroupStorageKey())||''}catch{return ''}}
+function rememberLiveGroup(value){try{localStorage.setItem(liveGroupStorageKey(),value||'')}catch{}}
+function visibleLiveGroups(){
+ return [...new Set(channels.map(x=>x.group).filter(Boolean).filter(g=>!channelPrefs.hiddenGroups.includes(g)))].sort((a,b)=>a.localeCompare(b));
+}
+function liveGroupCounts(){
+ const counts=new Map();for(const c of channels){if(isChannelHidden(c))continue;const g=c.group||'Ungrouped';counts.set(g,(counts.get(g)||0)+1)}return counts;
+}
+function renderLiveGroupBar(){
+ const host=$('#liveGroupBar');if(!host)return;
+ const groups=visibleLiveGroups(),counts=liveGroupCounts(),selected=$('#group')?.value||'';
+ const adult=groups.filter(g=>typeof lmIsAdultGroup==='function'&&lmIsAdultGroup(g));
+ host.innerHTML=`<button class="liveGroupChip ${selected===''?'active':''}" data-live-group="">All <small>${channels.filter(c=>!isChannelHidden(c)).length}</small></button>
+ <button class="liveGroupChip ${selected==='__favorites'?'active':''}" data-live-group="__favorites">★ Favourites</button>
+ <button class="liveGroupChip ${selected==='__recent'?'active':''}" data-live-group="__recent">↻ Recent</button>
+ ${adult.length?`<button class="liveGroupChip adult ${selected==='__adult'?'active':''}" data-live-group="__adult">18+ Adult <small>${adult.reduce((n,g)=>n+(counts.get(g)||0),0)}</small></button>`:''}
+ ${groups.filter(g=>!adult.includes(g)).map(g=>`<button class="liveGroupChip ${selected===g?'active':''}" data-live-group="${escAttr(g)}">${esc(g)} <small>${counts.get(g)||0}</small></button>`).join('')}`;
+ host.querySelectorAll('[data-live-group]').forEach(b=>b.onclick=()=>setLiveGroup(b.dataset.liveGroup||''));
+}
+function setLiveGroup(group){
+ const sel=$('#group');if(!sel)return;
+ if(group==='__adult'&&!sel.querySelector('option[value="__adult"]'))return;
+ sel.value=group;rememberLiveGroup(group);renderFilter();renderLiveGroupBar();
+}
+function filterLiveGroupBar(q){
+ q=String(q||'').trim().toLowerCase();
+ document.querySelectorAll('#liveGroupBar [data-live-group]').forEach(b=>{b.hidden=!!q&&!b.textContent.toLowerCase().includes(q)});
+}
+function stepLiveGroup(delta){
+ const sel=$('#group');if(!sel)return;
+ const opts=[...sel.options].filter(o=>!o.disabled);let i=Math.max(0,opts.findIndex(o=>o.value===sel.value));
+ i=(i+delta+opts.length)%opts.length;setLiveGroup(opts[i].value);
+}
 async function live(){
   if(!await ensureProvider()){content.innerHTML=noProvider();return}
   await loadChannelPrefs();
@@ -814,16 +849,21 @@ function renderChannels(){
   content.innerHTML=`<div class="toolbar liveToolbar">
     ${providerSelect()}
     <input id=q placeholder="Search channels">
-    <select id=group>
-      <option value="">All channels</option>
+    <select id=group aria-label="Live TV group">
+      <option value="">All groups</option>
       <option value="__favorites">★ Favourites</option>
       <option value="__recent">↻ Recently watched</option>
-      ${[...new Set(channels.map(x=>x.group).filter(Boolean).filter(g=>!channelPrefs.hiddenGroups.includes(g)))].sort().map(g=>`<option>${esc(g)}</option>`).join('')}
+      ${visibleLiveGroups().some(g=>typeof lmIsAdultGroup==='function'&&lmIsAdultGroup(g))?'<option value="__adult">18+ Adult (XXX)</option>':''}
+      ${visibleLiveGroups().map(g=>`<option value="${escAttr(g)}">${esc(g)}</option>`).join('')}
     </select>
     <button class=btn id=liveFavQuick>★ Favourites</button>
     <button class=btn id=liveRecentQuick>↻ Recent</button>
     <button class=btn id=liveNowNextQuick>Now & Next</button><button class=btn id=liveLastQuick>↶ Last channel</button><button class=btn id=liveFullscreenQuick>⛶ Fullscreen</button>
     <button class=btn id=hideGroupBtn>Hide group</button>
+  </div>
+  <div class="liveGroupFilterPanel">
+    <div class="liveGroupFilterHead"><b>Groups</b><input id=liveGroupSearch placeholder="Filter groups…" aria-label="Filter Live TV groups"><small>Alt+← / Alt+→ changes group</small></div>
+    <div id=liveGroupBar class=liveGroupBar></div>
   </div>
   <div class="tvLiveShell">
     <aside class="liveChannelPane">
@@ -844,14 +884,17 @@ function renderChannels(){
   </div>`;
   $('#provider').onchange=async e=>{currentProvider=e.target.value;await live()};
   $('#q').oninput=renderFilter;
-  $('#group').onchange=renderFilter;
-  $('#liveFavQuick').onclick=()=>{$('#group').value='__favorites';renderFilter()};
-  $('#liveRecentQuick').onclick=()=>{$('#group').value='__recent';renderFilter()};
+  $('#group').onchange=e=>{rememberLiveGroup(e.target.value);renderFilter();renderLiveGroupBar()};
+  $('#liveFavQuick').onclick=()=>setLiveGroup('__favorites');
+  $('#liveRecentQuick').onclick=()=>setLiveGroup('__recent');
   $('#liveNowNextQuick').onclick=()=>toggleLiveNowNextBoard();
   $('#liveLastQuick').onclick=()=>playLastLiveChannel();
   $('#liveFullscreenQuick').onclick=()=>toggleLiveFullscreen();
   $('#hideGroupBtn').onclick=()=>hideGroup($('#group').value);
   $('#chan').addEventListener('keydown',liveKeyHandler);
+  $('#liveGroupSearch').oninput=e=>filterLiveGroupBar(e.target.value);
+  const remembered=rememberedLiveGroup();if([...$('#group').options].some(o=>o.value===remembered))$('#group').value=remembered;
+  renderLiveGroupBar();
   renderFilter();
 }
 
@@ -923,6 +966,7 @@ function renderFilter(){
   const q=($('#q')?.value||'').toLowerCase(),g=$('#group')?.value||'';
   let rows=channels.filter(c=>!isChannelHidden(c)).filter(c=>(!q||channelName(c).toLowerCase().includes(q)));
   if(g==='__favorites')rows=rows.filter(c=>fav.has(c.id));
+  else if(g==='__adult')rows=rows.filter(c=>typeof lmIsAdultGroup==='function'&&lmIsAdultGroup(c.group||''));
   else if(g==='__recent'){
     const order=getLiveRecents().filter(x=>x.providerId===currentProvider).map(x=>x.key);
     rows=order.map(k=>channelByKey(k)).filter(Boolean).filter(c=>!q||channelName(c).toLowerCase().includes(q));
@@ -930,7 +974,7 @@ function renderFilter(){
 
   liveVisibleRows=rows.slice(0,800);
   liveSelectedIndex=Math.min(liveSelectedIndex,Math.max(0,liveVisibleRows.length-1));
-  const count=$('#liveChannelCount');if(count)count.textContent=`${liveVisibleRows.length}`;
+  const count=$('#liveChannelCount');if(count){const label=$('#group')?.selectedOptions?.[0]?.textContent||'All groups';count.textContent=`${liveVisibleRows.length} · ${label}`;}
 
   $('#chan').innerHTML=liveVisibleRows.map((c,i)=>{
     const pg=liveProgramFor(c);
@@ -961,6 +1005,7 @@ function renderFilter(){
   });
 }
 function liveKeyHandler(e){
+  if(e.altKey&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){e.preventDefault();stepLiveGroup(e.key==='ArrowRight'?1:-1);return}
   if(!liveVisibleRows.length)return;
   if(e.key==='ArrowDown'||e.key==='ArrowUp'){
     e.preventDefault();liveSelectedIndex=(liveSelectedIndex+(e.key==='ArrowDown'?1:-1)+liveVisibleRows.length)%liveVisibleRows.length;renderFilter();

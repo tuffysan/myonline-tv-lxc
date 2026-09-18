@@ -1,3 +1,8 @@
+# v39.8.3
+
+- Added direct Live TV group filtering, group search, counts and remembered group selection.
+- Added Adult (XXX), Favourites and Recent group shortcuts.
+
 # v39.8.2
 
 - Improved Movies/Series cache and buffering.
