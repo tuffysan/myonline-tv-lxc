@@ -2073,3 +2073,10 @@ button,a,input,select,[tabindex]{min-height:var(--tap-target)}
 .oneSearchHead{display:grid;grid-template-columns:1fr auto;gap:10px}.oneSearchHead input{font-size:1.15rem}.searchResultGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.searchResultGrid button{text-align:left;border-radius:12px;padding:12px}
 .searchResultGrid b,.searchResultGrid small{display:block}.searchResultGrid small{color:var(--muted)}
 @media(max-width:700px){.oneSearchOverlay{padding:0}.oneSearchBox{min-height:100vh;border-radius:0}.searchResultGrid{grid-template-columns:repeat(2,1fr)}}
+
+
+
+/* v39.1 Instant Player */
+.instantPlayerControls{position:fixed;z-index:10500;left:50%;bottom:5vh;transform:translateX(-50%);display:flex;gap:8px;background:#080b10dd;border-radius:18px;padding:10px;box-shadow:0 12px 40px #0008}
+.instantPlayerControls button{border-radius:12px;padding:10px 14px}[data-device-mode="mobile"] .instantPlayerControls{left:8px;right:8px;transform:none;overflow-x:auto;justify-content:flex-start}
+[data-device-mode="tv"] .instantPlayerControls{bottom:8vh;font-size:1.15rem}

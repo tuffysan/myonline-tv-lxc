@@ -4905,3 +4905,20 @@ function openOneSearch(){
   setTimeout(()=>$('#oneSearchInput')?.focus(),20);
 }
 addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openOneSearch()}});
+
+
+
+// v39.1.0 Instant Player Experience
+const PlayerExperience={
+  historyKey:'myonline-channel-history',
+  remember(item){try{const h=JSON.parse(localStorage.getItem(this.historyKey)||'[]').filter(x=>x.key!==item.key);h.unshift({key:item.key,name:item.name,group:item.group,at:Date.now()});localStorage.setItem(this.historyKey,JSON.stringify(h.slice(0,20)))}catch{}},
+  history(){try{return JSON.parse(localStorage.getItem(this.historyKey)||'[]')}catch{return []}},
+  showControls(item={}){
+    let d=document.querySelector('#instantPlayerControls');if(d)d.remove();d=document.createElement('div');d.id='instantPlayerControls';d.className='instantPlayerControls';
+    d.innerHTML=`<button onclick="PlayerExperience.channel(-1)">◀ Prev</button><button onclick="toggleMyStuff('favorite',${JSON.stringify(item).replace(/"/g,'&quot;')})">★ Favorite</button><button onclick="show('guide')">Guide</button><button onclick="PlayerExperience.recent()">Recent</button><button onclick="PlayerExperience.channel(1)">Next ▶</button>`;
+    document.body.appendChild(d);clearTimeout(this._hide);this._hide=setTimeout(()=>d.remove(),7000);
+  },
+  channel(delta){window.dispatchEvent(new CustomEvent('playerchannelstep',{detail:{delta}}))},
+  recent(){DeviceExperience.actionMenu(null,`<h3>Recent channels</h3>${this.history().map(x=>`<button class=btn>${esc(x.name||x.key)}</button>`).join('')||'<p class=muted>No recent channels.</p>'}`)}
+};
+addEventListener('keydown',e=>{if(['MediaTrackNext','PageDown'].includes(e.key))PlayerExperience.channel(1);if(['MediaTrackPrevious','PageUp'].includes(e.key))PlayerExperience.channel(-1)});
