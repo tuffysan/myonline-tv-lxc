@@ -1972,175 +1972,42 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
 /* v37.0.0 Library Management */
 .libraryMgmtTabs{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.libraryMgmtTabs button{border:1px solid rgba(255,255,255,.12);background:#0d1b27;color:inherit;border-radius:10px;padding:10px 14px}.libraryMgmtTabs button.active{background:#19354b}.lmGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}.lmGroupCard{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:14px;display:grid;gap:12px}.lmTitle{display:flex;justify-content:space-between;gap:12px}.lmTitle small{display:block;color:var(--muted);margin-top:4px}.lmQualities{display:flex;flex-wrap:wrap;gap:10px}.lmTable{display:grid;gap:5px;margin-top:12px;max-height:65vh;overflow:auto}.lmChannelRow{display:grid;grid-template-columns:28px 36px minmax(160px,1fr) minmax(120px,.6fr) 70px;gap:8px;align-items:center;padding:7px 9px;border-bottom:1px solid rgba(255,255,255,.06)}.lmChannelRow img{width:30px;height:24px;object-fit:contain}.lmChannelRow em{font-style:normal;font-size:12px;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:2px 5px;text-align:center}.lmItems{display:grid;gap:5px;max-height:320px;overflow:auto}.lmItems label{font-size:13px}@media(max-width:719px){.lmGrid{grid-template-columns:1fr}.lmChannelRow{grid-template-columns:24px 30px 1fr 56px}.lmChannelRow small{display:none}.libraryMgmtTabs{overflow-x:auto;flex-wrap:nowrap}.libraryMgmtTabs button{white-space:nowrap}}
 
-
-/* v38.1.0 Navigation Reliability */
-.navConfigHidden{display:none!important}
-aside{min-height:0}
-aside nav{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
-aside nav button.active{background:#183f5a;border-color:#4aa8df;box-shadow:inset 3px 0 0 var(--accent)}
-.mobileBackButton{display:none;width:38px;height:38px;min-width:38px;border-radius:999px;border:1px solid var(--line);background:#10283a;color:#fff;font-size:1.8rem;line-height:1;place-items:center;cursor:pointer}
-.mobileBrandText{min-width:0}
-#mobilePageTitle{display:block;max-width:48vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.65;font-size:.70rem}
-.mobileMoreGrid button.active{outline:2px solid var(--accent);background:#143149}
+/* =========================================================
+   v37.1.0 Mobile Experience Redesign — dedicated phone UI
+   ========================================================= */
 @media(max-width:719px){
-  .mobile364HeaderBrand{display:flex;align-items:center;gap:8px}
-  .mobileBackButton:not(.hidden){display:grid}
+  :root{--mobile-nav-h:72px}
+  html.isMobile:not(.isTV) body{background:#061019!important;padding-bottom:calc(var(--mobile-nav-h) + env(safe-area-inset-bottom))!important}
+  html.isMobile:not(.isTV) body.mobileSheetOpen{overflow:hidden!important}
+  html.isMobile:not(.isTV) #app{display:block!important;min-height:100dvh!important}
+  html.isMobile:not(.isTV) #app>aside{display:none!important}
+  html.isMobile:not(.isTV) main{width:100%!important;min-height:100dvh!important;overflow:visible!important}
+  html.isMobile:not(.isTV) main>header{position:sticky!important;top:0!important;z-index:45!important;min-height:56px!important;padding:8px 12px!important;background:rgba(6,16,25,.94)!important;backdrop-filter:blur(18px)!important}
+  html.isMobile:not(.isTV) #content{padding:10px 12px calc(22px + var(--mobile-nav-h) + env(safe-area-inset-bottom))!important;overflow:visible!important}
+  html.isMobile:not(.isTV) .mobileBottomNav{position:fixed!important;left:0!important;right:0!important;bottom:0!important;z-index:80!important;display:grid!important;grid-template-columns:repeat(5,1fr)!important;min-height:var(--mobile-nav-h)!important;border-top:1px solid rgba(255,255,255,.08)!important;background:rgba(4,12,19,.98)!important;backdrop-filter:blur(18px)!important}
+  html.isMobile:not(.isTV) .mobileBottomNav button{min-width:0!important;min-height:58px!important;padding:6px 2px!important;background:transparent!important;border:0!important;color:#8499a9!important}
+  html.isMobile:not(.isTV) .mobileBottomNav button.active{color:#70d3ff!important;background:rgba(55,174,229,.10)!important}
+  html.isMobile:not(.isTV) .mobileBottomNav button span{display:block;font-size:1.18rem!important}html.isMobile:not(.isTV) .mobileBottomNav button small{font-size:.64rem!important;font-weight:800!important}
+
+  /* Home */
+  html.isMobile:not(.isTV) .mobile364Welcome{padding:8px 2px 2px!important}html.isMobile:not(.isTV) .mobile364Welcome h1{font-size:1.5rem!important;margin:2px 0 10px!important}
+  html.isMobile:not(.isTV) .mobile364Search{position:sticky;top:64px;z-index:20;background:#0d2230!important;box-shadow:0 8px 22px rgba(0,0,0,.18)}
+  html.isMobile:not(.isTV) .mobile364Section{margin-top:20px!important}html.isMobile:not(.isTV) .mobile364LandscapeRail{grid-auto-columns:82vw!important}html.isMobile:not(.isTV) .mobile364PosterRail{grid-auto-columns:38vw!important}
+  html.isMobile:not(.isTV) .mobile364LiveStack{display:grid!important;grid-auto-flow:column!important;grid-auto-columns:88%!important;overflow-x:auto!important;gap:10px!important;scroll-snap-type:x mandatory!important;padding-bottom:4px!important}html.isMobile:not(.isTV) .mobile364Live{scroll-snap-align:start!important}
+
+  /* Live: player first, groups as bottom sheet, compact EPG channel list */
+  html.isMobile:not(.isTV) .mobile371Live{display:block;min-width:0}.mobile371PlayerStage{margin:-10px -12px 12px;background:#02070b}.mobile371PlayerStage .livePlayerWrap{width:100%;min-height:210px;aspect-ratio:16/9;border-radius:0!important;overflow:hidden}.mobile371PlayerStage video{width:100%!important;aspect-ratio:16/9!important;object-fit:contain;background:#000}.mobile371PlayerStage .liveEmptyState{min-height:210px!important;border-radius:0!important}
+  html.isMobile:not(.isTV) .mobile371PlayerStage .liveDetailsPanel{padding:0 12px 10px;background:#07131d}.mobile371PlayerStage .liveDetailsHeader{padding-top:10px}.mobile371PlayerStage .liveDetailsIdentity h2{font-size:1.05rem!important}.mobile371PlayerStage .liveProgrammeCard{padding:10px!important}.mobile371PlayerStage .liveProgrammeCard p,.mobile371PlayerStage .nextProgramme,.mobile371PlayerStage .liveDetailsLogo{display:none!important}.mobile371PlayerStage .livePrimaryActions{display:flex!important;overflow-x:auto!important;flex-wrap:nowrap!important}.mobile371PlayerStage .livePrimaryActions .btn{white-space:nowrap!important;min-height:42px!important}
+  .mobile371LiveTools{display:grid;grid-template-columns:minmax(0,1fr) 48px;gap:8px;margin:8px 0 14px}.mobile371GroupButton{grid-column:1/-1;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;width:100%;min-height:48px;padding:9px 13px;border:1px solid rgba(255,255,255,.09);border-radius:13px;background:#0d202d;color:#fff;text-align:left}.mobile371GroupButton span{font-size:.7rem;color:#7892a5;text-transform:uppercase;font-weight:900;letter-spacing:.08em}.mobile371GroupButton b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mobile371GroupButton i{font-style:normal;color:#72d2ff}.mobile371LiveSearch{display:flex;align-items:center;gap:8px;min-height:46px;padding:0 12px;border:1px solid rgba(255,255,255,.09);border-radius:13px;background:#0d202d}.mobile371LiveSearch input{width:100%;border:0!important;background:transparent!important;padding:0!important}.mobile371Fullscreen{border:1px solid rgba(255,255,255,.09);border-radius:13px;background:#0d202d;color:#fff;font-size:1.2rem}.mobile371HiddenSelect{display:none!important}.mobile371ChannelHeading{display:flex;align-items:center;justify-content:space-between;margin:0 2px 8px}.mobile371ChannelHeading h2{font-size:1.12rem;margin:0}.mobile371ChannelHeading span{font-size:.72rem;color:#8ca3b4}
+  .mobile371ChannelList{display:grid!important;gap:7px!important;max-height:none!important;overflow:visible!important}.mobile371Channel{display:grid;grid-template-columns:48px minmax(0,1fr) 44px;gap:10px;align-items:center;width:100%;min-height:76px;padding:9px;border:1px solid rgba(255,255,255,.07);border-radius:13px;background:#0b1c28;color:#fff;text-align:left}.mobile371Channel:active,.mobile371Channel.selectedChannel{background:#102b3d;border-color:rgba(91,202,255,.32)}.mobile371ChannelLogo{display:grid;place-items:center;width:48px;height:48px;border-radius:10px;background:#f3f6f8;color:#183041;font-weight:900;font-size:.65rem;overflow:hidden}.mobile371ChannelLogo img{width:100%;height:100%;object-fit:contain;padding:3px}.mobile371ChannelText{display:flex;flex-direction:column;min-width:0}.mobile371ChannelText b,.mobile371ChannelText em,.mobile371ChannelText small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mobile371ChannelText b{font-size:.88rem}.mobile371ChannelText em{font-style:normal;font-size:.76rem;color:#d6e0e7;margin-top:2px}.mobile371ChannelText small{font-size:.65rem;color:#8097a8;margin-top:2px}.mobile371ChannelText u{height:3px;margin-top:5px;border-radius:4px;background:#2a4050;text-decoration:none;overflow:hidden}.mobile371ChannelText u u{display:block;background:#58caff;height:100%}.mobile371ChannelMeta{display:grid;justify-items:end;gap:9px}.mobile371ChannelMeta i{font-style:normal;font-size:.58rem;font-weight:900;padding:3px 5px;border-radius:5px;background:#183b51;color:#77d8ff}.mobile371ChannelMeta strong{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:#15415d;color:#8ce0ff;font-size:.7rem}
+  .mobile371Sheet{position:fixed;inset:0;z-index:150;display:flex;align-items:flex-end}.mobile371SheetBackdrop{position:absolute;inset:0;border:0;background:rgba(0,0,0,.66)}.mobile371Sheet>section{position:relative;width:100%;max-height:78dvh;padding:7px 12px calc(14px + env(safe-area-inset-bottom));border-radius:22px 22px 0 0;background:#091824;box-shadow:0 -20px 60px rgba(0,0,0,.5);overflow:hidden}.mobile371SheetHandle{width:42px;height:4px;border-radius:5px;background:#486070;margin:2px auto 10px}.mobile371Sheet header{display:flex;align-items:center;justify-content:space-between}.mobile371Sheet header h2{margin:0;font-size:1.15rem}.mobile371GroupList{display:grid;gap:5px;max-height:62dvh;overflow-y:auto;margin-top:10px}.mobile371GroupList button{display:flex;justify-content:space-between;align-items:center;min-height:48px;padding:9px 12px;border:0;border-radius:11px;background:#0e2230;color:#fff;text-align:left}.mobile371GroupList button.active{background:#15415b;color:#82ddff}.mobile371GroupList small{color:#7991a2}
+
+  /* Movies & Series */
+  html.isMobile:not(.isTV) .mediaExperienceHead{margin:2px 0 10px!important}html.isMobile:not(.isTV) .mediaExperienceHead h1{font-size:1.55rem!important;margin:2px 0!important}html.isMobile:not(.isTV) .mediaExperienceHead p{display:none!important}
+  html.isMobile:not(.isTV) .mediaToolbar{display:grid!important;grid-template-columns:1fr 1fr!important;gap:7px!important;position:sticky;top:58px;z-index:25;padding:8px!important;margin:0 -2px 12px!important;background:rgba(6,16,25,.96)!important;backdrop-filter:blur(16px)}html.isMobile:not(.isTV) .mediaToolbar input{grid-column:1/-1!important}html.isMobile:not(.isTV) .mediaToolbar select,html.isMobile:not(.isTV) .mediaToolbar input,html.isMobile:not(.isTV) .mediaToolbar button{min-width:0!important;min-height:42px!important}html.isMobile:not(.isTV) .mediaToolbar .muted{grid-column:1/-1;font-size:.68rem}
+  html.isMobile:not(.isTV) .mediaExperienceGrid,html.isMobile:not(.isTV) #seriesContent .posterGrid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}html.isMobile:not(.isTV) .mediaPosterCard{min-width:0!important;border-radius:12px!important;overflow:hidden}html.isMobile:not(.isTV) .mediaPosterCard>img,html.isMobile:not(.isTV) .mediaPosterCard>.posterPlaceholder{aspect-ratio:2/3!important;width:100%!important;object-fit:cover!important}html.isMobile:not(.isTV) .posterBody{padding:8px!important}html.isMobile:not(.isTV) .posterBody b{font-size:.78rem!important;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}html.isMobile:not(.isTV) .posterBody small{font-size:.62rem!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}html.isMobile:not(.isTV) .mediaCardActions{display:none!important}
+  html.isMobile:not(.isTV) .cinemaDetail{margin:-10px -12px 10px!important;border-radius:0!important;min-height:calc(100dvh - var(--mobile-nav-h) - 56px)!important}html.isMobile:not(.isTV) .cinemaDetailContent{display:block!important;padding:80px 16px 20px!important}html.isMobile:not(.isTV) .cinemaPoster{width:120px!important;float:left;margin:0 14px 10px 0!important}html.isMobile:not(.isTV) .cinemaMeta h1{font-size:1.45rem!important}html.isMobile:not(.isTV) .cinemaActions{clear:both;display:grid!important;grid-template-columns:1fr 1fr!important;gap:7px!important}
+
+  /* Admin / Library management uses cards instead of desktop-width tables. */
+  html.isMobile:not(.isTV) .admin2Shell,html.isMobile:not(.isTV) .admin2Main{display:block!important;min-width:0!important}html.isMobile:not(.isTV) .admin2Nav{overflow-x:auto!important;display:flex!important;position:sticky!important;top:56px!important;z-index:24!important;background:#07131d!important}html.isMobile:not(.isTV) .admin2Nav button{white-space:nowrap!important;min-height:42px!important}html.isMobile:not(.isTV) .admin2Card{padding:11px!important;border-radius:13px!important}html.isMobile:not(.isTV) .lmGrid{grid-template-columns:1fr!important}.lmChannelRow{grid-template-columns:24px 36px minmax(0,1fr) 54px!important;min-height:58px!important;padding:7px 3px!important}.lmChannelRow small{display:none!important}.lmTable{max-height:none!important;overflow:visible!important}.libraryMgmtTabs{position:sticky;top:56px;z-index:23;background:#07131d;padding:6px 0!important;overflow-x:auto!important;flex-wrap:nowrap!important}
 }
-@media(min-width:720px) and (max-width:1179px){
-  html.isTablet:not(.isTV) .mobile364HeaderBrand{display:flex!important;align-items:center;gap:8px}
-  html.isTablet:not(.isTV) .mobileBackButton:not(.hidden){display:grid!important}
-}
-@media(min-width:1180px){
-  aside nav{max-height:calc(100vh - 150px)}
-}
-@media(min-width:1280px) and (pointer:coarse){
-  aside nav button{scroll-margin-block:18px}
-}
-
-
-/* v38.2.0 Adaptive Navigation & Focus */
-.mobileMoreSection{padding:4px 0 12px}
-.mobileMoreSection h3{margin:8px 14px 7px;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;opacity:.58}
-:focus-visible{outline:3px solid var(--accent)!important;outline-offset:3px}
-html.isTV :focus-visible{outline-width:4px!important;outline-offset:5px;box-shadow:0 0 0 2px rgba(0,0,0,.45),0 0 24px rgba(74,168,223,.30)}
-html.isTV button,html.isTV a,html.isTV [tabindex="0"]{scroll-margin:28px}
-@media(min-width:720px) and (max-width:1179px) and (orientation:landscape){
-  html.navRailMode aside{display:flex!important;width:74px!important;min-width:74px!important}
-  html.navRailMode aside nav button{font-size:0;justify-content:center;min-height:52px}
-  html.navRailMode aside nav button::first-letter{font-size:1.2rem}
-  html.navRailMode #mobileBottomNav{display:none!important}
-  html.navRailMode main{padding-left:0}
-}
-@media(max-width:719px){
-  #mobileMoreSheet{max-height:min(76vh,680px);overflow:auto;overscroll-behavior:contain}
-}
-
-/* v38.3.0 Personal Home & My Stuff */
-.myStuffHero{margin-bottom:18px}.myStuffEmpty{min-height:88px;display:flex;align-items:center;color:var(--muted)}
-.myStuffLinks{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0 36px}
-
-/* v38.4.0 Universal Search & Quick Actions */
-.quickActionOverlay{position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:9999;display:flex;align-items:flex-end;justify-content:center;padding:18px}
-.quickActionSheet{width:min(520px,100%);background:var(--panel,#151922);border:1px solid var(--border,#303747);border-radius:20px;padding:18px;display:grid;gap:10px;box-shadow:0 24px 80px rgba(0,0,0,.45)}
-@media(min-width:800px){.quickActionOverlay{align-items:center}.quickActionSheet{padding:24px}}
-
-/* v38.5.0 Live TV & Guide Experience */
-.premiumGuide .timeline{scroll-behavior:smooth}.premiumGuide .activeBtn{outline:2px solid currentColor}
-@media(max-width:700px){.guideHeader .toolbar{overflow-x:auto;flex-wrap:nowrap;padding-bottom:6px}.guideHeader .toolbar .btn{flex:0 0 auto}}
-@media (hover:none){.premiumGuide button,.liveNowCard{min-height:48px}}
-
-/* v38.7.0 Unified IPTV Manager */
-.iptvManagerTabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;scrollbar-width:thin}
-.iptvManagerTabs .btn{flex:0 0 auto}.iptvManagerHead{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:18px}
-.iptvManagerHeadActions,.iptvFilterToolbar,.iptvPresetRow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.iptvFilterToolbar{position:sticky;top:0;z-index:2;background:var(--panel,#151922);padding:10px 0}.iptvFilterToolbar input{min-width:min(320px,100%)}
-.iptvStats,.iptvDashboard{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0 20px}
-.iptvStats>div,.iptvDashboard>button{border:1px solid var(--border,#303747);background:var(--panel2,#111827);border-radius:14px;padding:14px;text-align:left}
-.iptvStats b,.iptvDashboard b{display:block;font-size:1.45rem}.iptvStats small,.iptvDashboard small,.iptvDashboard span{display:block;color:var(--muted)}
-.iptvCategoryList{max-height:44vh;overflow:auto}.iptvCategoryRow{display:flex!important;gap:10px;align-items:center;padding:9px 8px;border-bottom:1px solid var(--border,#303747)}
-.iptvCategoryRow span{display:flex;justify-content:space-between;gap:16px;width:100%}.iptvCategoryRow small{color:var(--muted)}
-.iptvItemManager{margin-top:24px}.iptvItemStats{padding:8px 0;color:var(--muted)}.iptvRuleBuilder{display:grid;grid-template-columns:auto auto auto 1fr auto;gap:8px;margin-bottom:12px}
-.iptvExamples{display:flex;gap:8px;flex-wrap:wrap}.iptvExamples button{border:1px solid var(--border,#303747);border-radius:999px;background:transparent;color:inherit;padding:7px 12px;cursor:pointer}
-.iptvHelp{margin-top:18px}
-@media(max-width:850px){.iptvStats,.iptvDashboard{grid-template-columns:repeat(2,minmax(0,1fr))}.iptvRuleBuilder{grid-template-columns:1fr 1fr}.iptvRuleBuilder input{grid-column:1/-1}.iptvManagerHead{flex-direction:column}}
-@media(max-width:520px){.iptvStats,.iptvDashboard{grid-template-columns:1fr 1fr}.iptvFilterToolbar>*{max-width:100%}.iptvFilterToolbar input{width:100%}.iptvRuleBuilder{grid-template-columns:1fr}.iptvRuleBuilder input{grid-column:auto}}
-
-
-/* v38.8 Device Experience Engine */
-:root{--tap-target:44px;--focus-ring:3px}
-[data-device-mode="mobile"]{--tap-target:48px}[data-device-mode="tv"]{--tap-target:56px;--focus-ring:4px}
-.adaptiveActionMenu{position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:flex-end;justify-content:center}
-.adaptiveActionSheet{background:var(--panel,#151922);padding:18px;border-radius:18px 18px 0 0;width:min(680px,100%);max-height:80vh;overflow:auto}
-.adaptiveActionMenu.desktop{align-items:center}.adaptiveActionMenu.desktop .adaptiveActionSheet{border-radius:18px;width:min(520px,90vw)}
-
-
-
-
-
-
-/* v39.3 Profiles Everywhere */
-.profileBadge{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:7px 11px;border:1px solid var(--border,#303747)}
-
-
-
-/* v39.4 Performance */
-.skeletonGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}.skeletonCard{height:210px;border-radius:14px;background:linear-gradient(90deg,#ffffff0a,#ffffff18,#ffffff0a);background-size:200% 100%;animation:skeletonMove 1.2s linear infinite}
-@keyframes skeletonMove{to{background-position:-200% 0}}@media(prefers-reduced-motion:reduce){.skeletonCard{animation:none}}
-.content-visibility-auto{content-visibility:auto;contain-intrinsic-size:300px}
-
-
-
-/* v39.5 Accessibility & Living-Room Polish */
-.largeText{font-size:112.5%}.highContrast{--muted:#e1e5eb;--border:#9aa4b2}.reduceMotion *{scroll-behavior:auto!important;animation-duration:.001ms!important;transition-duration:.001ms!important}
-.extraFocus :focus-visible{outline:4px solid currentColor!important;outline-offset:4px!important}
-.accessibilityOption{display:block;padding:14px 8px;border-bottom:1px solid var(--border,#303747);min-height:52px}
-@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation-duration:.001ms!important;transition-duration:.001ms!important}}
-
-/* v39.5.1 UI Recovery
-   Preserve the established application layout. New accessibility/device features
-   must be opt-in or component-scoped and must not globally resize legacy controls. */
-.adaptiveActionMenu .adaptiveActionSheet button,
-.adaptiveActionMenu .adaptiveActionSheet input,
-.adaptiveActionMenu .adaptiveActionSheet select{min-height:44px}
-@media(max-width:600px){
-  .adaptiveActionMenu .adaptiveActionSheet button,
-  .adaptiveActionMenu .adaptiveActionSheet input,
-  .adaptiveActionMenu .adaptiveActionSheet select{min-height:48px}
-}
-
-/* v39.5.2 Full UI Recovery
-   Safe-area handling is component-scoped; established page layout is untouched. */
-@media(max-width:600px){
-  .adaptiveActionSheet{
-    padding-left:max(18px,env(safe-area-inset-left));
-    padding-right:max(18px,env(safe-area-inset-right));
-    padding-bottom:max(18px,env(safe-area-inset-bottom));
-  }
-}
-
-/* v39.6.0 UX Consistency — component scoped.
-   No global body/button/input/link/nav/view rules. */
-.uxConsistencyToasts{position:fixed;right:16px;bottom:16px;z-index:15000;display:grid;gap:8px;width:min(420px,calc(100vw - 32px));pointer-events:none}
-.uxConsistencyToast{padding:11px 14px;border-radius:10px;background:var(--panel,#151922);border:1px solid var(--border,#303747);box-shadow:0 10px 28px rgba(0,0,0,.32);opacity:0;transform:translateY(6px);transition:opacity .16s ease,transform .16s ease}
-.uxConsistencyToast.is-visible{opacity:1;transform:none}.uxConsistencyToast--error{font-weight:700}
-.uxConsistencyBusy{padding:10px 12px;margin:0 0 10px;border-radius:10px;background:var(--panel2,#111827)}
-.uxConsistencyEmpty{padding:24px;text-align:center;border:1px dashed var(--border,#303747);border-radius:12px}
-.uxConsistencyEmpty strong{display:block;font-size:1.05rem}.uxConsistencyEmpty p{margin:8px 0 0;color:var(--muted,#9ca3af)}
-@media(max-width:600px){.uxConsistencyToasts{left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));width:auto}}
-@media(prefers-reduced-motion:reduce){.uxConsistencyToast{transition:none}}
-
-/* v39.6.1 UX Consistency Integration — scoped only. */
-.view button[aria-busy="true"],.view input[type="submit"][aria-busy="true"]{cursor:progress}
-.uxConsistencyToast--success{font-weight:600}
-@media(prefers-reduced-motion:reduce){.uxConsistencyToast{transform:none}}
-
-/* v39.7.0 IPTV Channel & Group Manager */
-.lmRefreshPanel{display:grid;gap:10px;padding:12px 0}.lmRefreshPanel>div:first-child{display:grid;gap:3px}
-.lmRefreshPanel input[type=number]{width:84px}.lmDiff{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:10px 12px;border:1px solid var(--border,#303747);border-radius:10px}.lmDiff small{flex-basis:100%}
-.lmFilterBar{position:sticky;top:0;z-index:3;padding:10px;background:var(--bg,#0b0f16);border-radius:10px}
-
-/* v39.7.1 IPTV Sync & Diagnostics */
-.lmSyncDiag{padding:12px;border:1px solid var(--border,#303747);border-radius:10px}.lmSyncDiag .manageList{max-height:320px;overflow:auto}
-
-/* v39.8.0 Live TV & Guide 2.0 */
-.liveNowNextBoard{position:fixed;inset:5vh 5vw;z-index:16000;background:var(--bg,#0b0f16);border:1px solid var(--border,#303747);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.55);padding:18px;display:grid;grid-template-rows:auto 1fr;gap:12px}
-.liveBoardHead{display:flex;align-items:center;justify-content:space-between}.liveBoardHead h2{margin:2px 0}
-.liveBoardRows{overflow:auto;display:grid;gap:7px}.liveBoardRows>button{display:grid;grid-template-columns:minmax(180px,32%) 1fr;gap:14px;text-align:left;align-items:center;padding:10px 12px;border:1px solid var(--border,#303747);border-radius:10px;background:var(--panel,#151922)}
-.liveBoardRows>button>span{display:grid;gap:3px}.liveBoardRows img{width:42px;height:30px;object-fit:contain}.liveBoardRows small{color:var(--muted,#9ca3af)}
-.liveBoardRows>button:focus-visible{outline:3px solid currentColor;outline-offset:2px}
-@media(max-width:700px){.liveNowNextBoard{inset:2vh 10px;padding:12px}.liveBoardRows>button{grid-template-columns:1fr}.liveToolbar #liveLastQuick{display:none}}
-
-/* v39.8.1 Adult Group Control */
-.adultGroupBadge{display:inline-flex;align-items:center;justify-content:center;padding:2px 6px;margin-left:6px;border:1px solid currentColor;border-radius:999px;font-size:.72em;font-weight:800}
-.lmGroupCard[data-adult="true"]{border-style:dashed}
-
-/* v39.8.2 */
-.lmGroupCard[data-adult="true"] .adultGroupBadge{font-weight:900}
-
-/* v39.8.3 Live TV Group Filtering */
-.liveGroupFilterPanel{display:grid;gap:8px;margin:0 0 12px;padding:10px 12px;border:1px solid var(--border,#303747);border-radius:12px;background:var(--panel,#151922)}
-.liveGroupFilterHead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.liveGroupFilterHead input{min-width:180px;max-width:320px}.liveGroupFilterHead small{margin-left:auto;color:var(--muted,#9ca3af)}
-.liveGroupBar{display:flex;gap:7px;overflow-x:auto;padding:2px 0 5px;scrollbar-width:thin}
-.liveGroupChip{white-space:nowrap;border:1px solid var(--border,#303747);border-radius:999px;padding:8px 11px;background:transparent;color:inherit;cursor:pointer}
-.liveGroupChip small{opacity:.72;margin-left:4px}.liveGroupChip.active{background:var(--accent,#4f7cff);color:#fff;border-color:transparent}.liveGroupChip.adult{border-style:dashed}
-@media(max-width:700px){.liveGroupFilterHead small{display:none}.liveGroupFilterHead input{width:100%;max-width:none}.liveGroupChip{padding:9px 12px}}

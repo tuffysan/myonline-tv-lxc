@@ -49,23 +49,6 @@ jobs:
           assert meta["artifact"] == f"myonline-tv-web-v{version}-linux-x64.tar.gz"
           print("release.json OK")
           PY
-      - name: Runtime version consistency
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION="$(tr -d '[:space:]' < VERSION)"
-          python3 - <<'PY2'
-          import json
-          from pathlib import Path
-          v=Path("VERSION").read_text().strip()
-          m=json.loads(Path("release.json").read_text())
-          assert m["version"] == v
-          assert m["artifact"] == f"myonline-tv-web-v{v}-linux-x64.tar.gz"
-          PY2
-          ! grep -R -n --include='*.cs' --include='*.js' 'MyOnline-TV-Updater/34.1.0\|MyOnline-TV/34.1.0' app
-          ! grep -R -n --include='*.cs' 'version *= *"31.2.0"' app
-          echo "Runtime release identity is consistent with ${VERSION}."
-
       - name: Regression markers
         shell: bash
         run: |

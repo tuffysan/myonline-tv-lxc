@@ -61,77 +61,59 @@ function updateResponsiveMode(){
   document.body.dataset.clientMode=w<720?'mobile':w<1180?'tablet':likelyTenFoot?'tv':'desktop';
 }
 
-const navigationIcons={home:'⌂',live:'▣',guide:'▤',movies:'▶',series:'▦',mystuff:'★',plex:'◆',jellyfin:'◇',downloads:'↓',recordings:'●',notifications:'●',rooms:'▣',library:'▦',search:'⌕',sources:'⚙',platform:'◆',diagnostics:'✓',appliance:'⚙',system:'◉',completion:'✓',update:'↑',admin:'🛡'};
-
-function navigationItemVisible(view){
-  const desktop=document.querySelector(`aside nav button[data-view="${view}"]`);
-  if(!desktop)return false;
-  if(desktop.classList.contains('hidden')||desktop.classList.contains('navConfigHidden'))return false;
-  if(desktop.hasAttribute('data-admin-only')&&authState.role!=='Admin')return false;
-  return viewAllowed(view);
-}
-function configuredNavigationViews(){
-  const configured=(navigationConfig?.items||[])
-    .filter(x=>x.enabled!==false)
-    .sort((a,b)=>(Number.isFinite(a.order)?a.order:999)-(Number.isFinite(b.order)?b.order:999))
-    .map(x=>x.id);
-  const dom=[...document.querySelectorAll('aside nav button[data-view]')].map(x=>x.dataset.view);
-  return [...new Set([...configured,...dom])].filter(navigationItemVisible);
-}
 function renderMobileNavigation(){
   const host=$('#mobileBottomNav');
   if(!host)return;
-  const available=configuredNavigationViews();
-  const preferred=['home','live','guide','movies'];
-  const primary=preferred.filter(x=>available.includes(x));
-  for(const view of available){if(primary.length>=4)break;if(!primary.includes(view))primary.push(view)}
-  const moreViews=available.filter(x=>!primary.includes(x));
-  host.innerHTML=primary.map(view=>`<button data-mobile-view="${view}" class="${currentView===view?'active':''}" aria-label="${escAttr(navigationLabels[view]||view)}"><span>${navigationIcons[view]||'•'}</span><small>${esc(navigationLabels[view]||view)}</small></button>`).join('')+
-    `<button id="mobileMoreButton" class="${moreViews.includes(currentView)?'active':''}" aria-label="More"><span>•••</span><small>More</small></button>`;
+  const primary=[
+    ['home','⌂','Home'],
+    ['live','▣','Live'],
+    ['movies','▶','Movies'],
+    ['series','▦','Series']
+  ];
+  host.innerHTML=primary.map(([view,icon,label])=>`<button data-mobile-view="${view}" class="${currentView===view?'active':''}"><span>${icon}</span><small>${label}</small></button>`).join('')+
+    `<button id=mobileMoreButton class="${['series','plex','jellyfin','downloads','recordings','sources','system','admin'].includes(currentView)?'active':''}"><span>•••</span><small>More</small></button>`;
   host.querySelectorAll('[data-mobile-view]').forEach(b=>b.onclick=()=>show(b.dataset.mobileView));
   $('#mobileMoreButton').onclick=toggleMobileMore;
-  updateNavigationChrome();
 }
+
 function toggleMobileMore(){
   const sheet=$('#mobileMoreSheet');
   if(!sheet)return;
   const open=sheet.classList.contains('hidden');
-  if(!open){closeMobileMore();return}
-  const primary=[...document.querySelectorAll('#mobileBottomNav [data-mobile-view]')].map(x=>x.dataset.mobileView);
-  const items=configuredNavigationViews().filter(view=>!primary.includes(view));
-  const grouped=['Watch','Library','Settings'].map(section=>{
-    const views=items.filter(v=>navigationSection(v)===section);
-    if(!views.length)return '';
-    return `<section class="mobileMoreSection"><h3>${section}</h3><div class="mobileMoreGrid">${
-      views.map(view=>`<button data-more-view="${view}" class="${currentView===view?'active':''}"><span>${navigationIcons[view]||'•'}</span><b>${esc(navigationLabels[view]||view)}</b></button>`).join('')
-    }</div></section>`;
-  }).join('');
-  sheet.innerHTML=`<div class="mobileMoreHandle"></div>${grouped}`;
+  if(!open){sheet.classList.add('hidden');sheet.setAttribute('aria-hidden','true');document.body.classList.remove('mobileSheetOpen');return}
+  const items=[
+    ['guide','▤','Guide'],
+    ['search','⌕','Search'],
+    ['plex','◆','Plex'],
+    ['jellyfin','◇','Jellyfin'],
+    ['downloads','↓','Downloads'],
+    ['recordings','●','DVR'],
+    ['sources','⚙','My Sources'],
+    ['system','◉','System'],
+    ['completion','✓','Completion'],
+    ['admin','🛡','Admin']
+  ];
+  sheet.innerHTML=`<div class=mobileMoreHandle></div><div class=mobileMoreGrid>${
+    items.map(([view,icon,label])=>{
+      const desktop=document.querySelector(`nav button[data-view="${view}"]`);
+      if(desktop?.classList.contains('hidden'))return '';
+      if((view==='system'||view==='completion'||view==='admin')&&authState.role!=='Admin')return '';
+      return `<button data-more-view="${view}"><span>${icon}</span><b>${label}</b></button>`;
+    }).join('')
+  }</div>`;
   sheet.classList.remove('hidden');
   sheet.setAttribute('aria-hidden','false');
   document.body.classList.add('mobileSheetOpen');
-  sheet.querySelectorAll('[data-more-view]').forEach(b=>b.onclick=()=>{closeMobileMore();show(b.dataset.moreView)});
-}
-function closeMobileMore(){
-  const sheet=$('#mobileMoreSheet');if(!sheet)return;
-  sheet.classList.add('hidden');sheet.setAttribute('aria-hidden','true');document.body.classList.remove('mobileSheetOpen');
-}
-function updateNavigationChrome(){
-  document.querySelectorAll('aside nav button[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===currentView));
-  const back=$('#mobileBackButton'), page=$('#mobilePageTitle');
-  if(back)back.classList.toggle('hidden',currentView==='home');
-  if(page)page.textContent=navigationLabels[currentView]||title?.textContent||currentView;
+  sheet.querySelectorAll('[data-more-view]').forEach(b=>b.onclick=()=>{sheet.classList.add('hidden');show(b.dataset.moreView)});
 }
 
-function ensureFocusedElementVisible(){
-  const active=document.activeElement;
-  if(active&&active!==document.body) active.scrollIntoView({block:'nearest',inline:'nearest',behavior:'smooth'});
-}
 window.addEventListener('keydown',e=>{
   if(e.key!=='Escape')return;
   const sheet=$('#mobileMoreSheet');
   if(sheet&&!sheet.classList.contains('hidden')){
-    closeMobileMore();
+    sheet.classList.add('hidden');
+    sheet.setAttribute('aria-hidden','true');
+    document.body.classList.remove('mobileSheetOpen');
   }
 });
 window.addEventListener('resize',debounce(()=>{updateResponsiveMode();renderMobileNavigation()},120));
@@ -159,7 +141,7 @@ async function boot(){
 
 let sourceAccess={adminIptv:true,adminPlex:true,adminJellyfin:true};
 let navigationConfig={items:[]};
-const navigationLabels={home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',mystuff:'My Stuff',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'DVR',notifications:'Alerts',rooms:'Rooms',library:'Library',search:'Search',sources:'My Sources',system:'System',platform:'System overview',diagnostics:'Diagnostics',appliance:'Appliance',completion:'Feature Completion',admin:'Admin'};
+const navigationLabels={home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'DVR',notifications:'Alerts',rooms:'Rooms',library:'Library',search:'Search',sources:'My Sources',system:'System',platform:'System overview',diagnostics:'Diagnostics',appliance:'Appliance',completion:'Feature Completion',admin:'Admin'};
 async function loadNavigationConfig(){try{navigationConfig=await api('/api/navigation')}catch{navigationConfig={items:[]}}applyNavigationConfig()}
 function applyNavigationConfig(){
  const items=navigationConfig?.items||[],map=new Map(items.map(x=>[x.id,x]));
@@ -167,7 +149,6 @@ function applyNavigationConfig(){
  const n=document.querySelector('aside nav')||document.querySelector('nav');
  if(n&&items.length){const o=new Map(items.map((x,i)=>[x.id,Number.isFinite(x.order)?x.order:i]));[...n.querySelectorAll('button[data-view]')].sort((a,b)=>(o.get(a.dataset.view)??999)-(o.get(b.dataset.view)??999)).forEach(b=>n.appendChild(b))}
  renderMobileNavigation();
- updateNavigationChrome();
 }
 async function saveNavigationManager(){
  const rows=[...document.querySelectorAll('#navigationManager [data-nav-id]')].map((r,i)=>({id:r.dataset.navId,enabled:r.querySelector('input[type=checkbox]').checked,order:i}));
@@ -364,75 +345,15 @@ async function refreshMediaLibraryNav(){
   renderMediaLibraryNav();
 }
 
-const navigationState={
-  focusByView:new Map(),
-  scrollByView:new Map()
-};
-function rememberViewContext(view=currentView){
-  if(!view)return;
-  const active=document.activeElement;
-  if(active&&active!==document.body){
-    if(!active.dataset.navFocusId) active.dataset.navFocusId=`focus-${Math.random().toString(36).slice(2,10)}`;
-    navigationState.focusByView.set(view,active.dataset.navFocusId);
-  }
-  const main=document.querySelector('main');
-  navigationState.scrollByView.set(view,{
-    windowY:window.scrollY||0,
-    mainY:main?main.scrollTop:0
-  });
-}
-function restoreViewContext(view){
-  requestAnimationFrame(()=>{
-    const scroll=navigationState.scrollByView.get(view);
-    const main=document.querySelector('main');
-    if(scroll){
-      window.scrollTo({top:scroll.windowY||0,left:0,behavior:'instant'});
-      if(main)main.scrollTop=scroll.mainY||0;
-    }
-    const id=navigationState.focusByView.get(view);
-    let target=id?document.querySelector(`[data-nav-focus-id="${id}"]`):null;
-    if(!target && document.documentElement.classList.contains('isTV')){
-      target=document.querySelector(`#${view} button:not(.hidden),#${view} a[href]:not(.hidden),#${view} [tabindex="0"]`);
-    }
-    if(target&&typeof target.focus==='function'){
-      target.focus({preventScroll:true});
-      target.scrollIntoView({block:'nearest',inline:'nearest'});
-    }
-  });
-}
-function navigationSection(view){
-  if(['home','live','guide','movies','series','mystuff','recordings','notifications','rooms'].includes(view))return 'Watch';
-  if(['plex','jellyfin','downloads','library','search','sources'].includes(view))return 'Library';
-  return 'Settings';
-}
-const viewHistory=[];
-function navigateBack(){
-  closeMobileMore();
-  while(viewHistory.length){
-    const previous=viewHistory.pop();
-    if(previous&&previous!==currentView){show(previous,{fromHistory:true});return}
-  }
-  if(currentView!=='home')show('home',{fromHistory:true});
-}
-const mobileBack=$('#mobileBackButton');if(mobileBack)mobileBack.onclick=navigateBack;
-
-async function show(v,opt={}){
+async function show(v){
   if(!viewAllowed(v)){v='home'}
-  if(currentView&&currentView!==v) rememberViewContext(currentView);
-  if(!opt.fromHistory&&currentView&&currentView!==v){
-    if(viewHistory[viewHistory.length-1]!==currentView)viewHistory.push(currentView);
-    if(viewHistory.length>24)viewHistory.shift();
-  }
   currentView=v;destroyPlayer();
   renderMobileNavigation();
-  closeMobileMore();
-  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',mystuff:'My Stuff',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'Recordings',platform:'Platform','profile-sync':'Profile Sync',diagnostics:'Diagnostics',appliance:'Appliance',notifications:'Notifications',rooms:'Rooms',library:'Library',search:'Search',sources:'My Sources',system:'System',completion:'Feature Completion',update:'System Update',admin:'Admin'})[v]||v;
-  updateNavigationChrome();
-  restoreViewContext(v);
+  const moreSheet=$('#mobileMoreSheet');if(moreSheet){moreSheet.classList.add('hidden');moreSheet.setAttribute('aria-hidden','true');document.body.classList.remove('mobileSheetOpen')}
+  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'Recordings',platform:'Platform','profile-sync':'Profile Sync',diagnostics:'Diagnostics',appliance:'Appliance',notifications:'Notifications',rooms:'Rooms',library:'Library',search:'Search',sources:'My Sources',system:'System',completion:'Feature Completion',update:'System Update',admin:'Admin'})[v]||v;
   if(v==='home')await home();
   if(v==='live')await live();
   if(v==='guide')await guide();
-  if(v==='mystuff')await myStuffView();
   if(v==='movies')await movies();
   if(v==='series')await series();
   if(v==='plex')await mediaLibraryView('plex');
@@ -460,7 +381,6 @@ function applyPermissions(){
   document.querySelectorAll('nav button[data-view]').forEach(b=>{
     if(Object.prototype.hasOwnProperty.call(map,b.dataset.view))b.classList.toggle('hidden',!map[b.dataset.view]);
   });
-  renderMobileNavigation();
   if(Array.isArray(p.allowedProviderIds)&&p.allowedProviderIds.length){
     providers=providers.filter(x=>p.allowedProviderIds.includes(x.id));
     if(!providers.some(x=>x.id===currentProvider))currentProvider=providers[0]?.id||null;
@@ -477,7 +397,7 @@ function updateDesktop363Clock(){
   dateEl.textContent=new Intl.DateTimeFormat(undefined,{weekday:'short',day:'numeric',month:'short',year:'numeric'}).format(now);
   timeEl.textContent=new Intl.DateTimeFormat(undefined,{hour:'2-digit',minute:'2-digit',hour12:false}).format(now);
 }
-setInterval(updateDesktop363Clock,1000);
+setInterval(updateDesktop363Clock,15000);
 document.addEventListener('DOMContentLoaded',updateDesktop363Clock);
 setTimeout(updateDesktop363Clock,0);
 
@@ -803,41 +723,6 @@ async function loadLiveEpgQuiet(){
   try{epg=await api('/api/epg/'+currentProvider+'?hours=6')}catch(_){}
 }
 
-// v39.8.3 Live TV group filtering
-function liveGroupStorageKey(){return `myonline-live-group:${currentProfile||'default'}:${currentProvider||'none'}`}
-function rememberedLiveGroup(){try{return localStorage.getItem(liveGroupStorageKey())||''}catch{return ''}}
-function rememberLiveGroup(value){try{localStorage.setItem(liveGroupStorageKey(),value||'')}catch{}}
-function visibleLiveGroups(){
- return [...new Set(channels.map(x=>x.group).filter(Boolean).filter(g=>!channelPrefs.hiddenGroups.includes(g)))].sort((a,b)=>a.localeCompare(b));
-}
-function liveGroupCounts(){
- const counts=new Map();for(const c of channels){if(isChannelHidden(c))continue;const g=c.group||'Ungrouped';counts.set(g,(counts.get(g)||0)+1)}return counts;
-}
-function renderLiveGroupBar(){
- const host=$('#liveGroupBar');if(!host)return;
- const groups=visibleLiveGroups(),counts=liveGroupCounts(),selected=$('#group')?.value||'';
- const adult=groups.filter(g=>typeof lmIsAdultGroup==='function'&&lmIsAdultGroup(g));
- host.innerHTML=`<button class="liveGroupChip ${selected===''?'active':''}" data-live-group="">All <small>${channels.filter(c=>!isChannelHidden(c)).length}</small></button>
- <button class="liveGroupChip ${selected==='__favorites'?'active':''}" data-live-group="__favorites">★ Favourites</button>
- <button class="liveGroupChip ${selected==='__recent'?'active':''}" data-live-group="__recent">↻ Recent</button>
- ${adult.length?`<button class="liveGroupChip adult ${selected==='__adult'?'active':''}" data-live-group="__adult">18+ Adult <small>${adult.reduce((n,g)=>n+(counts.get(g)||0),0)}</small></button>`:''}
- ${groups.filter(g=>!adult.includes(g)).map(g=>`<button class="liveGroupChip ${selected===g?'active':''}" data-live-group="${escAttr(g)}">${esc(g)} <small>${counts.get(g)||0}</small></button>`).join('')}`;
- host.querySelectorAll('[data-live-group]').forEach(b=>b.onclick=()=>setLiveGroup(b.dataset.liveGroup||''));
-}
-function setLiveGroup(group){
- const sel=$('#group');if(!sel)return;
- if(group==='__adult'&&!sel.querySelector('option[value="__adult"]'))return;
- sel.value=group;rememberLiveGroup(group);renderFilter();renderLiveGroupBar();
-}
-function filterLiveGroupBar(q){
- q=String(q||'').trim().toLowerCase();
- document.querySelectorAll('#liveGroupBar [data-live-group]').forEach(b=>{b.hidden=!!q&&!b.textContent.toLowerCase().includes(q)});
-}
-function stepLiveGroup(delta){
- const sel=$('#group');if(!sel)return;
- const opts=[...sel.options].filter(o=>!o.disabled);let i=Math.max(0,opts.findIndex(o=>o.value===sel.value));
- i=(i+delta+opts.length)%opts.length;setLiveGroup(opts[i].value);
-}
 async function live(){
   if(!await ensureProvider()){content.innerHTML=noProvider();return}
   await loadChannelPrefs();
@@ -845,25 +730,53 @@ async function live(){
   try{channels=await perfCachedApi('channels:'+currentProvider,'/api/channels/'+currentProvider,30000,{timeoutMs:12000,attempts:1});await loadLiveEpgQuiet();renderChannels()}
   catch(e){content.innerHTML=errorCard(e)}
 }
+function mobile371Quality(c){
+  const t=`${c?.quality||''} ${c?.name||''}`.toUpperCase();
+  if(/\bRAW\b/.test(t))return 'RAW';
+  if(/\b(4K|UHD|2160P?)\b/.test(t))return '4K';
+  if(/\b(FHD|1080P?)\b/.test(t))return 'FHD';
+  if(/\b(HD|720P?)\b/.test(t))return 'HD';
+  if(/\b(SD|576P?|480P?)\b/.test(t))return 'SD';
+  return '';
+}
+function mobile371OpenGroups(){
+  let sheet=$('#mobileLiveGroupSheet');
+  if(sheet){sheet.remove();return;}
+  const groups=[...new Set(channels.map(x=>x.group).filter(Boolean).filter(g=>!channelPrefs.hiddenGroups.includes(g)))].sort();
+  sheet=document.createElement('div');sheet.id='mobileLiveGroupSheet';sheet.className='mobile371Sheet';
+  const selected=$('#group')?.value||'';
+  const choices=[['','All channels'],['__favorites','★ Favourites'],['__recent','↻ Recently watched'],...groups.map(g=>[g,g])];
+  sheet.innerHTML=`<button class=mobile371SheetBackdrop aria-label="Close"></button><section><div class=mobile371SheetHandle></div><header><h2>Channel groups</h2><button class=round aria-label="Close">×</button></header><div class=mobile371GroupList>${choices.map(([v,n])=>`<button data-group="${escAttr(v)}" class="${v===selected?'active':''}"><span>${esc(n)}</span><small>${v&&!v.startsWith('__')?channels.filter(c=>c.group===v&&!isChannelHidden(c)).length:''}</small></button>`).join('')}</div></section>`;
+  document.body.appendChild(sheet);document.body.classList.add('mobileSheetOpen');
+  const close=()=>{sheet.remove();document.body.classList.remove('mobileSheetOpen')};
+  sheet.querySelector('.mobile371SheetBackdrop').onclick=close;sheet.querySelector('header button').onclick=close;
+  sheet.querySelectorAll('[data-group]').forEach(b=>b.onclick=()=>{const sel=$('#group');if(sel)sel.value=b.dataset.group;renderFilter();const label=$('#mobile371GroupLabel');if(label)label.textContent=b.querySelector('span').textContent;close()});
+}
+function renderMobile371Channels(){
+  const groups=[...new Set(channels.map(x=>x.group).filter(Boolean).filter(g=>!channelPrefs.hiddenGroups.includes(g)))].sort();
+  content.innerHTML=`<div class=mobile371Live>
+    <section class=mobile371PlayerStage><div id=playerWrap class=livePlayerWrap><div class=liveEmptyState><div class=liveEmptyIcon>▶</div><h2>Live TV</h2><p>Choose a channel below to start watching.</p></div></div><div id=liveDetails class=liveDetailsPanel></div></section>
+    <div class=mobile371LiveTools><button class=mobile371GroupButton onclick="mobile371OpenGroups()"><span>Groups</span><b id=mobile371GroupLabel>All channels</b><i>⌄</i></button><label class=mobile371LiveSearch><span>⌕</span><input id=q placeholder="Search channels"></label><button class=mobile371Fullscreen id=liveFullscreenQuick title="Fullscreen">⛶</button></div>
+    <select id=group class=mobile371HiddenSelect><option value="">All channels</option><option value="__favorites">Favourites</option><option value="__recent">Recent</option>${groups.map(g=>`<option>${esc(g)}</option>`).join('')}</select>
+    <div class=mobile371ChannelHeading><h2>Channels</h2><span id=liveChannelCount></span></div><div id=chan class=mobile371ChannelList></div>
+  </div>`;
+  $('#q').oninput=renderFilter;$('#group').onchange=renderFilter;$('#liveFullscreenQuick').onclick=toggleLiveFullscreen;renderFilter();
+}
 function renderChannels(){
+  if(document.body?.dataset?.clientMode==='mobile'){renderMobile371Channels();return}
   content.innerHTML=`<div class="toolbar liveToolbar">
     ${providerSelect()}
     <input id=q placeholder="Search channels">
-    <select id=group aria-label="Live TV group">
-      <option value="">All groups</option>
+    <select id=group>
+      <option value="">All channels</option>
       <option value="__favorites">★ Favourites</option>
       <option value="__recent">↻ Recently watched</option>
-      ${visibleLiveGroups().some(g=>typeof lmIsAdultGroup==='function'&&lmIsAdultGroup(g))?'<option value="__adult">18+ Adult (XXX)</option>':''}
-      ${visibleLiveGroups().map(g=>`<option value="${escAttr(g)}">${esc(g)}</option>`).join('')}
+      ${[...new Set(channels.map(x=>x.group).filter(Boolean).filter(g=>!channelPrefs.hiddenGroups.includes(g)))].sort().map(g=>`<option>${esc(g)}</option>`).join('')}
     </select>
     <button class=btn id=liveFavQuick>★ Favourites</button>
     <button class=btn id=liveRecentQuick>↻ Recent</button>
-    <button class=btn id=liveNowNextQuick>Now & Next</button><button class=btn id=liveLastQuick>↶ Last channel</button><button class=btn id=liveFullscreenQuick>⛶ Fullscreen</button>
+    <button class=btn id=liveFullscreenQuick>⛶ Fullscreen</button>
     <button class=btn id=hideGroupBtn>Hide group</button>
-  </div>
-  <div class="liveGroupFilterPanel">
-    <div class="liveGroupFilterHead"><b>Groups</b><input id=liveGroupSearch placeholder="Filter groups…" aria-label="Filter Live TV groups"><small>Alt+← / Alt+→ changes group</small></div>
-    <div id=liveGroupBar class=liveGroupBar></div>
   </div>
   <div class="tvLiveShell">
     <aside class="liveChannelPane">
@@ -879,22 +792,17 @@ function renderChannels(){
         </div>
       </div>
       <div id=liveDetails class=liveDetailsPanel></div>
-      <div class="liveHelp">Remote/keyboard: ↑ ↓ select · Enter play · ← → previous/next · N Now & Next · L last channel · F fullscreen · Esc exit</div>
+      <div class="liveHelp">Remote/keyboard: ↑ ↓ select · Enter play · ← → previous/next · F fullscreen · Esc exit</div>
     </section>
   </div>`;
   $('#provider').onchange=async e=>{currentProvider=e.target.value;await live()};
   $('#q').oninput=renderFilter;
-  $('#group').onchange=e=>{rememberLiveGroup(e.target.value);renderFilter();renderLiveGroupBar()};
-  $('#liveFavQuick').onclick=()=>setLiveGroup('__favorites');
-  $('#liveRecentQuick').onclick=()=>setLiveGroup('__recent');
-  $('#liveNowNextQuick').onclick=()=>toggleLiveNowNextBoard();
-  $('#liveLastQuick').onclick=()=>playLastLiveChannel();
+  $('#group').onchange=renderFilter;
+  $('#liveFavQuick').onclick=()=>{$('#group').value='__favorites';renderFilter()};
+  $('#liveRecentQuick').onclick=()=>{$('#group').value='__recent';renderFilter()};
   $('#liveFullscreenQuick').onclick=()=>toggleLiveFullscreen();
   $('#hideGroupBtn').onclick=()=>hideGroup($('#group').value);
   $('#chan').addEventListener('keydown',liveKeyHandler);
-  $('#liveGroupSearch').oninput=e=>filterLiveGroupBar(e.target.value);
-  const remembered=rememberedLiveGroup();if([...$('#group').options].some(o=>o.value===remembered))$('#group').value=remembered;
-  renderLiveGroupBar();
   renderFilter();
 }
 
@@ -949,24 +857,10 @@ function updateLiveDetails(c){
     ${next?`<div class=nextProgramme><span class=kicker>NEXT</span><b>${esc(next.title)}</b><small>${esc(liveProgramTimes(next))}</small></div>`:''}`;
 }
 
-function playLastLiveChannel(){
- const rows=getLiveRecents().filter(x=>x.providerId===currentProvider);
- const currentKey=liveCurrentChannel?.key;
- const last=rows.find(x=>String(x.key)!==String(currentKey));
- const c=last&&channelByKey(last.key);if(c)playLive(c.key,c.name);else liveStatus('No previous channel yet');
-}
-function toggleLiveNowNextBoard(){
- let box=$('#liveNowNextBoard');if(box){box.remove();return}
- box=document.createElement('div');box.id='liveNowNextBoard';box.className='liveNowNextBoard';box.setAttribute('role','dialog');box.setAttribute('aria-label','Now and next');
- const rows=(liveVisibleRows.length?liveVisibleRows:channels.filter(c=>!isChannelHidden(c))).slice(0,120);
- box.innerHTML=`<div class=liveBoardHead><div><span class=kicker>LIVE TV</span><h2>Now & Next</h2></div><button class=btn onclick="$('#liveNowNextBoard')?.remove()">Close</button></div><div class=liveBoardRows>${rows.map((c,i)=>{const p=liveProgramFor(c);return `<button data-live-board-index="${i}" onclick='playLive(${JSON.stringify(c.key)},${JSON.stringify(c.name)});$("#liveNowNextBoard")?.remove()'><span>${c.logo?`<img src="${escAttr(c.logo)}">`:''}<b>${esc(channelName(c))}</b></span><span><strong>${esc(p.now?.title||'Live TV')}</strong><small>${p.next?'Next: '+esc(p.next.title):'No next programme data'}</small></span></button>`}).join('')}</div>`;
- document.body.appendChild(box);box.querySelector('button[data-live-board-index]')?.focus();
-}
 function renderFilter(){
   const q=($('#q')?.value||'').toLowerCase(),g=$('#group')?.value||'';
   let rows=channels.filter(c=>!isChannelHidden(c)).filter(c=>(!q||channelName(c).toLowerCase().includes(q)));
   if(g==='__favorites')rows=rows.filter(c=>fav.has(c.id));
-  else if(g==='__adult')rows=rows.filter(c=>typeof lmIsAdultGroup==='function'&&lmIsAdultGroup(c.group||''));
   else if(g==='__recent'){
     const order=getLiveRecents().filter(x=>x.providerId===currentProvider).map(x=>x.key);
     rows=order.map(k=>channelByKey(k)).filter(Boolean).filter(c=>!q||channelName(c).toLowerCase().includes(q));
@@ -974,10 +868,17 @@ function renderFilter(){
 
   liveVisibleRows=rows.slice(0,800);
   liveSelectedIndex=Math.min(liveSelectedIndex,Math.max(0,liveVisibleRows.length-1));
-  const count=$('#liveChannelCount');if(count){const label=$('#group')?.selectedOptions?.[0]?.textContent||'All groups';count.textContent=`${liveVisibleRows.length} · ${label}`;}
+  const count=$('#liveChannelCount');if(count)count.textContent=`${liveVisibleRows.length}`;
 
   $('#chan').innerHTML=liveVisibleRows.map((c,i)=>{
     const pg=liveProgramFor(c);
+    if(document.body?.dataset?.clientMode==='mobile'){
+      const quality=mobile371Quality(c), now=pg.now, next=pg.next;
+      return `<button class="mobile371Channel ${i===liveSelectedIndex?'selectedChannel':''}" data-live-index="${i}" onclick='playLive(${JSON.stringify(c.key)},${JSON.stringify(c.name)})'>
+        <span class=mobile371ChannelLogo>${c.logo?`<img loading=lazy src="${escAttr(c.logo)}" onerror="this.style.display='none'">`:'TV'}</span>
+        <span class=mobile371ChannelText><b>${esc(channelName(c))}</b><em>${esc(now?.title||c.group||'Live TV')}</em><small>${now?esc(liveProgramTimes(now)):(next?'Next · '+esc(next.title):esc(c.group||''))}</small>${now?`<u><u style="width:${liveProgress(now)}%"></u></u>`:''}</span>
+        <span class=mobile371ChannelMeta>${quality?`<i>${quality}</i>`:''}<strong>▶</strong></span></button>`;
+    }
     return `<article class="channelCard tvChannelRow ${i===liveSelectedIndex?'selectedChannel':''}" data-live-index="${i}">
       <div class=logoBox>${c.logo?`<img loading=lazy decoding=async src="${escAttr(c.logo)}" onerror="this.style.display='none'">`:''}</div>
       <div class=channelInfo>
@@ -1005,7 +906,6 @@ function renderFilter(){
   });
 }
 function liveKeyHandler(e){
-  if(e.altKey&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){e.preventDefault();stepLiveGroup(e.key==='ArrowRight'?1:-1);return}
   if(!liveVisibleRows.length)return;
   if(e.key==='ArrowDown'||e.key==='ArrowUp'){
     e.preventDefault();liveSelectedIndex=(liveSelectedIndex+(e.key==='ArrowDown'?1:-1)+liveVisibleRows.length)%liveVisibleRows.length;renderFilter();
@@ -1021,9 +921,6 @@ document.addEventListener('keydown',e=>{
   if(e.key==='ArrowLeft'){e.preventDefault();stepLiveChannel(-1)}
   else if(e.key==='ArrowRight'){e.preventDefault();stepLiveChannel(1)}
   else if(e.key.toLowerCase()==='f'){e.preventDefault();toggleLiveFullscreen()}
-  else if(e.key.toLowerCase()==='n'){e.preventDefault();toggleLiveNowNextBoard()}
-  else if(e.key.toLowerCase()==='l'){e.preventDefault();playLastLiveChannel()}
-  else if((e.key==='Escape'||e.key==='Backspace')&&$('#liveNowNextBoard')){e.preventDefault();$('#liveNowNextBoard').remove()}
 });
 async function toggleFav(id){fav=new Set(await api('/api/favourites/'+encodeURIComponent(id),{method:'POST'}));if(currentView==='live')renderFilter()}
 
@@ -1427,8 +1324,8 @@ function renderGuide(start,hours){
   const by=new Map();epg.forEach(x=>{if(!by.has(x.channel))by.set(x.channel,[]);by.get(x.channel).push(x)});
   const rows=channels.filter(c=>!isChannelHidden(c)&&by.has(c.id)).slice(0,180);
   const ticks=[];for(let d=new Date(start);d<end;d=new Date(d.getTime()+3600000))ticks.push(d);
-  content.innerHTML=`<div class="guideHeader"><div><span class=kicker>TV GUIDE</span><h2>Programme guide</h2></div><div class=toolbar>${providerSelect()}<button class="btn ${guideWindow==='now'?'activeBtn':''}" onclick="guideWindow='now';guide()">Now</button><button class="btn ${guideWindow==='tonight'?'activeBtn':''}" onclick="guideWindow='tonight';guide()">Tonight</button><button class="btn ${guideWindow==='tomorrow'?'activeBtn':''}" onclick="guideWindow='tomorrow';guide()">Tomorrow</button><button class=btn id=guideFavs>★ Favorites</button><button class=btn id=guideNow>◎ Now</button><button class=btn id=refreshGuide>↻ Refresh</button></div></div><div id=playerWrap></div><div class="timelineWrap premiumGuide"><div class=timelineHead><div class=channelHead>Channel</div><div class=timeAxis style="grid-template-columns:repeat(${ticks.length},1fr)">${ticks.map(x=>`<span>${x.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>`).join('')}</div></div><div class=timeline>${rows.map(c=>timelineRowV319(c,by.get(c.id)||[],start,end,span)).join('')}</div></div>`;
-  $('#provider').onchange=async e=>{currentProvider=e.target.value;await guide()};$('#refreshGuide').onclick=guide;$('#guideNow').onclick=scrollGuideToNow;$('#guideFavs').onclick=toggleGuideFavoritesOnly;applyGuideFavoritesFilter();setTimeout(()=>{if(guideWindow==='now')scrollGuideToNow()},80);
+  content.innerHTML=`<div class="guideHeader"><div><span class=kicker>TV GUIDE</span><h2>Programme guide</h2></div><div class=toolbar>${providerSelect()}<button class="btn ${guideWindow==='now'?'activeBtn':''}" onclick="guideWindow='now';guide()">Now</button><button class="btn ${guideWindow==='tonight'?'activeBtn':''}" onclick="guideWindow='tonight';guide()">Tonight</button><button class="btn ${guideWindow==='tomorrow'?'activeBtn':''}" onclick="guideWindow='tomorrow';guide()">Tomorrow</button><button class=btn id=guideNow>◎ Now</button><button class=btn id=refreshGuide>↻ Refresh</button></div></div><div id=playerWrap></div><div class="timelineWrap premiumGuide"><div class=timelineHead><div class=channelHead>Channel</div><div class=timeAxis style="grid-template-columns:repeat(${ticks.length},1fr)">${ticks.map(x=>`<span>${x.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>`).join('')}</div></div><div class=timeline>${rows.map(c=>timelineRowV319(c,by.get(c.id)||[],start,end,span)).join('')}</div></div>`;
+  $('#provider').onchange=async e=>{currentProvider=e.target.value;await guide()};$('#refreshGuide').onclick=guide;$('#guideNow').onclick=scrollGuideToNow;setTimeout(()=>{if(guideWindow==='now')scrollGuideToNow()},80);
 }
 function timelineRowV319(c,progs,start,end,span){
   const nowPct=(Date.now()-start.getTime())/span*100;
@@ -1471,8 +1368,7 @@ async function mediaLibraryView(type){
 
   try{
     const endpoint=tab==='movies'?'/api/unified/movies':'/api/unified/series';
-    const cacheKey=tab==='movies'?'unified:movies':'unified:series';
-    const rows=(await perfCachedApi(cacheKey,endpoint,900000,{timeoutMs:65000}))
+    const rows=(await api(endpoint,{timeoutMs:65000}))
       .filter(x=>String(x.source||'').toLowerCase()===source);
 
     const host=$('#sourceLibraryContent');
@@ -1739,7 +1635,7 @@ async function featureCompletionView(){
     const groups=[...new Set(features.map(x=>x.area))];
     content.innerHTML=`
       <div class=hero>
-        <span class=kicker>FEATURE COMPLETION</span>
+        <span class=kicker>v31.2.0 FEATURE COMPLETION</span>
         <h2>Feature Completion audit</h2>
         <p class=muted>This page distinguishes working features from partial implementations, foundations and missing functionality. It intentionally does not count a contract/model as a finished feature.</p>
       </div>
@@ -1935,7 +1831,7 @@ async function adminView(){
   <div class="admin2Shell">
     <div class="admin2Hero">
       <div>
-        <span class="admin2Kicker">MYONLINE TV</span>
+        <span class="admin2Kicker">MYONLINE TV v31.2.0</span>
         <h1>Administration</h1>
         <p>Everything needed to configure, monitor and maintain your media center — without one endless settings page.</p>
       </div>
@@ -2359,22 +2255,19 @@ async function openPersonalIptvEditor(id,prefetched=null){
     const p=prefetched||await api('/api/providers/'+encodeURIComponent(id)+'/edit');
     personalSourceEditorProviderId=id;currentProvider=id;
     content.innerHTML=`<div class=hero><span class=kicker>IPTV SOURCE</span><h2>Edit ${esc(p.name)}</h2><p class=muted>Change the connection and choose exactly which Live TV groups/channels, Movies and Series are visible.</p><div class=row><button class=btn onclick="sourcesView()">← My Sources</button></div></div>
-    <div class="sourceEditTabs iptvManagerTabs">
-      <button class="btn active" data-source-tab=overview onclick="showPersonalSourceTab('overview',this)">Overview</button>
-      <button class=btn data-source-tab=connection onclick="showPersonalSourceTab('connection',this)">Connection</button>
+    <div class="sourceEditTabs">
+      <button class="btn active" data-source-tab=connection onclick="showPersonalSourceTab('connection',this)">Connection</button>
       <button class=btn data-source-tab=live onclick="showPersonalSourceTab('live',this)">Live TV</button>
-      ${p.type==='xtream'?`<button class=btn data-source-tab=vod onclick="showPersonalSourceTab('vod',this)">Movies</button><button class=btn data-source-tab=series onclick="showPersonalSourceTab('series',this)">Series</button><button class=btn data-source-tab=rules onclick="showPersonalSourceTab('rules',this)">Smart Filters</button>`:''}
+      ${p.type==='xtream'?`<button class=btn data-source-tab=vod onclick="showPersonalSourceTab('vod',this)">Movies</button><button class=btn data-source-tab=series onclick="showPersonalSourceTab('series',this)">Series</button>`:''}
     </div>
     <section id=personalSourcePanel class=card></section>`;
-    window._personalProvider=p;showPersonalSourceTab('overview',document.querySelector('[data-source-tab=overview]'));
+    window._personalProvider=p;showPersonalSourceTab('connection',document.querySelector('[data-source-tab=connection]'));
   }catch(e){alert(friendlyError(e))}
 }
 
 async function showPersonalSourceTab(tab,button){
   document.querySelectorAll('[data-source-tab]').forEach(x=>x.classList.toggle('active',x===button));
   const p=window._personalProvider,box=$('#personalSourcePanel');if(!p||!box)return;
-  if(tab==='overview'){await renderIptvManagerOverview();return}
-  if(tab==='rules'){renderIptvSmartFilters();return}
   if(tab==='connection'){
     box.innerHTML=`<h3>Connection</h3><div class=grid2><div class=field><label>Name</label><input id=srcName value="${escAttr(p.name)}"></div><div class=field><label>Type</label><select id=srcType disabled><option>${esc(p.type)}</option></select></div></div>
       ${p.type==='m3u'?`<div class=field><label>M3U URL</label><input id=srcPlaylist value="${escAttr(p.playlistUrl||'')}"></div><div class=field><label>EPG URL</label><input id=srcEpg value="${escAttr(p.epgUrl||'')}"></div>`:`<div class=field><label>Xtream server URL</label><input id=srcBase value="${escAttr(p.baseUrl||'')}"></div><div class=grid2><div class=field><label>Username</label><input id=srcUser value="${escAttr(p.username||'')}"></div><div class=field><label>Password</label><input id=srcPass type=password placeholder="${p.passwordStored?'Leave blank to keep existing password':'Password'}"></div></div>`}
@@ -2412,144 +2305,19 @@ async function loadCataloguePrefs(){
   cataloguePrefs.hiddenVodCategories=cataloguePrefs.hiddenVodCategories||[];cataloguePrefs.hiddenVodItems=cataloguePrefs.hiddenVodItems||[];cataloguePrefs.hiddenSeriesCategories=cataloguePrefs.hiddenSeriesCategories||[];cataloguePrefs.hiddenSeriesItems=cataloguePrefs.hiddenSeriesItems||[];
 }
 async function renderPersonalCatalogueVisibility(kind){
-  const box=$('#personalSourcePanel'),label=kind==='vod'?'Movies':'Series';
-  box.innerHTML=`<p class=muted>Loading ${label.toLowerCase()} groups…</p>`;
-  try{
-    await loadCataloguePrefs();
-    const cats=await api(`/api/${kind}/${encodeURIComponent(personalSourceEditorProviderId)}/categories?includeHidden=true`,{timeoutMs:30000});
-    const hidden=kind==='vod'?cataloguePrefs.hiddenVodCategories:cataloguePrefs.hiddenSeriesCategories;
-    window._iptvCatalogueCategories=cats;
-    window._iptvCatalogueKind=kind;
-    box.innerHTML=`<div class=iptvManagerHead><div><span class=kicker>UNIFIED IPTV FILTER</span><h3>${label} visibility</h3><p class=muted>Exactly like Live TV: checked = visible. Uncheck groups or individual titles you do not want to see.</p></div><div class=iptvManagerHeadActions><button class=btn onclick="iptvExportFilters()">Export</button><button class=btn onclick="iptvImportFilters()">Import</button><button class=btn onclick="resetPersonalCatalogueVisibility('${kind}')">Show all</button></div></div>
-      <div class=iptvStats id=iptvCatalogueStats></div>
-      <div class=iptvFilterToolbar>
-        <input id=iptvCategorySearch placeholder="Search ${label.toLowerCase()} groups…" oninput="iptvFilterCategories(this.value)">
-        <label class=checkline><input id=iptvShowHidden type=checkbox onchange="iptvFilterCategories($('#iptvCategorySearch').value)"> Hidden only</label>
-        <button class=btn onclick="iptvSetAllCategories('${kind}',true)">Select all</button>
-        <button class=btn onclick="iptvSetAllCategories('${kind}',false)">Uncheck all</button>
-        <button class=btn onclick="iptvSelectCategoryMatches('${kind}',true)">Select matches</button>
-        <button class=btn onclick="iptvSelectCategoryMatches('${kind}',false)">Uncheck matches</button>
-      </div>
-      <div class="manageList iptvCategoryList" id=iptvCategoryList>${cats.map(c=>iptvCategoryRow(kind,c,!hidden.includes(String(c.id)))).join('')||'<span class=muted>No categories found.</span>'}</div>
-      <div class=iptvItemManager>
-        <div class=sectionHead><div><h4>${label}</h4><p class=muted>Choose a group, then fine-tune individual titles.</p></div></div>
-        <div class=iptvFilterToolbar><select id=sourceCatalogueCategory onchange="loadPersonalCatalogueItems('${kind}',this.value)"><option value="">Choose group/category…</option>${cats.map(c=>`<option value="${escAttr(c.id)}">${esc(c.name)}</option>`).join('')}</select></div>
-        <div id=sourceCatalogueItems class=manageList><span class=muted>Choose a group to manage individual titles.</span></div>
-      </div>`;
-    iptvCatalogueSummary(kind);
+  const box=$('#personalSourcePanel'),label=kind==='vod'?'Movies':'Series';box.innerHTML=`<p class=muted>Loading ${label.toLowerCase()} groups…</p>`;
+  try{await loadCataloguePrefs();const cats=await api(`/api/${kind}/${encodeURIComponent(personalSourceEditorProviderId)}/categories?includeHidden=true`,{timeoutMs:30000});const hidden=kind==='vod'?cataloguePrefs.hiddenVodCategories:cataloguePrefs.hiddenSeriesCategories;
+    box.innerHTML=`<div class=sectionHead><div><h3>${label} visibility</h3><p class=muted>Hide whole groups/categories or individual ${label.toLowerCase()}. Hidden content is removed from normal browsing and search lists that use the IPTV catalogue.</p></div><button class=btn onclick="resetPersonalCatalogueVisibility('${kind}')">Reset</button></div><h4>Groups / categories</h4><div class=manageList>${cats.map(c=>`<label><input type=checkbox ${hidden.includes(c.id)?'checked':''} onchange='setCatalogueCategory(${JSON.stringify(kind)},${JSON.stringify(c.id)},this.checked)'> Hide ${esc(c.name)}</label>`).join('')||'<span class=muted>No categories found.</span>'}</div><h4>${label}</h4><div class=row><select id=sourceCatalogueCategory onchange="loadPersonalCatalogueItems('${kind}',this.value)"><option value="">Choose group/category…</option>${cats.map(c=>`<option value="${escAttr(c.id)}">${esc(c.name)}</option>`).join('')}</select></div><div id=sourceCatalogueItems class=manageList><span class=muted>Choose a group to manage individual titles.</span></div>`;
   }catch(e){box.innerHTML=errorCard(e)}
-}
-function iptvCategoryRow(kind,c,visible){
-  const id=String(c.id),name=c.name||c.categoryName||id;
-  return `<label class=iptvCategoryRow data-iptv-category data-filter="${escAttr(name.toLowerCase())}" data-visible="${visible?'1':'0'}"><input data-iptv-category-check value="${escAttr(id)}" type=checkbox ${visible?'checked':''} onchange="iptvCatalogueCategoryChanged('${kind}',this)"> <span><b>${esc(name)}</b><small>${visible?'Visible':'Hidden'}</small></span></label>`;
-}
-function iptvFilterCategories(q){
-  q=(q||'').trim().toLowerCase();const hiddenOnly=$('#iptvShowHidden')?.checked;
-  document.querySelectorAll('[data-iptv-category]').forEach(row=>{const cb=row.querySelector('input'),match=!q||row.dataset.filter.includes(q),hidden=!cb.checked;row.hidden=!match||(hiddenOnly&&!hidden)});
-}
-function iptvCatalogueSummary(kind){
-  const rows=[...document.querySelectorAll('[data-iptv-category-check]')],visible=rows.filter(x=>x.checked).length;
-  const el=$('#iptvCatalogueStats');if(el)el.innerHTML=`<div><b>${rows.length}</b><small>groups</small></div><div><b>${visible}</b><small>visible</small></div><div><b>${rows.length-visible}</b><small>hidden</small></div><div><b>${kind==='vod'?'Movies':'Series'}</b><small>filter scope</small></div>`;
-}
-async function iptvCatalogueCategoryChanged(kind,cb){
-  cb.closest('[data-iptv-category]').dataset.visible=cb.checked?'1':'0';
-  cb.closest('[data-iptv-category]').querySelector('small').textContent=cb.checked?'Visible':'Hidden';
-  await iptvSaveCategorySelection(kind);iptvCatalogueSummary(kind);
-}
-async function iptvSaveCategorySelection(kind){
-  const hidden=[...document.querySelectorAll('[data-iptv-category-check]')].filter(x=>!x.checked).map(x=>x.value);
-  await jpost('/api/catalogue-preferences/'+encodeURIComponent(personalSourceEditorProviderId)+'/bulk',{kind,hiddenCategories:hidden});
-  await loadCataloguePrefs();
-}
-async function iptvSetAllCategories(kind,checked){
-  document.querySelectorAll('[data-iptv-category-check]').forEach(x=>x.checked=checked);
-  await iptvSaveCategorySelection(kind);await renderPersonalCatalogueVisibility(kind);
-}
-async function iptvSelectCategoryMatches(kind,checked){
-  document.querySelectorAll('[data-iptv-category]:not([hidden]) [data-iptv-category-check]').forEach(x=>x.checked=checked);
-  await iptvSaveCategorySelection(kind);await renderPersonalCatalogueVisibility(kind);
 }
 async function loadPersonalCatalogueItems(kind,categoryId){
-  const box=$('#sourceCatalogueItems');if(!box)return;if(!categoryId){box.innerHTML='<span class=muted>Choose a group to manage individual titles.</span>';return}
-  box.innerHTML='<span class=muted>Loading…</span>';
-  try{
-    await loadCataloguePrefs();
-    const rows=await api(`/api/${kind}/${encodeURIComponent(personalSourceEditorProviderId)}/items?categoryId=${encodeURIComponent(categoryId)}&includeHidden=true`,{timeoutMs:120000,attempts:1});
-    const hidden=kind==='vod'?cataloguePrefs.hiddenVodItems:cataloguePrefs.hiddenSeriesItems;
-    window._iptvCatalogueItems=rows;
-    box.innerHTML=`<div class=iptvFilterToolbar><input id=sourceCatalogueSearch placeholder="Search titles…" oninput=filterPersonalCatalogueItems(this.value)><label class=checkline><input id=iptvItemsHiddenOnly type=checkbox onchange="filterPersonalCatalogueItems($('#sourceCatalogueSearch').value)"> Hidden only</label><button class=btn onclick="iptvSetVisibleItems('${kind}',true)">Select all</button><button class=btn onclick="iptvSetVisibleItems('${kind}',false)">Uncheck all</button><button class=btn onclick="iptvSetMatchedItems('${kind}',true)">Select matches</button><button class=btn onclick="iptvSetMatchedItems('${kind}',false)">Uncheck matches</button></div><div class=iptvItemStats id=iptvItemStats></div>`+
-      rows.map(x=>{const id=String(x.id),visible=!hidden.includes(id),name=x.name||x.title||id;return `<label class=manageChannel data-iptv-item data-source-search="${escAttr((name+' '+(x.year||'')).toLowerCase())}"><input data-iptv-item-check value="${escAttr(id)}" type=checkbox ${visible?'checked':''} onchange="iptvItemChanged('${kind}',this)"> <span><b>${esc(name)}</b><small>${esc(x.year||'')} · ${visible?'Visible':'Hidden'}</small></span></label>`}).join('')||'<span class=muted>No titles found.</span>';
-    iptvItemSummary();
-  }catch(e){box.innerHTML=errorCard(e)}
+  const box=$('#sourceCatalogueItems');if(!box)return;if(!categoryId){box.innerHTML='<span class=muted>Choose a group to manage individual titles.</span>';return}box.innerHTML='<span class=muted>Loading…</span>';
+  try{await loadCataloguePrefs();const rows=await api(`/api/${kind}/${encodeURIComponent(personalSourceEditorProviderId)}/items?categoryId=${encodeURIComponent(categoryId)}&includeHidden=true`,{timeoutMs:120000,attempts:1});const hidden=kind==='vod'?cataloguePrefs.hiddenVodItems:cataloguePrefs.hiddenSeriesItems;box.innerHTML=`<input id=sourceCatalogueSearch placeholder="Search" oninput=filterPersonalCatalogueItems(this.value)>`+rows.map(x=>`<div class=manageChannel data-source-search="${escAttr((x.name||'').toLowerCase())}"><label><input type=checkbox ${hidden.includes(String(x.id))?'checked':''} onchange='setCatalogueItem(${JSON.stringify(kind)},${JSON.stringify(String(x.id))},this.checked)'> Hide</label><span><b>${esc(x.name)}</b><small>${esc(x.year||'')}</small></span></div>`).join('')||'<span class=muted>No titles found.</span>';}catch(e){box.innerHTML=errorCard(e)}
 }
-function filterPersonalCatalogueItems(q){q=(q||'').toLowerCase();const hiddenOnly=$('#iptvItemsHiddenOnly')?.checked;document.querySelectorAll('#sourceCatalogueItems [data-iptv-item]').forEach(x=>{const cb=x.querySelector('[data-iptv-item-check]');x.hidden=(!x.dataset.sourceSearch.includes(q))||(hiddenOnly&&cb.checked)})}
-function iptvItemSummary(){const x=[...document.querySelectorAll('[data-iptv-item-check]')],v=x.filter(i=>i.checked).length;if($('#iptvItemStats'))$('#iptvItemStats').textContent=`${v} of ${x.length} titles visible · ${x.length-v} hidden`}
-async function iptvItemChanged(kind,cb){await setCatalogueItem(kind,cb.value,!cb.checked);cb.closest('[data-iptv-item]').querySelector('small').textContent=(cb.closest('[data-iptv-item]').querySelector('small').textContent.split(' · ')[0]||'')+' · '+(cb.checked?'Visible':'Hidden');iptvItemSummary()}
-async function iptvSaveItemSelection(kind){
-  const hidden=[...document.querySelectorAll('[data-iptv-item-check]')].filter(x=>!x.checked).map(x=>x.value);
-  await jpost('/api/catalogue-preferences/'+encodeURIComponent(personalSourceEditorProviderId)+'/bulk',{kind,hiddenItems:hidden,replaceItems:true});
-  await loadCataloguePrefs();
-}
-async function iptvSetVisibleItems(kind,checked){document.querySelectorAll('[data-iptv-item-check]').forEach(x=>x.checked=checked);await iptvSaveItemSelection(kind);await loadPersonalCatalogueItems(kind,$('#sourceCatalogueCategory').value)}
-async function iptvSetMatchedItems(kind,checked){document.querySelectorAll('[data-iptv-item]:not([hidden]) [data-iptv-item-check]').forEach(x=>x.checked=checked);await iptvSaveItemSelection(kind);await loadPersonalCatalogueItems(kind,$('#sourceCatalogueCategory').value)}
+function filterPersonalCatalogueItems(q){q=(q||'').toLowerCase();document.querySelectorAll('#sourceCatalogueItems [data-source-search]').forEach(x=>x.style.display=x.dataset.sourceSearch.includes(q)?'':'none')}
 async function setCatalogueCategory(kind,categoryId,hidden){await jpost('/api/catalogue-preferences/'+encodeURIComponent(personalSourceEditorProviderId)+'/category',{kind,categoryId,hidden});await loadCataloguePrefs()}
 async function setCatalogueItem(kind,itemId,hidden){await jpost('/api/catalogue-preferences/'+encodeURIComponent(personalSourceEditorProviderId)+'/item',{kind,itemId,hidden});await loadCataloguePrefs()}
 async function resetPersonalCatalogueVisibility(kind){if(!confirm(`Show all ${kind==='vod'?'movies':'series'} again?`))return;await jpost('/api/catalogue-preferences/'+encodeURIComponent(personalSourceEditorProviderId)+'/reset',{kind});await renderPersonalCatalogueVisibility(kind)}
-
-function iptvRuleStorageKey(){return `myonline-iptv-rules-${personalSourceEditorProviderId}`}
-function iptvLoadRules(){try{return JSON.parse(localStorage.getItem(iptvRuleStorageKey())||'[]')}catch{return []}}
-function iptvSaveRules(rules){localStorage.setItem(iptvRuleStorageKey(),JSON.stringify(rules))}
-function renderIptvSmartFilters(){
-  const box=$('#personalSourcePanel'),rules=iptvLoadRules();
-  box.innerHTML=`<div class=iptvManagerHead><div><span class=kicker>SMART FILTERS</span><h3>Automatic group rules</h3><p class=muted>Create simple rules and apply them to Live TV, Movies or Series. Rules are stored per IPTV provider.</p></div></div>
-  <div class="card iptvRuleBuilder"><select id=iptvRuleScope><option value=all>All</option><option value=live>Live TV</option><option value=vod>Movies</option><option value=series>Series</option></select><select id=iptvRuleAction><option value=show>Show</option><option value=hide>Hide</option></select><select id=iptvRuleMatch><option value=contains>contains</option><option value=starts>starts with</option><option value=ends>ends with</option></select><input id=iptvRuleText placeholder="e.g. Sweden, Sport, Adult, 4K"><button class=btn onclick=iptvAddRule()>Add rule</button></div>
-  <div class=iptvPresetRow><button class=btn onclick="iptvAddPreset('nordic')">+ Nordic</button><button class=btn onclick="iptvAddPreset('sports')">+ Sports</button><button class=btn onclick="iptvAddPreset('kids')">+ Kids</button><button class=btn onclick="iptvAddPreset('hideadult')">Hide Adult</button></div>
-  <div id=iptvRulesList class=manageList>${rules.map((r,i)=>`<div class=manageChannel><span><b>${esc(r.action.toUpperCase())} ${esc(r.scope)}</b><small>${esc(r.match)} "${esc(r.text)}"</small></span><button class=btn onclick="iptvDeleteRule(${i})">Remove</button></div>`).join('')||'<span class=muted>No smart filters yet.</span>'}</div>
-  <div class=row><button class="btn primaryBtn" onclick=iptvApplyRules()>Apply rules now</button><button class=btn onclick=iptvExportFilters()>Export filters</button><button class=btn onclick=iptvImportFilters()>Import filters</button></div>`;
-}
-function iptvAddRule(){const text=$('#iptvRuleText').value.trim();if(!text)return;const r=iptvLoadRules();r.push({scope:$('#iptvRuleScope').value,action:$('#iptvRuleAction').value,match:$('#iptvRuleMatch').value,text});iptvSaveRules(r);renderIptvSmartFilters()}
-function iptvDeleteRule(i){const r=iptvLoadRules();r.splice(i,1);iptvSaveRules(r);renderIptvSmartFilters()}
-function iptvAddPreset(name){const p={nordic:[['all','show','contains','Sweden'],['all','show','contains','Nordic']],sports:[['all','show','contains','Sport']],kids:[['all','show','contains','Kids']],hideadult:[['all','hide','contains','Adult']]};const r=iptvLoadRules();(p[name]||[]).forEach(x=>r.push({scope:x[0],action:x[1],match:x[2],text:x[3]}));iptvSaveRules(r);renderIptvSmartFilters()}
-function iptvRuleMatches(name,r){name=(name||'').toLowerCase();const q=(r.text||'').toLowerCase();return r.match==='starts'?name.startsWith(q):r.match==='ends'?name.endsWith(q):name.includes(q)}
-async function iptvApplyRules(){
-  const rules=iptvLoadRules();if(!rules.length){alert('Add at least one rule first.');return}
-  const id=personalSourceEditorProviderId;
-  try{
-    const live=await api('/api/channels/'+encodeURIComponent(id)),groups=[...new Set(live.map(x=>x.group).filter(Boolean))];
-    await loadChannelPrefs();let hiddenLive=new Set(channelPrefs.hiddenGroups);
-    for(const r of rules.filter(x=>x.scope==='all'||x.scope==='live'))for(const g of groups)if(iptvRuleMatches(g,r)){if(r.action==='hide')hiddenLive.add(g);else hiddenLive.delete(g)}
-    await jpost('/api/channel-preferences/'+encodeURIComponent(id)+'/bulk',{hiddenGroups:[...hiddenLive],hiddenChannels:channelPrefs.hiddenChannels||[]});
-    for(const kind of ['vod','series']){
-      const cats=await api(`/api/${kind}/${encodeURIComponent(id)}/categories?includeHidden=true`),pref=await api('/api/catalogue-preferences/'+encodeURIComponent(id));
-      const current=kind==='vod'?pref.hiddenVodCategories:pref.hiddenSeriesCategories,hidden=new Set(current||[]);
-      for(const r of rules.filter(x=>x.scope==='all'||x.scope===kind))for(const c of cats)if(iptvRuleMatches(c.name||'',r)){if(r.action==='hide')hidden.add(String(c.id));else hidden.delete(String(c.id))}
-      await jpost('/api/catalogue-preferences/'+encodeURIComponent(id)+'/bulk',{kind,hiddenCategories:[...hidden]});
-    }
-    alert('Smart filters applied to Live TV, Movies and Series.');
-    await renderIptvManagerOverview();
-  }catch(e){alert(friendlyError(e))}
-}
-async function renderIptvManagerOverview(){
-  const box=$('#personalSourcePanel'),p=window._personalProvider;box.innerHTML='<p class=muted>Loading IPTV Manager…</p>';
-  try{
-    currentProvider=personalSourceEditorProviderId;await loadChannelPrefs();await loadCataloguePrefs();
-    const live=await api('/api/channels/'+encodeURIComponent(currentProvider));
-    let vod=[],series=[];if(p?.type==='xtream'){vod=await api(`/api/vod/${encodeURIComponent(currentProvider)}/categories?includeHidden=true`);series=await api(`/api/series/${encodeURIComponent(currentProvider)}/categories?includeHidden=true`)}
-    const liveGroups=[...new Set(live.map(x=>x.group).filter(Boolean))],visibleChannels=live.filter(x=>!channelPrefs.hiddenGroups.includes(x.group)&&!channelPrefs.hiddenChannels.includes(x.key)).length;
-    box.innerHTML=`<div class=iptvManagerHead><div><span class=kicker>IPTV MANAGER</span><h3>${esc(p?.name||'IPTV')} content control</h3><p class=muted>One place to decide what is visible in Live TV, Guide, Movies and Series.</p></div><div class=iptvManagerHeadActions><button class=btn onclick=iptvExportFilters()>Export</button><button class=btn onclick=iptvImportFilters()>Import</button></div></div>
-    <div class=iptvDashboard>
-      <button onclick="showPersonalSourceTab('live',document.querySelector('[data-source-tab=live]'))"><b>${visibleChannels}/${live.length}</b><span>Live channels</span><small>${liveGroups.length-channelPrefs.hiddenGroups.length}/${liveGroups.length} groups visible</small></button>
-      ${p?.type==='xtream'?`<button onclick="showPersonalSourceTab('vod',document.querySelector('[data-source-tab=vod]'))"><b>${vod.length-cataloguePrefs.hiddenVodCategories.length}/${vod.length}</b><span>Movie groups</span><small>${cataloguePrefs.hiddenVodCategories.length} hidden</small></button><button onclick="showPersonalSourceTab('series',document.querySelector('[data-source-tab=series]'))"><b>${series.length-cataloguePrefs.hiddenSeriesCategories.length}/${series.length}</b><span>Series groups</span><small>${cataloguePrefs.hiddenSeriesCategories.length} hidden</small></button>`:''}
-      <button onclick="showPersonalSourceTab('rules',document.querySelector('[data-source-tab=rules]'))"><b>${iptvLoadRules().length}</b><span>Smart rules</span><small>Automatic filtering</small></button>
-    </div>
-    <div class="card iptvHelp"><h4>Fast filtering examples</h4><div class=iptvExamples><button onclick="iptvQuickRule('all','show','Sweden')">Show Sweden</button><button onclick="iptvQuickRule('all','show','Sport')">Show Sport</button><button onclick="iptvQuickRule('all','hide','Adult')">Hide Adult</button><button onclick="iptvQuickRule('live','show','4K')">Show Live 4K</button><button onclick="iptvQuickRule('vod','show','Kids')">Show Kids Movies</button><button onclick="iptvQuickRule('series','show','Nordic')">Show Nordic Series</button></div><p class=muted>Tip: use Search + “Uncheck matches” when you want manual control; use Smart Filters when the provider refreshes its groups often.</p></div>`;
-  }catch(e){box.innerHTML=errorCard(e)}
-}
-function iptvQuickRule(scope,action,text){const r=iptvLoadRules();r.push({scope,action,match:'contains',text});iptvSaveRules(r);showPersonalSourceTab('rules',document.querySelector('[data-source-tab=rules]'))}
-async function iptvExportFilters(){
-  try{await loadChannelPrefs();await loadCataloguePrefs();const data={version:1,providerId:personalSourceEditorProviderId,exported:new Date().toISOString(),live:{hiddenGroups:channelPrefs.hiddenGroups||[],hiddenChannels:channelPrefs.hiddenChannels||[]},movies:{hiddenCategories:cataloguePrefs.hiddenVodCategories||[],hiddenItems:cataloguePrefs.hiddenVodItems||[]},series:{hiddenCategories:cataloguePrefs.hiddenSeriesCategories||[],hiddenItems:cataloguePrefs.hiddenSeriesItems||[]},rules:iptvLoadRules()};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`iptv-filters-${personalSourceEditorProviderId}.json`;a.click();URL.revokeObjectURL(a.href)}catch(e){alert(friendlyError(e))}
-}
-function iptvImportFilters(){const i=document.createElement('input');i.type='file';i.accept='.json,application/json';i.onchange=async()=>{try{const data=JSON.parse(await i.files[0].text());await jpost('/api/channel-preferences/'+encodeURIComponent(personalSourceEditorProviderId)+'/bulk',{hiddenGroups:data.live?.hiddenGroups||[],hiddenChannels:data.live?.hiddenChannels||[]});await jpost('/api/catalogue-preferences/'+encodeURIComponent(personalSourceEditorProviderId)+'/bulk',{kind:'vod',hiddenCategories:data.movies?.hiddenCategories||[],hiddenItems:data.movies?.hiddenItems||[],replaceItems:true});await jpost('/api/catalogue-preferences/'+encodeURIComponent(personalSourceEditorProviderId)+'/bulk',{kind:'series',hiddenCategories:data.series?.hiddenCategories||[],hiddenItems:data.series?.hiddenItems||[],replaceItems:true});iptvSaveRules(data.rules||[]);alert('IPTV filters imported.');await renderIptvManagerOverview()}catch(e){alert('Could not import filters: '+friendlyError(e))}};i.click()}
 
 async function saveProvider(){
   const p={id:editingProviderId||'',name:$('#pname').value,type:$('#ptype').value,playlistUrl:$('#purl').value,epgUrl:$('#pepg').value,baseUrl:$('#pbase').value,username:$('#puser').value,password:$('#ppass').value,keepExistingConnection:false,keepExistingPassword:!!editingProviderId&&!$('#ppass').value};
@@ -2822,7 +2590,7 @@ document.addEventListener('focusin',e=>{
 document.addEventListener('keydown',e=>{
   const tag=document.activeElement?.tagName;
   const editing=tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT';
-  const remoteKey=['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Enter','Escape','Backspace','BrowserBack'].includes(e.key);
+  const remoteKey=['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Enter','Escape','Backspace'].includes(e.key);
   const coarse=window.matchMedia?.('(pointer:coarse)')?.matches===true;
   const focusedControl=document.activeElement?.matches?.('button,a[href],[tabindex],video')===true;
   const remoteEligible=document.documentElement.classList.contains('isTV')||coarse||focusedControl;
@@ -2849,10 +2617,10 @@ document.addEventListener('keydown',e=>{
   else if(e.key==='Enter'){
     if(document.activeElement?.tagName!=='VIDEO' && tvActivateFocused())e.preventDefault();
   }
-  else if((e.key==='Escape'||e.key==='Backspace'||e.key==='BrowserBack')&&!document.fullscreenElement){
+  else if((e.key==='Escape'||e.key==='Backspace')&&!document.fullscreenElement){
     const picker=$('#profilePicker');
     if(picker){picker.remove();e.preventDefault();return}
-    if(currentView!=='home'){navigateBack();e.preventDefault()}
+    if(currentView!=='home'){show('home');e.preventDefault()}
   }
 });
 
@@ -3851,16 +3619,12 @@ async function prefetchViewData(view){
       ]);
     }else if(view==='library'){
       await Promise.all([
-        perfCachedApi('unified:movies','/api/unified/movies',900000,{timeoutMs:20000,attempts:1}),
-        perfCachedApi('unified:series','/api/unified/series',900000,{timeoutMs:20000,attempts:1})
+        perfCachedApi('unified:movies','/api/unified/movies',120000,{timeoutMs:20000,attempts:1}),
+        perfCachedApi('unified:series','/api/unified/series',120000,{timeoutMs:20000,attempts:1})
       ]);
     }
   }catch{}
 }
-// v39.8.2 VOD buffering helper.
-function enhanceVodVideoBuffering(root=document){root.querySelectorAll?.('video').forEach(v=>{if(v.dataset.vodBufferEnhanced)return;v.dataset.vodBufferEnhanced='true';v.preload='auto';v.setAttribute('playsinline','')})}
-const vodVideoObserver=new MutationObserver(ms=>ms.forEach(m=>m.addedNodes?.forEach(n=>{if(n.nodeType===1)enhanceVodVideoBuffering(n)})));
-vodVideoObserver.observe(document.documentElement,{childList:true,subtree:true});enhanceVodVideoBuffering();
 document.addEventListener('pointerover',e=>{
   const b=e.target.closest?.('[data-view]');
   if(b?.dataset?.view)prefetchViewData(b.dataset.view);
@@ -4757,58 +4521,19 @@ function renderTabletHome365({unifiedMovies=[],unifiedSeries=[],continueItems=[]
 let lmState={tab:'groups',snapshot:null,channels:[],vodCats:[],seriesCats:[]};
 function lmProviderId(){return $('#lmProvider')?.value||currentProvider||providers?.[0]?.id||''}
 function lmTab(tab,b){lmState.tab=tab;document.querySelectorAll('[data-lm-tab]').forEach(x=>x.classList.toggle('active',x===b));renderLibraryManagementTab()}
-async function libraryManagementView(){const id=lmProviderId();if(!id)return;currentProvider=id;const body=$('#libraryManagementBody');if(body)body.innerHTML='<p class=muted>Loading library…</p>';try{const [snap,ch]=await Promise.all([api('/api/library-management/'+encodeURIComponent(id)),api('/api/channels/'+encodeURIComponent(id)+'?includeHidden=true')]);lmState.snapshot=snap;lmState.channels=ch;await loadChannelPrefs();renderLmRefresh(snap.refresh);await renderLibraryManagementTab()}catch(e){if(body)body.innerHTML=errorCard(e)}}
-function renderLmRefresh(r){
- const x=$('#lmRefreshStatus');if(!x||!r)return;
- x.innerHTML=`<div class=lmRefreshPanel><div><b>Live TV provider sync</b><small>Last reload: ${r.lastRefresh?new Date(r.lastRefresh).toLocaleString():'Never'}${r.lastRefresh?` · +${r.lastAdded||0} new · ~${r.lastUpdated||0} changed · −${r.lastRemoved||0} removed`:''}</small></div>
- <div class=row><button class=btn onclick="previewLiveLibrary(this)">Preview provider changes</button><button class="btn primaryBtn" onclick="refreshLiveLibrary(this)">↻ Reload Live TV now</button><button class=btn onclick="showLmSyncDiagnostics()">Sync diagnostics</button></div>
- <div class=row><label>Automatic sync <select id=lmRefreshMode onchange="saveLmRefreshSettings()"><option value=manual ${r.mode==='manual'?'selected':''}>Manual</option><option value=interval ${r.mode==='interval'?'selected':''}>Every X hours</option><option value=daily ${r.mode==='daily'?'selected':''}>Daily</option></select></label>
- <label>Hours <input id=lmRefreshHours type=number min=1 max=168 value="${r.intervalHours||24}" onchange="saveLmRefreshSettings()"></label>
- <label class=checkline><input id=lmNewChannelsActive type=checkbox ${r.newChannelsActive!==false?'checked':''} onchange="saveLmRefreshSettings()"> New channels active</label></div><div id=lmRefreshPreview></div></div>`;
-}
-async function saveLmRefreshSettings(){await jpost('/api/providers/'+encodeURIComponent(lmProviderId())+'/refresh-settings',{mode:$('#lmRefreshMode').value,intervalHours:+$('#lmRefreshHours').value||24,newChannelsActive:$('#lmNewChannelsActive')?.checked!==false})}
-async function previewLiveLibrary(btn){
- const id=lmProviderId();if(!id)return;const box=$('#lmRefreshPreview');btn.disabled=true;box.innerHTML='<p class=muted>Reading current provider list…</p>';
- try{const r=await jpost('/api/providers/'+encodeURIComponent(id)+'/refresh-live-preview',{});
- box.innerHTML=`<div class=lmDiff><b>Preview</b><span>+${r.added} new</span><span>~${r.updated} updated</span><span>−${r.removed} removed</span><span>${r.unchanged} unchanged</span><small>Total after reload: ${r.total}. Your existing group/channel selections are preserved.</small></div>`}
- catch(e){box.innerHTML=errorCard(e)}finally{btn.disabled=false}
-}
-async function refreshLiveLibrary(btn){
- const id=lmProviderId();if(!id)return;
- if(!confirm('Reload all Live TV channels from the provider now? Existing group/channel visibility choices will be preserved.'))return;
- btn&&(btn.disabled=true);const x=$('#lmRefreshPreview');if(x)x.textContent='Reloading Live TV from provider…';
- try{const r=await jpost('/api/providers/'+encodeURIComponent(id)+'/refresh-live',{});
- if(x)x.innerHTML=`<div class=lmDiff><b>Reload complete</b><span>+${r.added} new</span><span>~${r.updated} updated</span><span>−${r.removed} removed</span><span>${r.unchanged} unchanged</span></div>`;
- await libraryManagementView()}catch(e){if(x)x.innerHTML=errorCard(e)}finally{btn&&(btn.disabled=false)}
-}
-async function showLmSyncDiagnostics(){
- const id=lmProviderId(),box=$('#lmRefreshPreview');box.innerHTML='<p class=muted>Loading sync history…</p>';
- try{const d=await api('/api/providers/'+encodeURIComponent(id)+'/sync-diagnostics');
- const rows=d.history||[];box.innerHTML=`<div class=lmSyncDiag><h4>IPTV sync diagnostics</h4><p>${esc(d.mode)} · every ${d.intervalHours}h · ${d.recentFailures} recent failures</p><div class=manageList>${rows.map(x=>`<div><b>${x.ok?'✓':'!'} ${new Date(x.at).toLocaleString()} · ${esc(x.trigger)}</b><small>${x.ok?`+${x.added} · ~${x.updated} · −${x.removed} · ${x.unchanged} unchanged`:esc(x.error||'Sync failed')}</small></div>`).join('')||'<span class=muted>No sync history yet.</span>'}</div></div>`}
- catch(e){box.innerHTML=errorCard(e)}
-}
+async function libraryManagementView(){const id=lmProviderId();if(!id)return;currentProvider=id;const body=$('#libraryManagementBody');if(body)body.innerHTML='<p class=muted>Loading library…</p>';try{const [snap,ch]=await Promise.all([api('/api/library-management/'+encodeURIComponent(id)),api('/api/channels/'+encodeURIComponent(id)+'?includeHidden=true')]);lmState.snapshot=snap;lmState.channels=ch;renderLmRefresh(snap.refresh);await renderLibraryManagementTab()}catch(e){if(body)body.innerHTML=errorCard(e)}}
+function renderLmRefresh(r){const x=$('#lmRefreshStatus');if(!x||!r)return;x.innerHTML=`Last refresh: <b>${r.lastRefresh?new Date(r.lastRefresh).toLocaleString():'Never'}</b>${r.lastRefresh?` · +${r.lastAdded||0} new · ~${r.lastUpdated||0} changed · −${r.lastRemoved||0} removed · ${r.lastUnchanged||0} unchanged`:''}<br><label>Auto refresh <select id=lmRefreshMode onchange="saveLmRefreshSettings()"><option value=manual ${r.mode==='manual'?'selected':''}>Manual</option><option value=interval ${r.mode==='interval'?'selected':''}>Every X hours</option><option value=daily ${r.mode==='daily'?'selected':''}>Daily</option></select></label> <input id=lmRefreshHours type=number min=1 max=168 value="${r.intervalHours||24}" style="width:80px" onchange="saveLmRefreshSettings()"> hours`;}
+async function saveLmRefreshSettings(){await jpost('/api/providers/'+encodeURIComponent(lmProviderId())+'/refresh-settings',{mode:$('#lmRefreshMode').value,intervalHours:+$('#lmRefreshHours').value||24})}
+async function refreshLiveLibrary(btn){const id=lmProviderId();if(!id)return;btn&&(btn.disabled=true);const x=$('#lmRefreshStatus');if(x)x.textContent='Refreshing Live TV from provider…';try{const r=await jpost('/api/providers/'+encodeURIComponent(id)+'/refresh-live',{});if(x)x.innerHTML=`Refresh complete · <b>+${r.added}</b> new · <b>~${r.updated}</b> changed · <b>−${r.removed}</b> removed · ${r.unchanged} unchanged · ${r.total} total`;await libraryManagementView()}catch(e){if(x)x.textContent=friendlyError(e)}finally{btn&&(btn.disabled=false)}}
 function qualityChecks(g){const allowed=g.quality?.allowed||[];return ['RAW','4K','FHD','HD','SD','Unknown'].map(q=>`<label><input type=checkbox data-q="${q}" ${!allowed.length||allowed.includes(q)?'checked':''}> ${q}</label>`).join('')}
 async function saveGroupQuality(group,el){const card=el.closest('.lmGroupCard'),allowed=[...card.querySelectorAll('[data-q]:checked')].map(x=>x.dataset.q),bestOnly=card.querySelector('[data-best]').checked,priority=card.querySelector('[data-priority]').value.split(',').map(x=>x.trim()).filter(Boolean);await jpost('/api/library-management/'+encodeURIComponent(lmProviderId())+'/quality',{group,allowed,bestOnly,priority});el.textContent='Saved ✓';setTimeout(()=>el.textContent='Save quality',1200)}
 async function lmHideGroup(group,hidden){await jpost('/api/channel-preferences/'+encodeURIComponent(lmProviderId())+'/group',{group,hidden});await libraryManagementView()}
-async function renderLibraryManagementTab(){const body=$('#libraryManagementBody');if(!body||!lmState.snapshot)return;const id=lmProviderId();if(lmState.tab==='groups'){
- const active=lmState.snapshot.groups.filter(g=>!g.hidden).length,total=lmState.snapshot.groups.length;
- body.innerHTML=`<div class=admin2CardHead><div><h3>Live TV groups</h3><p>Choose exactly which provider groups are active. Group state is separate from individual channel state.</p></div><span class=countPill>${active} / ${total} active</span></div>
- <div class="row lmFilterBar"><input id=lmSearch placeholder="Search groups…" oninput="lmApplyGroupFilters()"><select id=lmGroupState onchange="lmApplyGroupFilters()"><option value=all>All groups</option><option value=active>Active only</option><option value=inactive>Inactive only</option><option value=adult>Adult (18+)</option></select><button class=btn onclick="lmSetVisibleGroups(false)">Activate matches</button><button class=btn onclick="lmSetVisibleGroups(true)">Deactivate matches</button><button class="btn danger" onclick="lmSetAdultGroups(true)">Enable Adult (18+)</button><button class=btn onclick="lmSetAdultGroups(false)">Disable Adult</button></div>
- <div class=lmGrid>${lmState.snapshot.groups.map(g=>`<article class=lmGroupCard data-lm-filter="${escAttr(g.name.toLowerCase())}" data-hidden="${g.hidden?'true':'false'}" data-adult="${lmIsAdultGroup(g.name)?'true':'false'}"><div class=lmTitle><div><b>${esc(g.name||'Ungrouped')} ${lmIsAdultGroup(g.name)?'<span class="adultGroupBadge">18+</span>':''}</b><small>${g.count} channels · ${Object.entries(g.qualities||{}).map(([q,n])=>q+' '+n).join(' · ')}</small></div><label class=checkline><input type=checkbox ${!g.hidden?'checked':''} onchange='lmHideGroup(${JSON.stringify(g.name)},!this.checked)'> Active</label></div><div class=lmQualities>${qualityChecks(g)}</div><label class=checkline><input data-best type=checkbox ${g.quality?.bestOnly?'checked':''}> Best available only</label><label>Priority <input data-priority value="${escAttr((g.quality?.priority||['RAW','4K','FHD','HD','SD','Unknown']).join(','))}"></label><button class=btn onclick='saveGroupQuality(${JSON.stringify(g.name)},this)'>Save quality</button></article>`).join('')}</div>`;return}
-if(lmState.tab==='channels'){
- const groups=[...new Set(lmState.channels.map(c=>c.group||'').filter(Boolean))].sort();
- body.innerHTML=`<div class=admin2CardHead><div><h3>Live TV channels</h3><p>Filter by group/status, then bulk activate or deactivate only the matching channels.</p></div><span id=lmChannelVisibleCount class=countPill></span></div>
- <div class="row lmFilterBar"><input id=lmChannelSearch placeholder="Search channels…" oninput="lmApplyChannelFilters()"><select id=lmChannelGroup onchange="lmApplyChannelFilters()"><option value="">All groups</option>${groups.map(g=>`<option value="${escAttr(g)}">${esc(g)}</option>`).join('')}</select><select id=lmChannelState onchange="lmApplyChannelFilters()"><option value=all>All channels</option><option value=active>Active only</option><option value=inactive>Inactive only</option></select><button class=btn onclick="lmSelectVisible(true)">Select matches</button><button class=btn onclick="lmSelectVisible(false)">Clear</button><button class=btn onclick="lmBulkHideChannels(false)">Activate selected</button><button class="btn danger" onclick="lmBulkHideChannels(true)">Deactivate selected</button></div>
- <div class=lmTable>${lmState.channels.map(c=>{const hidden=(channelPrefs.hiddenChannels||[]).includes(c.key);return `<label class=lmChannelRow data-lm-row data-group="${escAttr(c.group||'')}" data-hidden="${hidden?'true':'false'}" data-filter="${escAttr(((c.name||'')+' '+(c.group||'')+' '+(c.quality||'')).toLowerCase())}"><input type=checkbox data-lm-channel value="${escAttr(c.key)}"><span>${c.logo?`<img src="${escAttr(c.logo)}" loading=lazy>`:''}</span><b>${esc(c.name)}</b><small>${esc(c.group||'')}</small><em>${hidden?'Inactive':'Active'} · ${esc(c.quality||'Unknown')}</em></label>`}).join('')}</div>`;lmApplyChannelFilters();return}
+async function renderLibraryManagementTab(){const body=$('#libraryManagementBody');if(!body||!lmState.snapshot)return;const id=lmProviderId();if(lmState.tab==='groups'){body.innerHTML=`<div class=admin2CardHead><div><h3>Groups</h3><p>Hide groups permanently and choose which stream qualities are visible.</p></div><input id=lmSearch placeholder="Search groups…" oninput="lmFilterCards(this.value)"></div><div class=lmGrid>${lmState.snapshot.groups.map(g=>`<article class=lmGroupCard data-lm-filter="${escAttr(g.name.toLowerCase())}"><div class=lmTitle><div><b>${esc(g.name||'Ungrouped')}</b><small>${g.count} channels · ${Object.entries(g.qualities||{}).map(([q,n])=>q+' '+n).join(' · ')}</small></div><label class=checkline><input type=checkbox ${g.hidden?'checked':''} onchange='lmHideGroup(${JSON.stringify(g.name)},this.checked)'> Hidden</label></div><div class=lmQualities>${qualityChecks(g)}</div><label class=checkline><input data-best type=checkbox ${g.quality?.bestOnly?'checked':''}> Best available only</label><label>Priority <input data-priority value="${escAttr((g.quality?.priority||['RAW','4K','FHD','HD','SD','Unknown']).join(','))}"></label><button class=btn onclick='saveGroupQuality(${JSON.stringify(g.name)},this)'>Save quality</button><button class=btn onclick="refreshLiveLibrary(this)">↻ Refresh group</button></article>`).join('')}</div>`;return}
+if(lmState.tab==='channels'){body.innerHTML=`<div class=admin2CardHead><div><h3>Channels</h3><p>Search and bulk hide channels. Hidden channels stay hidden after refresh.</p></div></div><div class=row><input id=lmChannelSearch placeholder="Search channels or groups…" oninput="lmFilterRows(this.value)"><button class=btn onclick="lmSelectVisible(true)">Select visible</button><button class=btn onclick="lmSelectVisible(false)">Clear</button><button class="btn danger" onclick="lmBulkHideChannels(true)">Hide selected</button><button class=btn onclick="lmBulkHideChannels(false)">Show selected</button></div><div class=lmTable>${lmState.channels.map(c=>`<label class=lmChannelRow data-lm-row data-filter="${escAttr(((c.name||'')+' '+(c.group||'')+' '+(c.quality||'')).toLowerCase())}"><input type=checkbox data-lm-channel value="${escAttr(c.key)}"><span>${c.logo?`<img src="${escAttr(c.logo)}" loading=lazy>`:''}</span><b>${esc(c.name)}</b><small>${esc(c.group||'')}</small><em>${esc(c.quality||'Unknown')}</em></label>`).join('')}</div>`;return}
 if(lmState.tab==='movies'||lmState.tab==='series'){const kind=lmState.tab==='movies'?'vod':'series',label=lmState.tab==='movies'?'Movies':'Series';body.innerHTML=`<div class=admin2CardHead><div><h3>${label}</h3><p>Hide categories or individual titles. Hidden items remain blocked after provider refresh.</p></div><button class=btn onclick="lmLoadCatalogue('${kind}')">Load ${label}</button></div><div id=lmCatalogue><p class=muted>Press Load ${label} to fetch the current provider catalogue.</p></div>`;return}
 body.innerHTML=`<div class=admin2CardHead><div><h3>Cleanup Center</h3><p>Find duplicate-looking channels, empty groups and missing metadata before hiding anything.</p></div><button class=btn onclick=lmRunCleanup()>Scan library</button></div><div id=lmCleanup></div>`}
 function lmFilterCards(q){q=(q||'').toLowerCase();document.querySelectorAll('[data-lm-filter]').forEach(x=>x.hidden=!x.dataset.lmFilter.includes(q))}
-function lmIsAdultGroup(name){const g=String(name||'').trim().toLowerCase();return ['adult','adults','xxx','xx ','18+','18 +','18plus','18 plus','18 years','erotic','erotica','porn','porno','sex','playboy','redlight','red light','hot xxx'].some(x=>g.includes(x))}
-function lmApplyGroupFilters(){const q=($('#lmSearch')?.value||'').toLowerCase(),s=$('#lmGroupState')?.value||'all';document.querySelectorAll('.lmGroupCard[data-lm-filter]').forEach(x=>{const text=x.dataset.lmFilter||'',hidden=x.dataset.hidden==='true',adult=x.dataset.adult==='true';x.hidden=!(text.includes(q)&&(s==='all'||(s==='active'&&!hidden)||(s==='inactive'&&hidden)||(s==='adult'&&adult)))})}
-async function lmSetVisibleGroups(hidden){const cards=[...document.querySelectorAll('.lmGroupCard[data-lm-filter]:not([hidden])')],adultSkipped=!hidden?cards.filter(x=>x.dataset.adult==='true').length:0,names=cards.filter(x=>hidden||x.dataset.adult!=='true').map(x=>x.querySelector('.lmTitle b')?.childNodes[0]?.textContent?.trim()||'').filter(Boolean);if(!names.length){if(adultSkipped)alert('Adult (18+) groups are protected. Use Enable Adult (18+) explicitly.');return}if(!confirm(`${hidden?'Deactivate':'Activate'} ${names.length} matching groups?${adultSkipped?` ${adultSkipped} Adult group(s) stay inactive.`:''}`))return;for(const group of names)await jpost('/api/channel-preferences/'+encodeURIComponent(lmProviderId())+'/group',{group,hidden});await libraryManagementView()}
-async function lmSetAdultGroups(active){if(active&&!confirm('Enable all detected Adult (18+) groups for this IPTV provider?'))return;const r=await jpost('/api/providers/'+encodeURIComponent(lmProviderId())+'/adult-groups',{active});if(window.UXConsistency)UXConsistency.toast(`${r.groups||0} Adult group(s) ${active?'enabled':'disabled'}`,active?'info':'success');await libraryManagementView()}
-function lmApplyChannelFilters(){const q=($('#lmChannelSearch')?.value||'').toLowerCase(),g=$('#lmChannelGroup')?.value||'',s=$('#lmChannelState')?.value||'all';let n=0;document.querySelectorAll('[data-lm-row]').forEach(x=>{const hidden=x.dataset.hidden==='true',ok=(x.dataset.filter||'').includes(q)&&(!g||x.dataset.group===g)&&(s==='all'||(s==='active'&&!hidden)||(s==='inactive'&&hidden));x.hidden=!ok;if(ok)n++});const c=$('#lmChannelVisibleCount');if(c)c.textContent=`${n} matching`;}
-function lmFilterRows(q){const e=$('#lmChannelSearch');if(e)e.value=q||'';lmApplyChannelFilters()}
+function lmFilterRows(q){q=(q||'').toLowerCase();document.querySelectorAll('[data-lm-row]').forEach(x=>x.hidden=!x.dataset.filter.includes(q))}
 function lmSelectVisible(on){document.querySelectorAll('[data-lm-row]:not([hidden]) [data-lm-channel]').forEach(x=>x.checked=on)}
 async function lmBulkHideChannels(hidden){const keys=[...document.querySelectorAll('[data-lm-channel]:checked')].map(x=>x.value);if(!keys.length)return;await jpost('/api/library-management/'+encodeURIComponent(lmProviderId())+'/bulk-channels',{channelKeys:keys,hidden});await libraryManagementView()}
 async function lmLoadCatalogue(kind){const id=lmProviderId(),box=$('#lmCatalogue');box.innerHTML='<p class=muted>Loading…</p>';try{const cats=await api(`/api/${kind}/${encodeURIComponent(id)}/categories?includeHidden=true`);const prefs=await api('/api/catalogue-preferences/'+encodeURIComponent(id));box.innerHTML=`<input placeholder="Search categories…" oninput="lmFilterCards(this.value)"><div class=lmGrid>${cats.map(c=>{const cid=c.id||c.categoryId||'',name=c.name||c.categoryName||'Unnamed',set=kind==='vod'?prefs.hiddenVodCategories:prefs.hiddenSeriesCategories,hidden=(set||[]).includes(cid);return `<article class=lmGroupCard data-lm-filter="${escAttr(name.toLowerCase())}"><b>${esc(name)}</b><label class=checkline><input type=checkbox ${hidden?'checked':''} onchange="lmCatalogueCategory('${kind}','${escAttr(cid)}',this.checked)"> Hidden</label><button class=btn onclick="lmLoadItems('${kind}','${escAttr(cid)}',this)">Manage titles</button><div class=lmItems></div></article>`}).join('')}</div>`}catch(e){box.innerHTML=errorCard(e)}}
@@ -4816,329 +4541,3 @@ async function lmCatalogueCategory(kind,id,hidden){await jpost('/api/catalogue-p
 async function lmLoadItems(kind,cat,btn){const box=btn.parentElement.querySelector('.lmItems');box.innerHTML='Loading…';try{const rows=await api(`/api/${kind}/${encodeURIComponent(lmProviderId())}/items?categoryId=${encodeURIComponent(cat)}&includeHidden=true`);box.innerHTML=rows.slice(0,1000).map(x=>`<label><input type=checkbox onchange="lmCatalogueItem('${kind}','${escAttr(x.id)}',this.checked)"> Hide ${esc(x.name||x.title||x.id)}</label>`).join('')}catch(e){box.textContent=friendlyError(e)}}
 async function lmCatalogueItem(kind,id,hidden){await jpost('/api/catalogue-preferences/'+encodeURIComponent(lmProviderId())+'/item',{kind,itemId:id,hidden})}
 function lmRunCleanup(){const rows=lmState.channels||[],norm=n=>(n||'').toUpperCase().replace(/\b(RAW|4K|UHD|FHD|HD|SD|2160P?|1080P?|720P?)\b/g,'').replace(/\s+/g,' ').trim(),m=new Map();rows.forEach(c=>{const k=norm(c.name);if(!m.has(k))m.set(k,[]);m.get(k).push(c)});const dup=[...m.values()].filter(x=>x.length>1),missing=rows.filter(x=>!x.logo).length;$('#lmCleanup').innerHTML=`<div class=admin2StatusGrid><div class=admin2Card><b>${dup.length}</b><small>duplicate-looking channel sets</small></div><div class=admin2Card><b>${missing}</b><small>channels without logos</small></div><div class=admin2Card><b>${lmState.snapshot.groups.filter(g=>!g.name).length}</b><small>ungrouped sets</small></div></div><h4>Duplicate candidates</h4><div class=manageList>${dup.slice(0,200).map(g=>`<div><b>${esc(norm(g[0].name))}</b><small>${g.map(x=>esc(x.name)+' ['+esc(x.quality||'')+']').join(' · ')}</small></div>`).join('')||'<p>No duplicate-looking channels found.</p>'}</div>`}
-
-document.addEventListener('keydown',e=>{
-  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){
-    requestAnimationFrame(ensureFocusedElementVisible);
-  }
-},true);
-
-function applyAdaptiveNavigationMode(){
-  const tablet=document.documentElement.classList.contains('isTablet');
-  const tv=document.documentElement.classList.contains('isTV');
-  const landscape=matchMedia('(orientation: landscape)').matches;
-  document.documentElement.classList.toggle('navRailMode',tablet&&landscape&&!tv);
-}
-applyAdaptiveNavigationMode();
-addEventListener('resize',applyAdaptiveNavigationMode,{passive:true});
-addEventListener('orientationchange',()=>setTimeout(applyAdaptiveNavigationMode,50),{passive:true});
-
-
-// v38.3.0 - Personal Home & My Stuff
-function myStuffKey(){return 'myonlinetv-my-stuff-'+(authState?.user||'default')}
-function loadMyStuff(){
-  try{return JSON.parse(localStorage.getItem(myStuffKey())||'{"favorites":[],"watchlist":[]}')}catch{return {favorites:[],watchlist:[]}}
-}
-function saveMyStuff(v){localStorage.setItem(myStuffKey(),JSON.stringify(v))}
-function myStuffIdentity(x){return String(x?.id||x?.url||x?.name||x?.title||'')}
-function toggleMyStuff(kind,item){
-  const state=loadMyStuff(),key=kind==='favorites'?'favorites':'watchlist',id=myStuffIdentity(item);
-  const i=state[key].findIndex(x=>myStuffIdentity(x)===id);
-  if(i>=0)state[key].splice(i,1);else state[key].unshift({...item,added:new Date().toISOString()});
-  saveMyStuff(state); if(currentView==='mystuff')myStuffView();
-}
-async function myStuffView(){
-  const state=loadMyStuff();
-  let cont=[],history=[];
-  try{cont=await api('/api/continue',{timeoutMs:5000,attempts:1})}catch{}
-  try{history=JSON.parse(localStorage.getItem('myonline-media-history')||'[]')}catch{}
-  const cards=(items,empty)=>items.length?`<div class="posterRail">${items.slice(0,24).map(x=>`<button class="posterCard" onclick='playUnifiedItem(${JSON.stringify(x)})'>${mediaPosterMarkup(x.poster,x.name||x.title)}<div class=posterBody><b>${esc(x.name||x.title||'Media')}</b><small>${esc(x.source||x.kind||'')}</small></div></button>`).join('')}</div>`:`<div class="card myStuffEmpty">${empty}</div>`;
-  content.innerHTML=`<div class="hero myStuffHero"><span class=kicker>PERSONAL</span><h1>My Stuff</h1><p class=muted>Your personal place for things you want to continue, save and revisit.</p></div>
-  <div class=sectionHead><h2>Continue watching</h2></div>${cards(cont,'Nothing to continue yet.')}
-  <div class=sectionHead><h2>★ Favorites</h2></div>${cards(state.favorites,'Add favorites from Quick Actions.')}
-  <div class=sectionHead><h2>＋ Watchlist</h2></div>${cards(state.watchlist,'Your watchlist is empty.')}
-  <div class=sectionHead><h2>Recently watched</h2></div>${cards(history,'No recent activity yet.')}
-  <div class="myStuffLinks"><button class=btn onclick="show('recordings')">Recordings</button><button class=btn onclick="show('downloads')">Downloads</button></div>`;
-}
-
-
-// v38.4.0 - Universal Search & Quick Actions
-function openQuickActions(item){
-  closeQuickActions();
-  const state=loadMyStuff(),id=myStuffIdentity(item);
-  const fav=state.favorites.some(x=>myStuffIdentity(x)===id),watch=state.watchlist.some(x=>myStuffIdentity(x)===id);
-  const overlay=document.createElement('div');overlay.id='quickActionOverlay';overlay.className='quickActionOverlay';
-  overlay.innerHTML=`<div class=quickActionSheet role=dialog aria-modal=true aria-label="Quick actions"><div><span class=kicker>QUICK ACTIONS</span><h3>${esc(item.name||item.title||'Media')}</h3></div>
-  <button class="btn primaryBtn" data-qa-play>▶ Play</button>
-  <button class=btn data-qa-fav>${fav?'★ Remove favorite':'☆ Add favorite'}</button>
-  <button class=btn data-qa-watch>${watch?'✓ Remove from watchlist':'＋ Add to watchlist'}</button>
-  <button class=btn data-qa-close>Close</button></div>`;
-  document.body.appendChild(overlay);
-  overlay.onclick=e=>{if(e.target===overlay)closeQuickActions()};
-  overlay.querySelector('[data-qa-close]').onclick=closeQuickActions;
-  overlay.querySelector('[data-qa-play]').onclick=()=>{closeQuickActions();playUnifiedItem(item)};
-  overlay.querySelector('[data-qa-fav]').onclick=()=>{toggleMyStuff('favorites',item);closeQuickActions()};
-  overlay.querySelector('[data-qa-watch]').onclick=()=>{toggleMyStuff('watchlist',item);closeQuickActions()};
-  setTimeout(()=>overlay.querySelector('button')?.focus(),0);
-}
-function closeQuickActions(){document.getElementById('quickActionOverlay')?.remove()}
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('quickActionOverlay')){e.preventDefault();closeQuickActions()}})
-document.addEventListener('contextmenu',e=>{
-  const card=e.target.closest?.('.posterCard,.historyMain,.continueCard');
-  if(!card)return;
-  const title=card.querySelector('b')?.textContent?.trim(); if(!title)return;
-  e.preventDefault(); openQuickActions({name:title,title});
-});
-function installGlobalSearchShortcut(){
-  document.addEventListener('keydown',e=>{
-    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){
-      e.preventDefault();sessionStorage.setItem('myonline-search-query','');show('search').then(()=>setTimeout(()=>document.querySelector('#searchInput,input[type=search],input[placeholder*="Search"]')?.focus(),40));
-    }
-  });
-}
-installGlobalSearchShortcut();
-
-
-
-// v38.6.0 - Live Clock
-function updateVisibleClocks(){
-  const now=new Date();
-  const time=new Intl.DateTimeFormat(undefined,{hour:'2-digit',minute:'2-digit',hour12:false}).format(now);
-  document.querySelectorAll('.liveClock,[data-live-clock]').forEach(el=>{
-    if(el.textContent!==time)el.textContent=time;
-  });
-  updateDesktop363Clock();
-}
-if(!window.__myOnlineLiveClockTimer){
-  window.__myOnlineLiveClockTimer=setInterval(updateVisibleClocks,1000);
-  document.addEventListener('DOMContentLoaded',updateVisibleClocks,{once:true});
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden)updateVisibleClocks()});
-}
-
-// v38.5.0 - Live TV & Guide Experience
-let guideFavoritesOnly=false;
-function toggleGuideFavoritesOnly(){
-  guideFavoritesOnly=!guideFavoritesOnly;
-  const b=document.getElementById('guideFavs');if(b)b.classList.toggle('activeBtn',guideFavoritesOnly);
-  applyGuideFavoritesFilter();
-}
-function applyGuideFavoritesFilter(){
-  const b=document.getElementById('guideFavs');if(b)b.classList.toggle('activeBtn',guideFavoritesOnly);
-  if(!guideFavoritesOnly){document.querySelectorAll('.timeline>*,.timelineRow').forEach(x=>x.style.display='');return}
-  let fav=new Set();
-  try{fav=new Set(JSON.parse(localStorage.getItem('favorites')||'[]').map(String))}catch{}
-  document.querySelectorAll('.timeline>*,.timelineRow').forEach(row=>{
-    const key=String(row.dataset?.channelId||row.getAttribute?.('data-channel')||'');
-    row.style.display=(!key||fav.has(key))?'':'none';
-  });
-}
-document.addEventListener('keydown',e=>{
-  if(currentView!=='guide')return;
-  if(e.key.toLowerCase()==='n'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();guideWindow='now';guide().then(scrollGuideToNow)}
-  if(e.key.toLowerCase()==='f'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();toggleGuideFavoritesOnly()}
-});
-function liveConnectionMessage(error){
-  const msg=String(error?.message||error||'').toLowerCase();
-  if(msg.includes('timeout'))return 'Your TV provider is taking too long to respond.';
-  if(msg.includes('network')||msg.includes('fetch'))return 'The TV provider cannot be reached right now.';
-  return 'Live TV is temporarily unavailable.';
-}
-
-
-// v38.8.0 Device Experience Engine
-const DeviceExperience={
-  mode:'desktop', input:'mouse',
-  detect(){
-    const coarse=matchMedia('(pointer:coarse)').matches, hover=matchMedia('(hover:hover)').matches;
-    // UI Recovery: never guess "tv" from viewport/pointer alone.
-    // TV mode becomes active only after an actual remote-style key is observed.
-    const explicitTv=document.documentElement.dataset.remoteDetected==='true';
-    const narrow=matchMedia('(max-width:640px)').matches;
-    const tablet=coarse && matchMedia('(min-width:641px) and (max-width:1180px)').matches;
-    this.mode=explicitTv?'tv':narrow?'mobile':tablet?'tablet':'desktop';
-    this.input=explicitTv?'remote':coarse?'touch':hover?'mouse':'keyboard';
-    document.documentElement.dataset.deviceMode=this.mode;
-    document.documentElement.dataset.inputMode=this.input;
-    document.body?.classList.toggle('remoteFirst',this.mode==='tv');
-    window.dispatchEvent(new CustomEvent('deviceexperiencechange',{detail:{mode:this.mode,input:this.input}}));
-  },
-  actionMenu(anchor,html){
-    const old=document.querySelector('.adaptiveActionMenu'); if(old)old.remove();
-    const d=document.createElement('div');d.className=`adaptiveActionMenu ${this.mode}`;
-    d.innerHTML=`<div class=adaptiveActionSheet role=dialog aria-modal=true>${html}<button class=btn onclick="this.closest('.adaptiveActionMenu').remove()">Close</button></div>`;
-    document.body.appendChild(d); d.querySelector('button,[tabindex]')?.focus();
-  }
-};
-addEventListener('resize',()=>DeviceExperience.detect());
-addEventListener('pointerdown',e=>{DeviceExperience.input=e.pointerType==='touch'?'touch':'mouse';document.documentElement.dataset.inputMode=DeviceExperience.input});
-addEventListener('keydown',e=>{
-  const remoteKeys=['MediaPlayPause','MediaTrackNext','MediaTrackPrevious','BrowserBack','GoBack'];
-  if(remoteKeys.includes(e.key)){
-    document.documentElement.dataset.remoteDetected='true';
-    DeviceExperience.detect();
-    DeviceExperience.input='remote';
-  }else if(DeviceExperience.mode!=='tv'){
-    DeviceExperience.input='keyboard';
-  }
-  document.documentElement.dataset.inputMode=DeviceExperience.input;
-});
-document.addEventListener('DOMContentLoaded',()=>DeviceExperience.detect(),{once:true});
-
-
-
-// v38.9 Simple Home disabled in v39.5.1 UI Recovery.
-// The established authenticated home() implementation remains authoritative.
-
-
-// v39.0 experimental One Search removed by v39.5.2 UI Recovery.
-// The established authenticated searchView() is authoritative.
-
-
-// v39.1 experimental Instant Player overlay removed by v39.5.2 UI Recovery.
-// Existing Live TV player and remote handling remain authoritative.
-
-
-// v39.2 Setup Wizard removed in v39.5.1 UI Recovery.
-// Authenticated firstLoginGuide()/onboardingRequired is the only onboarding flow.
-
-
-// v39.3.0 Profiles Everywhere
-const ProfileState={
-  current(){return localStorage.getItem('myonline-active-profile')||'default'},
-  key(name){return `myonline-profile-${this.current()}-${name}`},
-  get(name,fallback){try{const v=localStorage.getItem(this.key(name));return v===null?fallback:JSON.parse(v)}catch{return fallback}},
-  set(name,value){localStorage.setItem(this.key(name),JSON.stringify(value));window.dispatchEvent(new CustomEvent('profilestatechange',{detail:{profile:this.current(),name}}))},
-  switchTo(id){localStorage.setItem('myonline-active-profile',id||'default');location.reload()},
-  export(){const prefix=`myonline-profile-${this.current()}-`,data={profile:this.current(),state:{}};for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k.startsWith(prefix))data.state[k.slice(prefix.length)]=JSON.parse(localStorage.getItem(k))}return data}
-};
-function profileStatePanel(){
-  DeviceExperience.actionMenu(null,`<h3>Profile state</h3><p>Active profile: <b>${esc(ProfileState.current())}</b></p><p class=muted>Favorites, watchlist, navigation preferences and future profile-aware settings can use this shared namespace.</p><button class=btn onclick="navigator.clipboard?.writeText(JSON.stringify(ProfileState.export(),null,2))">Copy profile state</button>`);
-}
-
-
-
-// v39.4.0 Performance & Perceived Speed
-const UiPerformance={
-  cache:new Map(),
-  async cached(key,loader,ttl=60000){const x=this.cache.get(key);if(x&&Date.now()-x.at<ttl)return x.value;const value=await loader();this.cache.set(key,{at:Date.now(),value});return value},
-  skeleton(host,count=6){if(typeof host==='string')host=$(host);if(host)host.innerHTML=`<div class=skeletonGrid>${Array.from({length:count},()=>'<i class=skeletonCard></i>').join('')}</div>`},
-  lazyImages(root=document){root.querySelectorAll('img[data-src]').forEach(img=>{img.loading='lazy';img.decoding='async';img.src=img.dataset.src;delete img.dataset.src})},
-  idle(fn){('requestIdleCallback'in window?requestIdleCallback:setTimeout)(fn)}
-};
-const _apiBase=window.api;
-if(typeof _apiBase==='function'){window.cachedApi=(url,opts={},ttl=60000)=>UiPerformance.cached(url,()=>_apiBase(url,opts),ttl)}
-document.addEventListener('DOMContentLoaded',()=>UiPerformance.idle(()=>UiPerformance.lazyImages()),{once:true});
-
-
-
-// v39.5.0 Accessibility & Living-Room Polish
-const Accessibility={
-  key:'myonline-accessibility',
-  load(){try{return JSON.parse(localStorage.getItem(this.key)||'{}')}catch{return {}}},
-  apply(v=this.load()){const r=document.documentElement;r.classList.toggle('largeText',!!v.largeText);r.classList.toggle('highContrast',!!v.highContrast);r.classList.toggle('reduceMotion',!!v.reduceMotion);r.classList.toggle('extraFocus',!!v.extraFocus)},
-  save(v){localStorage.setItem(this.key,JSON.stringify(v));this.apply(v)},
-  panel(){const v=this.load();DeviceExperience.actionMenu(null,`<h3>Accessibility</h3>${[['largeText','Larger text'],['highContrast','High contrast'],['reduceMotion','Reduce motion'],['extraFocus','Extra focus visibility']].map(([k,l])=>`<label class=accessibilityOption><input type=checkbox ${v[k]?'checked':''} onchange="const v=Accessibility.load();v['${k}']=this.checked;Accessibility.save(v)"> ${l}</label>`).join('')}`)}
-};
-document.addEventListener('DOMContentLoaded',()=>{
-  const recoveryKey='myonline-v3952-accessibility-recovered';
-  if(!localStorage.getItem(recoveryKey)){
-    localStorage.removeItem(Accessibility.key);
-    localStorage.setItem(recoveryKey,'1');
-  }
-  Accessibility.apply();
-},{once:true});
-
-// v39.6.0 UX Consistency — safe additive layer.
-// Existing Home, Search, Live TV, Guide, authentication, onboarding and player
-// implementations remain authoritative.
-const UXConsistency = {
-  toast(message, kind='info', timeout=3200) {
-    if (!message) return;
-    let host=document.getElementById('uxConsistencyToasts');
-    if (!host) {
-      host=document.createElement('div');
-      host.id='uxConsistencyToasts';
-      host.className='uxConsistencyToasts';
-      host.setAttribute('aria-live','polite');
-      document.body.appendChild(host);
-    }
-    const item=document.createElement('div');
-    item.className=`uxConsistencyToast uxConsistencyToast--${kind}`;
-    item.setAttribute('role',kind==='error'?'alert':'status');
-    item.textContent=String(message);
-    host.appendChild(item);
-    requestAnimationFrame(()=>item.classList.add('is-visible'));
-    setTimeout(()=>{item.classList.remove('is-visible');setTimeout(()=>item.remove(),180)},timeout);
-  },
-  setBusy(target,busy=true,label='Loading…') {
-    const el=typeof target==='string'?document.querySelector(target):target;
-    if(!el)return;
-    if(busy){
-      el.setAttribute('aria-busy','true');
-      if(!el.querySelector(':scope > .uxConsistencyBusy')){
-        const s=document.createElement('div');s.className='uxConsistencyBusy';
-        s.setAttribute('role','status');s.textContent=label;el.prepend(s);
-      }
-    }else{
-      el.removeAttribute('aria-busy');
-      el.querySelector(':scope > .uxConsistencyBusy')?.remove();
-    }
-  },
-  rememberFocus(scope='app'){
-    const e=document.activeElement;if(!e||e===document.body)return;
-    const key=e.id||e.getAttribute('data-focus-key');
-    if(key)sessionStorage.setItem(`ux-focus:${scope}`,key);
-  },
-  restoreFocus(scope='app'){
-    const key=sessionStorage.getItem(`ux-focus:${scope}`);if(!key)return false;
-    const e=document.getElementById(key)||[...document.querySelectorAll('[data-focus-key]')].find(x=>x.getAttribute('data-focus-key')===key);
-    if(!e||e.offsetParent===null)return false;
-    e.focus({preventScroll:true});e.scrollIntoView({block:'nearest',inline:'nearest'});return true;
-  },
-  emptyState(title,message='',actionHtml=''){
-    return `<div class="uxConsistencyEmpty" role="status"><strong>${esc(title||'Nothing here yet')}</strong>${message?`<p>${esc(message)}</p>`:''}${actionHtml||''}</div>`;
-  }
-};
-// v39.6.1 UX Consistency Integration — passive integration only.
-UXConsistency.runAction=async function(target,action,{loading='Working…',success='',error='Something went wrong'}={}){
-  const el=typeof target==='string'?document.querySelector(target):target;
-  const host=el?.closest?.('.card,.panel,.modal,.view')||null;
-  try{
-    if(el){el.disabled=true;el.setAttribute('aria-disabled','true')}
-    UXConsistency.setBusy(host,true,loading);
-    const result=await action();
-    if(success)UXConsistency.toast(success,'success');
-    return result;
-  }catch(ex){
-    UXConsistency.toast(ex?.message||error,'error',5000);
-    throw ex;
-  }finally{
-    UXConsistency.setBusy(host,false);
-    if(el){el.disabled=false;el.removeAttribute('aria-disabled')}
-  }
-};
-UXConsistency.bindForm=function(form){
-  if(!form||form.dataset.uxConsistencyBound==='true')return;
-  form.dataset.uxConsistencyBound='true';
-  form.addEventListener('submit',()=>{
-    const submit=form.querySelector('button[type="submit"],input[type="submit"]');
-    if(!submit)return;
-    submit.setAttribute('aria-busy','true'); submit.disabled=true;
-    setTimeout(()=>{if(document.contains(submit)){submit.disabled=false;submit.removeAttribute('aria-busy')}},8000);
-  });
-};
-UXConsistency.enhanceVisibleView=function(){
-  const visible=[...document.querySelectorAll('.view')].find(v=>!v.classList.contains('hidden')&&v.offsetParent!==null);
-  if(!visible)return;
-  visible.querySelectorAll('form').forEach(UXConsistency.bindForm);
-  visible.querySelectorAll('[data-empty-state]').forEach(el=>{
-    if(!el.children.length&&!el.textContent.trim())
-      el.innerHTML=UXConsistency.emptyState(el.dataset.emptyTitle||'Nothing here yet',el.dataset.emptyMessage||'');
-  });
-};
-window.UXConsistency=UXConsistency;
-const uxConsistencyObserver=new MutationObserver(ms=>{
-  if(ms.some(m=>m.type==='attributes'&&m.attributeName==='class'))
-    queueMicrotask(()=>UXConsistency.enhanceVisibleView());
-});
-document.querySelectorAll('.view').forEach(v=>uxConsistencyObserver.observe(v,{attributes:true,attributeFilter:['class']}));

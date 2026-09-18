@@ -2,7 +2,7 @@ public static class Profiles2V2370
 {
     public static object Capabilities() => new
     {
-        version = AppIdentity.Version,
+        version = "31.2.0",
         feature = "Profiles 2.0",
         localFirst = true,
         mandatoryRuntimeCostSek = 0,

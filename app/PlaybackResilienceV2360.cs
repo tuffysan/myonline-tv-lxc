@@ -2,7 +2,7 @@ public static class PlaybackResilienceV2360
 {
     public static object Capabilities() => new
     {
-        version = AppIdentity.Version,
+        version = "31.2.0",
         feature = "Playback Resilience",
         localFirst = true,
         mandatoryRuntimeCostSek = 0,

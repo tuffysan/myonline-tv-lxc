@@ -1,0 +1,6 @@
+VERSION
+release.json
+CHANGELOG.md
+RELEASE-v39.8.3.md
+app/wwwroot/app.js
+app/wwwroot/styles.css

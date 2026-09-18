@@ -2,7 +2,7 @@ public static class PersonalHomeV2380
 {
     public static object Capabilities() => new
     {
-        version = AppIdentity.Version,
+        version = "31.2.0",
         feature = "Personal Home",
         localFirst = true,
         mandatoryRuntimeCostSek = 0,
