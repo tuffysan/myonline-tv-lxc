@@ -1,9 +1,14 @@
+# v38.6.0
+
+- Live Clock: application time now updates automatically every second.
+- Live TV and header clocks stay synchronized without page reloads.
+- Date/time is refreshed immediately when the app becomes visible again.
+
 # v38.5.0
 
 - Improves the TV Guide with Favorites filtering and fast return to Now.
 - Adds keyboard/remote-friendly Guide shortcuts: N for Now and F for Favorites.
 - Improves Guide behavior on phones and touch devices and adds clearer Live TV connection messaging primitives.
-- Live/header clocks now refresh automatically every second and recover immediately when the tab becomes visible.
 
 # v38.4.0
 

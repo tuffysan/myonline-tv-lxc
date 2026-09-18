@@ -4665,14 +4665,13 @@ installGlobalSearchShortcut();
 
 
 
-// v38.5.0 - Live clock ticker
+// v38.6.0 - Live Clock
 function updateVisibleClocks(){
   const now=new Date();
   const time=new Intl.DateTimeFormat(undefined,{hour:'2-digit',minute:'2-digit',hour12:false}).format(now);
   document.querySelectorAll('.liveClock,[data-live-clock]').forEach(el=>{
     if(el.textContent!==time)el.textContent=time;
   });
-  // Also keeps the header date correct across midnight without a page reload.
   updateDesktop363Clock();
 }
 if(!window.__myOnlineLiveClockTimer){
