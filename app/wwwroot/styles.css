@@ -2108,3 +2108,8 @@ html.isTV button,html.isTV a,html.isTV [tabindex="0"]{scroll-margin:28px}
 .uxConsistencyEmpty strong{display:block;font-size:1.05rem}.uxConsistencyEmpty p{margin:8px 0 0;color:var(--muted,#9ca3af)}
 @media(max-width:600px){.uxConsistencyToasts{left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));width:auto}}
 @media(prefers-reduced-motion:reduce){.uxConsistencyToast{transition:none}}
+
+/* v39.6.1 UX Consistency Integration — scoped only. */
+.view button[aria-busy="true"],.view input[type="submit"][aria-busy="true"]{cursor:progress}
+.uxConsistencyToast--success{font-weight:600}
+@media(prefers-reduced-motion:reduce){.uxConsistencyToast{transform:none}}

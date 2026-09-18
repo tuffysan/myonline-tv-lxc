@@ -4992,4 +4992,46 @@ const UXConsistency = {
     return `<div class="uxConsistencyEmpty" role="status"><strong>${esc(title||'Nothing here yet')}</strong>${message?`<p>${esc(message)}</p>`:''}${actionHtml||''}</div>`;
   }
 };
+// v39.6.1 UX Consistency Integration — passive integration only.
+UXConsistency.runAction=async function(target,action,{loading='Working…',success='',error='Something went wrong'}={}){
+  const el=typeof target==='string'?document.querySelector(target):target;
+  const host=el?.closest?.('.card,.panel,.modal,.view')||null;
+  try{
+    if(el){el.disabled=true;el.setAttribute('aria-disabled','true')}
+    UXConsistency.setBusy(host,true,loading);
+    const result=await action();
+    if(success)UXConsistency.toast(success,'success');
+    return result;
+  }catch(ex){
+    UXConsistency.toast(ex?.message||error,'error',5000);
+    throw ex;
+  }finally{
+    UXConsistency.setBusy(host,false);
+    if(el){el.disabled=false;el.removeAttribute('aria-disabled')}
+  }
+};
+UXConsistency.bindForm=function(form){
+  if(!form||form.dataset.uxConsistencyBound==='true')return;
+  form.dataset.uxConsistencyBound='true';
+  form.addEventListener('submit',()=>{
+    const submit=form.querySelector('button[type="submit"],input[type="submit"]');
+    if(!submit)return;
+    submit.setAttribute('aria-busy','true'); submit.disabled=true;
+    setTimeout(()=>{if(document.contains(submit)){submit.disabled=false;submit.removeAttribute('aria-busy')}},8000);
+  });
+};
+UXConsistency.enhanceVisibleView=function(){
+  const visible=[...document.querySelectorAll('.view')].find(v=>!v.classList.contains('hidden')&&v.offsetParent!==null);
+  if(!visible)return;
+  visible.querySelectorAll('form').forEach(UXConsistency.bindForm);
+  visible.querySelectorAll('[data-empty-state]').forEach(el=>{
+    if(!el.children.length&&!el.textContent.trim())
+      el.innerHTML=UXConsistency.emptyState(el.dataset.emptyTitle||'Nothing here yet',el.dataset.emptyMessage||'');
+  });
+};
 window.UXConsistency=UXConsistency;
+const uxConsistencyObserver=new MutationObserver(ms=>{
+  if(ms.some(m=>m.type==='attributes'&&m.attributeName==='class'))
+    queueMicrotask(()=>UXConsistency.enhanceVisibleView());
+});
+document.querySelectorAll('.view').forEach(v=>uxConsistencyObserver.observe(v,{attributes:true,attributeFilter:['class']}));

@@ -1,3 +1,9 @@
+# v39.6.1
+
+- Passive UX Consistency integration.
+- Action feedback, form busy states and opt-in empty states.
+- Preserves verified v39.6.0 UI baseline.
+
 # v39.6.0
 
 - Safe opt-in UX consistency helpers on top of v39.5.2.
