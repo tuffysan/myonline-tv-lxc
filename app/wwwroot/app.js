@@ -4944,3 +4944,18 @@ const SetupWizard={
   finish(){localStorage.setItem(this.key,new Date().toISOString());$('#setupWizard')?.remove();show('home')}
 };
 document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{if(SetupWizard.shouldRun())SetupWizard.open()},900),{once:true});
+
+
+
+// v39.3.0 Profiles Everywhere
+const ProfileState={
+  current(){return localStorage.getItem('myonline-active-profile')||'default'},
+  key(name){return `myonline-profile-${this.current()}-${name}`},
+  get(name,fallback){try{const v=localStorage.getItem(this.key(name));return v===null?fallback:JSON.parse(v)}catch{return fallback}},
+  set(name,value){localStorage.setItem(this.key(name),JSON.stringify(value));window.dispatchEvent(new CustomEvent('profilestatechange',{detail:{profile:this.current(),name}}))},
+  switchTo(id){localStorage.setItem('myonline-active-profile',id||'default');location.reload()},
+  export(){const prefix=`myonline-profile-${this.current()}-`,data={profile:this.current(),state:{}};for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k.startsWith(prefix))data.state[k.slice(prefix.length)]=JSON.parse(localStorage.getItem(k))}return data}
+};
+function profileStatePanel(){
+  DeviceExperience.actionMenu(null,`<h3>Profile state</h3><p>Active profile: <b>${esc(ProfileState.current())}</b></p><p class=muted>Favorites, watchlist, navigation preferences and future profile-aware settings can use this shared namespace.</p><button class=btn onclick="navigator.clipboard?.writeText(JSON.stringify(ProfileState.export(),null,2))">Copy profile state</button>`);
+}

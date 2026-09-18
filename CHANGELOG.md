@@ -1,3 +1,11 @@
+# v39.3.0
+
+- Shared per-profile state namespace for all device types.
+- Active profile persists across reloads on the device.
+- Profile-state change events let Home, filters and navigation react consistently.
+- Profile state can be exported for diagnostics/migration.
+- Profile UI scales for TV and touch targets.
+
 # v39.2.0
 
 - Four-step first-run Setup Wizard.

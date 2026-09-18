@@ -2088,3 +2088,9 @@ button,a,input,select,[tabindex]{min-height:var(--tap-target)}
 .setupProgress{display:flex;gap:8px;margin-bottom:22px}.setupProgress i{height:5px;flex:1;border-radius:4px;background:#ffffff20}.setupProgress i.active{background:currentColor}
 .setupChoices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:18px 0}.setupChoices label{border:1px solid var(--border,#303747);padding:14px;border-radius:12px}
 @media(max-width:600px){.setupWizard{padding:0}.setupWizardCard{min-height:100vh;border-radius:0;padding-top:10vh}.setupChoices{grid-template-columns:1fr}}
+
+
+
+/* v39.3 Profiles Everywhere */
+.profileBadge{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:7px 11px;border:1px solid var(--border,#303747)}
+[data-device-mode="tv"] .profileBadge{padding:10px 16px}
