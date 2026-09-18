@@ -1,3 +1,9 @@
+# v38.4.0
+
+- Adds Ctrl/Cmd+K global search access on desktop and keyboard devices.
+- Adds contextual Quick Actions for Play, Favorites and Watchlist.
+- Connects Quick Actions to the personal My Stuff experience introduced in v38.3.0.
+
 # v38.3.0
 
 - Adds a dedicated My Stuff destination for Continue Watching, Favorites, Watchlist and recent activity.

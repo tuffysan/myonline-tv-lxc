@@ -4625,3 +4625,40 @@ async function myStuffView(){
   <div class=sectionHead><h2>Recently watched</h2></div>${cards(history,'No recent activity yet.')}
   <div class="myStuffLinks"><button class=btn onclick="show('recordings')">Recordings</button><button class=btn onclick="show('downloads')">Downloads</button></div>`;
 }
+
+
+// v38.4.0 - Universal Search & Quick Actions
+function openQuickActions(item){
+  closeQuickActions();
+  const state=loadMyStuff(),id=myStuffIdentity(item);
+  const fav=state.favorites.some(x=>myStuffIdentity(x)===id),watch=state.watchlist.some(x=>myStuffIdentity(x)===id);
+  const overlay=document.createElement('div');overlay.id='quickActionOverlay';overlay.className='quickActionOverlay';
+  overlay.innerHTML=`<div class=quickActionSheet role=dialog aria-modal=true aria-label="Quick actions"><div><span class=kicker>QUICK ACTIONS</span><h3>${esc(item.name||item.title||'Media')}</h3></div>
+  <button class="btn primaryBtn" data-qa-play>▶ Play</button>
+  <button class=btn data-qa-fav>${fav?'★ Remove favorite':'☆ Add favorite'}</button>
+  <button class=btn data-qa-watch>${watch?'✓ Remove from watchlist':'＋ Add to watchlist'}</button>
+  <button class=btn data-qa-close>Close</button></div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick=e=>{if(e.target===overlay)closeQuickActions()};
+  overlay.querySelector('[data-qa-close]').onclick=closeQuickActions;
+  overlay.querySelector('[data-qa-play]').onclick=()=>{closeQuickActions();playUnifiedItem(item)};
+  overlay.querySelector('[data-qa-fav]').onclick=()=>{toggleMyStuff('favorites',item);closeQuickActions()};
+  overlay.querySelector('[data-qa-watch]').onclick=()=>{toggleMyStuff('watchlist',item);closeQuickActions()};
+  setTimeout(()=>overlay.querySelector('button')?.focus(),0);
+}
+function closeQuickActions(){document.getElementById('quickActionOverlay')?.remove()}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('quickActionOverlay')){e.preventDefault();closeQuickActions()}})
+document.addEventListener('contextmenu',e=>{
+  const card=e.target.closest?.('.posterCard,.historyMain,.continueCard');
+  if(!card)return;
+  const title=card.querySelector('b')?.textContent?.trim(); if(!title)return;
+  e.preventDefault(); openQuickActions({name:title,title});
+});
+function installGlobalSearchShortcut(){
+  document.addEventListener('keydown',e=>{
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){
+      e.preventDefault();sessionStorage.setItem('myonline-search-query','');show('search').then(()=>setTimeout(()=>document.querySelector('#searchInput,input[type=search],input[placeholder*="Search"]')?.focus(),40));
+    }
+  });
+}
+installGlobalSearchShortcut();

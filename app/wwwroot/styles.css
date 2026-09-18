@@ -2018,3 +2018,8 @@ html.isTV button,html.isTV a,html.isTV [tabindex="0"]{scroll-margin:28px}
 /* v38.3.0 Personal Home & My Stuff */
 .myStuffHero{margin-bottom:18px}.myStuffEmpty{min-height:88px;display:flex;align-items:center;color:var(--muted)}
 .myStuffLinks{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0 36px}
+
+/* v38.4.0 Universal Search & Quick Actions */
+.quickActionOverlay{position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:9999;display:flex;align-items:flex-end;justify-content:center;padding:18px}
+.quickActionSheet{width:min(520px,100%);background:var(--panel,#151922);border:1px solid var(--border,#303747);border-radius:20px;padding:18px;display:grid;gap:10px;box-shadow:0 24px 80px rgba(0,0,0,.45)}
+@media(min-width:800px){.quickActionOverlay{align-items:center}.quickActionSheet{padding:24px}}
