@@ -822,7 +822,7 @@ function renderChannels(){
     </select>
     <button class=btn id=liveFavQuick>★ Favourites</button>
     <button class=btn id=liveRecentQuick>↻ Recent</button>
-    <button class=btn id=liveFullscreenQuick>⛶ Fullscreen</button>
+    <button class=btn id=liveNowNextQuick>Now & Next</button><button class=btn id=liveLastQuick>↶ Last channel</button><button class=btn id=liveFullscreenQuick>⛶ Fullscreen</button>
     <button class=btn id=hideGroupBtn>Hide group</button>
   </div>
   <div class="tvLiveShell">
@@ -839,7 +839,7 @@ function renderChannels(){
         </div>
       </div>
       <div id=liveDetails class=liveDetailsPanel></div>
-      <div class="liveHelp">Remote/keyboard: ↑ ↓ select · Enter play · ← → previous/next · F fullscreen · Esc exit</div>
+      <div class="liveHelp">Remote/keyboard: ↑ ↓ select · Enter play · ← → previous/next · N Now & Next · L last channel · F fullscreen · Esc exit</div>
     </section>
   </div>`;
   $('#provider').onchange=async e=>{currentProvider=e.target.value;await live()};
@@ -847,6 +847,8 @@ function renderChannels(){
   $('#group').onchange=renderFilter;
   $('#liveFavQuick').onclick=()=>{$('#group').value='__favorites';renderFilter()};
   $('#liveRecentQuick').onclick=()=>{$('#group').value='__recent';renderFilter()};
+  $('#liveNowNextQuick').onclick=()=>toggleLiveNowNextBoard();
+  $('#liveLastQuick').onclick=()=>playLastLiveChannel();
   $('#liveFullscreenQuick').onclick=()=>toggleLiveFullscreen();
   $('#hideGroupBtn').onclick=()=>hideGroup($('#group').value);
   $('#chan').addEventListener('keydown',liveKeyHandler);
@@ -904,6 +906,19 @@ function updateLiveDetails(c){
     ${next?`<div class=nextProgramme><span class=kicker>NEXT</span><b>${esc(next.title)}</b><small>${esc(liveProgramTimes(next))}</small></div>`:''}`;
 }
 
+function playLastLiveChannel(){
+ const rows=getLiveRecents().filter(x=>x.providerId===currentProvider);
+ const currentKey=liveCurrentChannel?.key;
+ const last=rows.find(x=>String(x.key)!==String(currentKey));
+ const c=last&&channelByKey(last.key);if(c)playLive(c.key,c.name);else liveStatus('No previous channel yet');
+}
+function toggleLiveNowNextBoard(){
+ let box=$('#liveNowNextBoard');if(box){box.remove();return}
+ box=document.createElement('div');box.id='liveNowNextBoard';box.className='liveNowNextBoard';box.setAttribute('role','dialog');box.setAttribute('aria-label','Now and next');
+ const rows=(liveVisibleRows.length?liveVisibleRows:channels.filter(c=>!isChannelHidden(c))).slice(0,120);
+ box.innerHTML=`<div class=liveBoardHead><div><span class=kicker>LIVE TV</span><h2>Now & Next</h2></div><button class=btn onclick="$('#liveNowNextBoard')?.remove()">Close</button></div><div class=liveBoardRows>${rows.map((c,i)=>{const p=liveProgramFor(c);return `<button data-live-board-index="${i}" onclick='playLive(${JSON.stringify(c.key)},${JSON.stringify(c.name)});$("#liveNowNextBoard")?.remove()'><span>${c.logo?`<img src="${escAttr(c.logo)}">`:''}<b>${esc(channelName(c))}</b></span><span><strong>${esc(p.now?.title||'Live TV')}</strong><small>${p.next?'Next: '+esc(p.next.title):'No next programme data'}</small></span></button>`}).join('')}</div>`;
+ document.body.appendChild(box);box.querySelector('button[data-live-board-index]')?.focus();
+}
 function renderFilter(){
   const q=($('#q')?.value||'').toLowerCase(),g=$('#group')?.value||'';
   let rows=channels.filter(c=>!isChannelHidden(c)).filter(c=>(!q||channelName(c).toLowerCase().includes(q)));
@@ -961,6 +976,9 @@ document.addEventListener('keydown',e=>{
   if(e.key==='ArrowLeft'){e.preventDefault();stepLiveChannel(-1)}
   else if(e.key==='ArrowRight'){e.preventDefault();stepLiveChannel(1)}
   else if(e.key.toLowerCase()==='f'){e.preventDefault();toggleLiveFullscreen()}
+  else if(e.key.toLowerCase()==='n'){e.preventDefault();toggleLiveNowNextBoard()}
+  else if(e.key.toLowerCase()==='l'){e.preventDefault();playLastLiveChannel()}
+  else if((e.key==='Escape'||e.key==='Backspace')&&$('#liveNowNextBoard')){e.preventDefault();$('#liveNowNextBoard').remove()}
 });
 async function toggleFav(id){fav=new Set(await api('/api/favourites/'+encodeURIComponent(id),{method:'POST'}));if(currentView==='live')renderFilter()}
 

@@ -2121,3 +2121,11 @@ html.isTV button,html.isTV a,html.isTV [tabindex="0"]{scroll-margin:28px}
 
 /* v39.7.1 IPTV Sync & Diagnostics */
 .lmSyncDiag{padding:12px;border:1px solid var(--border,#303747);border-radius:10px}.lmSyncDiag .manageList{max-height:320px;overflow:auto}
+
+/* v39.8.0 Live TV & Guide 2.0 */
+.liveNowNextBoard{position:fixed;inset:5vh 5vw;z-index:16000;background:var(--bg,#0b0f16);border:1px solid var(--border,#303747);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.55);padding:18px;display:grid;grid-template-rows:auto 1fr;gap:12px}
+.liveBoardHead{display:flex;align-items:center;justify-content:space-between}.liveBoardHead h2{margin:2px 0}
+.liveBoardRows{overflow:auto;display:grid;gap:7px}.liveBoardRows>button{display:grid;grid-template-columns:minmax(180px,32%) 1fr;gap:14px;text-align:left;align-items:center;padding:10px 12px;border:1px solid var(--border,#303747);border-radius:10px;background:var(--panel,#151922)}
+.liveBoardRows>button>span{display:grid;gap:3px}.liveBoardRows img{width:42px;height:30px;object-fit:contain}.liveBoardRows small{color:var(--muted,#9ca3af)}
+.liveBoardRows>button:focus-visible{outline:3px solid currentColor;outline-offset:2px}
+@media(max-width:700px){.liveNowNextBoard{inset:2vh 10px;padding:12px}.liveBoardRows>button{grid-template-columns:1fr}.liveToolbar #liveLastQuick{display:none}}
