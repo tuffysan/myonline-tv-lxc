@@ -1,3 +1,9 @@
+# v39.6.0
+
+- Safe opt-in UX consistency helpers on top of v39.5.2.
+- No replacement of established screens or authentication flow.
+- Component-scoped CSS only.
+
 # v39.5.2
 
 - Full UI Recovery audit and removal of remaining conflicting v39.x experimental UI layers.

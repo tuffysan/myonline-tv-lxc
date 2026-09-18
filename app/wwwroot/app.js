@@ -4940,3 +4940,56 @@ document.addEventListener('DOMContentLoaded',()=>{
   }
   Accessibility.apply();
 },{once:true});
+
+// v39.6.0 UX Consistency — safe additive layer.
+// Existing Home, Search, Live TV, Guide, authentication, onboarding and player
+// implementations remain authoritative.
+const UXConsistency = {
+  toast(message, kind='info', timeout=3200) {
+    if (!message) return;
+    let host=document.getElementById('uxConsistencyToasts');
+    if (!host) {
+      host=document.createElement('div');
+      host.id='uxConsistencyToasts';
+      host.className='uxConsistencyToasts';
+      host.setAttribute('aria-live','polite');
+      document.body.appendChild(host);
+    }
+    const item=document.createElement('div');
+    item.className=`uxConsistencyToast uxConsistencyToast--${kind}`;
+    item.setAttribute('role',kind==='error'?'alert':'status');
+    item.textContent=String(message);
+    host.appendChild(item);
+    requestAnimationFrame(()=>item.classList.add('is-visible'));
+    setTimeout(()=>{item.classList.remove('is-visible');setTimeout(()=>item.remove(),180)},timeout);
+  },
+  setBusy(target,busy=true,label='Loading…') {
+    const el=typeof target==='string'?document.querySelector(target):target;
+    if(!el)return;
+    if(busy){
+      el.setAttribute('aria-busy','true');
+      if(!el.querySelector(':scope > .uxConsistencyBusy')){
+        const s=document.createElement('div');s.className='uxConsistencyBusy';
+        s.setAttribute('role','status');s.textContent=label;el.prepend(s);
+      }
+    }else{
+      el.removeAttribute('aria-busy');
+      el.querySelector(':scope > .uxConsistencyBusy')?.remove();
+    }
+  },
+  rememberFocus(scope='app'){
+    const e=document.activeElement;if(!e||e===document.body)return;
+    const key=e.id||e.getAttribute('data-focus-key');
+    if(key)sessionStorage.setItem(`ux-focus:${scope}`,key);
+  },
+  restoreFocus(scope='app'){
+    const key=sessionStorage.getItem(`ux-focus:${scope}`);if(!key)return false;
+    const e=document.getElementById(key)||[...document.querySelectorAll('[data-focus-key]')].find(x=>x.getAttribute('data-focus-key')===key);
+    if(!e||e.offsetParent===null)return false;
+    e.focus({preventScroll:true});e.scrollIntoView({block:'nearest',inline:'nearest'});return true;
+  },
+  emptyState(title,message='',actionHtml=''){
+    return `<div class="uxConsistencyEmpty" role="status"><strong>${esc(title||'Nothing here yet')}</strong>${message?`<p>${esc(message)}</p>`:''}${actionHtml||''}</div>`;
+  }
+};
+window.UXConsistency=UXConsistency;

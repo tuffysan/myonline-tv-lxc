@@ -2097,3 +2097,14 @@ html.isTV button,html.isTV a,html.isTV [tabindex="0"]{scroll-margin:28px}
     padding-bottom:max(18px,env(safe-area-inset-bottom));
   }
 }
+
+/* v39.6.0 UX Consistency — component scoped.
+   No global body/button/input/link/nav/view rules. */
+.uxConsistencyToasts{position:fixed;right:16px;bottom:16px;z-index:15000;display:grid;gap:8px;width:min(420px,calc(100vw - 32px));pointer-events:none}
+.uxConsistencyToast{padding:11px 14px;border-radius:10px;background:var(--panel,#151922);border:1px solid var(--border,#303747);box-shadow:0 10px 28px rgba(0,0,0,.32);opacity:0;transform:translateY(6px);transition:opacity .16s ease,transform .16s ease}
+.uxConsistencyToast.is-visible{opacity:1;transform:none}.uxConsistencyToast--error{font-weight:700}
+.uxConsistencyBusy{padding:10px 12px;margin:0 0 10px;border-radius:10px;background:var(--panel2,#111827)}
+.uxConsistencyEmpty{padding:24px;text-align:center;border:1px dashed var(--border,#303747);border-radius:12px}
+.uxConsistencyEmpty strong{display:block;font-size:1.05rem}.uxConsistencyEmpty p{margin:8px 0 0;color:var(--muted,#9ca3af)}
+@media(max-width:600px){.uxConsistencyToasts{left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));width:auto}}
+@media(prefers-reduced-motion:reduce){.uxConsistencyToast{transition:none}}
