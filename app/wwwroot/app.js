@@ -4882,3 +4882,26 @@ async function buildSimpleHome(){
   host.prepend(panel);
 }
 document.addEventListener('DOMContentLoaded',()=>setTimeout(buildSimpleHome,400),{once:true});
+
+
+
+// v39.0.0 One Search
+async function oneSearch(query){
+  query=(query||'').trim(); if(!query)return [];
+  const sources=[
+    ['Live',`/api/search/live?q=${encodeURIComponent(query)}`],
+    ['Guide',`/api/search/guide?q=${encodeURIComponent(query)}`],
+    ['Movies',`/api/search/vod?q=${encodeURIComponent(query)}`],
+    ['Series',`/api/search/series?q=${encodeURIComponent(query)}`]
+  ];
+  const results=await Promise.all(sources.map(async([type,url])=>{try{return (await api(url)).map(x=>({...x,_searchType:type}))}catch{return []}}));
+  return results.flat();
+}
+function openOneSearch(){
+  let d=document.querySelector('#oneSearchOverlay');
+  if(!d){d=document.createElement('div');d.id='oneSearchOverlay';d.className='oneSearchOverlay';d.innerHTML=`<div class=oneSearchBox><div class=oneSearchHead><input id=oneSearchInput placeholder="Search Live, Guide, Movies and Series…" autocomplete=off><button class=btn onclick="$('#oneSearchOverlay').remove()">Close</button></div><div id=oneSearchResults class=oneSearchResults><p class=muted>Start typing to search everything.</p></div></div>`;document.body.appendChild(d);
+    let t;$('#oneSearchInput').oninput=()=>{clearTimeout(t);t=setTimeout(async()=>{const q=$('#oneSearchInput').value,r=await oneSearch(q),g=Object.groupBy?Object.groupBy(r,x=>x._searchType):r.reduce((a,x)=>((a[x._searchType]??=[]).push(x),a),{});$('#oneSearchResults').innerHTML=Object.entries(g).map(([k,v])=>`<section><h3>${esc(k)}</h3><div class=searchResultGrid>${v.slice(0,20).map(x=>`<button onclick="openQuickActions(${JSON.stringify({name:x.name||x.title||'',url:x.url||''}).replace(/"/g,'&quot;')})"><b>${esc(x.name||x.title||'Untitled')}</b><small>${esc(x.group||x.subtitle||'')}</small></button>`).join('')}</div></section>`).join('')||'<p class=muted>No results.</p>'},180)};
+  }
+  setTimeout(()=>$('#oneSearchInput')?.focus(),20);
+}
+addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openOneSearch()}});
