@@ -2101,3 +2101,12 @@ button,a,input,select,[tabindex]{min-height:var(--tap-target)}
 .skeletonGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}.skeletonCard{height:210px;border-radius:14px;background:linear-gradient(90deg,#ffffff0a,#ffffff18,#ffffff0a);background-size:200% 100%;animation:skeletonMove 1.2s linear infinite}
 @keyframes skeletonMove{to{background-position:-200% 0}}@media(prefers-reduced-motion:reduce){.skeletonCard{animation:none}}
 .content-visibility-auto{content-visibility:auto;contain-intrinsic-size:300px}
+
+
+
+/* v39.5 Accessibility & Living-Room Polish */
+.largeText{font-size:112.5%}.highContrast{--muted:#e1e5eb;--border:#9aa4b2}.reduceMotion *{scroll-behavior:auto!important;animation-duration:.001ms!important;transition-duration:.001ms!important}
+.extraFocus :focus-visible,[data-device-mode="tv"] :focus-visible{outline:4px solid currentColor!important;outline-offset:4px!important}
+.accessibilityOption{display:block;padding:14px 8px;border-bottom:1px solid var(--border,#303747);min-height:52px}
+@media(max-width:600px){body{padding-left:max(0px,env(safe-area-inset-left));padding-right:max(0px,env(safe-area-inset-right));padding-bottom:max(0px,env(safe-area-inset-bottom))}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation-duration:.001ms!important;transition-duration:.001ms!important}}

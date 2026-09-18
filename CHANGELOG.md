@@ -1,3 +1,11 @@
+# v39.5.0
+
+- User controls for larger text, high contrast, reduced motion and stronger focus.
+- Accessibility preferences persist locally.
+- Improved keyboard/remote focus visibility across the app.
+- Safe-area handling for modern mobile devices.
+- Respects the operating system's reduced-motion preference.
+
 # v39.4.0
 
 - Shared TTL cache for repeated UI data requests.

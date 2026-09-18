@@ -4973,3 +4973,15 @@ const UiPerformance={
 const _apiBase=window.api;
 if(typeof _apiBase==='function'){window.cachedApi=(url,opts={},ttl=60000)=>UiPerformance.cached(url,()=>_apiBase(url,opts),ttl)}
 document.addEventListener('DOMContentLoaded',()=>UiPerformance.idle(()=>UiPerformance.lazyImages()),{once:true});
+
+
+
+// v39.5.0 Accessibility & Living-Room Polish
+const Accessibility={
+  key:'myonline-accessibility',
+  load(){try{return JSON.parse(localStorage.getItem(this.key)||'{}')}catch{return {}}},
+  apply(v=this.load()){const r=document.documentElement;r.classList.toggle('largeText',!!v.largeText);r.classList.toggle('highContrast',!!v.highContrast);r.classList.toggle('reduceMotion',!!v.reduceMotion);r.classList.toggle('extraFocus',!!v.extraFocus)},
+  save(v){localStorage.setItem(this.key,JSON.stringify(v));this.apply(v)},
+  panel(){const v=this.load();DeviceExperience.actionMenu(null,`<h3>Accessibility</h3>${[['largeText','Larger text'],['highContrast','High contrast'],['reduceMotion','Reduce motion'],['extraFocus','Extra focus visibility']].map(([k,l])=>`<label class=accessibilityOption><input type=checkbox ${v[k]?'checked':''} onchange="const v=Accessibility.load();v['${k}']=this.checked;Accessibility.save(v)"> ${l}</label>`).join('')}`)}
+};
+document.addEventListener('DOMContentLoaded',()=>{Accessibility.apply();document.querySelectorAll('img:not([alt])').forEach(x=>x.alt='');document.querySelectorAll('button:not([type])').forEach(x=>x.type='button')},{once:true});
