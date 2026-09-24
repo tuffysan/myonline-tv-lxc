@@ -1,5 +1,5 @@
-const CACHE='myonline-tv-v31.2.0';
-const SHELL=['/','/index.html','/styles.css','/app.js','/icon.svg','/manifest.webmanifest'];
+const CACHE='myonline-tv-mobile-v3';
+const SHELL=['/','/index.html','/styles.css','/mobile.css','/app.js','/continue-watching.js','/mobile.js','/app-icon.svg','/manifest.webmanifest'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{

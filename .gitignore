@@ -1,6 +1,9 @@
 # Build output
 app/bin/
 app/obj/
+tests/**/bin/
+tests/**/obj/
+tests/**/node_modules/
 dist/
 *.log
 

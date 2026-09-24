@@ -1,4 +1,5 @@
 const $=s=>document.querySelector(s), content=$('#content'), title=$('#title');
+function posterPlaceholder(){return '<div class="posterPlaceholder" aria-hidden="true">▶</div>';}
 let providers=[], currentProvider=null, channels=[], epg=[], fav=new Set(), hls=null, currentView='home', profiles=[], currentProfile=localStorage.getItem('myonline-profile')||'default', channelPrefs={hiddenGroups:[],hiddenChannels:[],aliases:{}}, authState={user:'',role:''}, accessState={allowedProfileIds:[],defaultProfileId:'default',policies:{}}, mediaLibraries=[];
 
 async function api(url,opt={}){
@@ -481,6 +482,8 @@ async function loadHomeUnified(){
   if(Array.isArray(movies))setHomeCache('unifiedMovies',movies);
   if(Array.isArray(series))setHomeCache('unifiedSeries',series);
   return {
+    moviesState:Array.isArray(movies)?'ready':'error',
+    seriesState:Array.isArray(series)?'ready':'error',
     movies:Array.isArray(movies)?movies:getHomeCache('unifiedMovies',[]),
     series:Array.isArray(series)?series:getHomeCache('unifiedSeries',[])
   };
@@ -493,7 +496,9 @@ async function loadHomeLiveNow(){
     api('/api/channels/'+currentProvider,{timeoutMs:12000,attempts:1}).catch(()=>null),
     api('/api/epg/'+currentProvider+'?hours=3',{timeoutMs:12000,attempts:1}).catch(()=>null)
   ]);
-  if(!Array.isArray(liveChannels)||!Array.isArray(liveEpg))return getHomeCache('liveNow',[]);
+  if(!Array.isArray(liveChannels)||!Array.isArray(liveEpg)){
+    const cached=getHomeCache('liveNow',[]);cached.loadFailed=true;return cached;
+  }
   const now=Date.now();
   const epgByChannel=new Map();
   for(const p of liveEpg){
@@ -567,12 +572,15 @@ function renderHomeContent({unifiedMovies=[],unifiedSeries=[],continueItems=[],h
   $('#homeSearch').onkeydown=e=>{if(e.key==='Enter')homeQuickSearch()};
 }
 
+let homeSectionState={};
 async function home(){
   if((providers||[]).length===0 && (mediaLibraries||[]).filter(x=>x.enabled!==false).length===0){
     content.innerHTML=`<div class="hero emptyHomeHero"><span class=kicker>WELCOME</span><h2>Your media starts here</h2><p class=muted>Connect your personal IPTV, Plex or Jellyfin. Sources are private to ${esc(authState.user)}.</p><div class=row><button class=btn onclick="firstLoginGuide({sources:{iptv:0,plex:0,jellyfin:0}},true)">Run setup guide</button><button class=btn onclick="show('sources')">My Sources</button></div></div>`;
     return;
   }
   const generation=++homeRefreshGeneration;
+  homeSectionState={continue:'loading',movies:'loading',series:'loading',live:'loading'};
+  if(mobileHome364IsActive())content.innerHTML='<div role="status" class="mobileHomeState"><h2>Home</h2><div class="mobileSkeleton" aria-hidden="true"></div><p>Loading your media…</p></div>';
   const homeHistory=getMediaHistory();
 
   // Fast first paint: only use local/session data and a short Continue Watching request.
@@ -581,7 +589,10 @@ async function home(){
   const cachedLive=getHomeCache('liveNow',[]);
 
   let cont=[];
-  try{cont=await api('/api/continue',{timeoutMs:5000,attempts:1})}catch{}
+  let continueState='ready';
+  try{cont=await api('/api/continue',{timeoutMs:5000,attempts:1})}catch{continueState='error'}
+  if(currentView!=='home'||generation!==homeRefreshGeneration)return;
+  homeSectionState.continue=continueState;
   const continueItems=cont.map(x=>({...x,poster:findLegacyPoster(x,homeHistory,cachedMovies,cachedSeries)}));
 
   renderHomeContent({
@@ -593,7 +604,7 @@ async function home(){
   });
 
   // Do not block Home on catalogue, EPG or poster-repair calls.
-  requestAnimationFrame(()=>window.scrollTo({top:0,behavior:'auto'}));
+  if(typeof mobileHistoryRestoring==='undefined'||!mobileHistoryRestoring)requestAnimationFrame(()=>window.scrollTo({top:0,behavior:'auto'}));
 
   const unifiedPromise=homeCacheFresh('unifiedMovies')&&homeCacheFresh('unifiedSeries')
     ? Promise.resolve({movies:cachedMovies,series:cachedSeries})
@@ -607,6 +618,11 @@ async function home(){
     if(currentView!=='home'||generation!==homeRefreshGeneration)return;
     const unified=results[0].status==='fulfilled'?results[0].value:{movies:getHomeCache('unifiedMovies',[]),series:getHomeCache('unifiedSeries',[])};
     const live=results[1].status==='fulfilled'?results[1].value:getHomeCache('liveNow',[]);
+    homeSectionState.movies=unified.moviesState|| (results[0].status==='fulfilled'?'ready':'error');
+    homeSectionState.series=unified.seriesState|| (results[0].status==='fulfilled'?'ready':'error');
+    homeSectionState.live=live.loadFailed||results[1].status==='rejected'?'error':'ready';
+    if(content.querySelector('video'))return;
+    const homeScroll=window.scrollY;
     const refreshedContinue=cont.map(x=>({...x,poster:findLegacyPoster(x,homeHistory,unified.movies,unified.series)}));
     renderHomeContent({
       unifiedMovies:unified.movies,
@@ -615,6 +631,7 @@ async function home(){
       homeHistory,
       homeLiveNow:live
     });
+    window.scrollTo(0,homeScroll);
   });
 
   // Poster recovery used to block Home for up to several minutes on large IPTV catalogues.
@@ -624,7 +641,7 @@ async function home(){
       if(currentView!=='home'||generation!==homeRefreshGeneration)return;
       try{
         const repaired=await repairMissingHomePosters(continueItems,homeHistory);
-        if(currentView!=='home'||generation!==homeRefreshGeneration)return;
+        if(currentView!=='home'||generation!==homeRefreshGeneration||content.querySelector('video'))return;
         const movies=getHomeCache('unifiedMovies',[]);
         const series=getHomeCache('unifiedSeries',[]);
         const live=getHomeCache('liveNow',[]);
@@ -1198,8 +1215,10 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
 
     const installResumeTracking=()=>{
       if(!mediaId)return;
+      video.dataset.continueId=String(mediaId);
       let last=-1;
       const save=()=>{
+        if(video.dataset.continueRemoved==='true')return;
         const sec=Math.floor(video.currentTime||0);
         const dur=mediaDurationSeconds>0?mediaDurationSeconds:(Number.isFinite(video.duration)?video.duration:0);
         if(sec<5)return;
@@ -1275,8 +1294,10 @@ function playMedia(url,name,mediaId=null){
   const video=$('#video');
   installMediaDurationDisplay(video,0);
   if(mediaId){
+    video.dataset.continueId=String(mediaId);
     let last=-1;
     const save=()=>{
+      if(video.dataset.continueRemoved==='true')return;
       const sec=Math.floor(video.currentTime||0);
       if(sec===last)return;
       last=sec;
@@ -2362,7 +2383,6 @@ function noProvider(){return '<div class=card>No IPTV provider configured. Open 
 function errorCard(e){return `<div class="card danger"><b>Error</b><p>${esc(friendlyError(e))}</p><button class=btn onclick="show(currentView)">Retry</button></div>`}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function escAttr(s){return esc(s)}
-boot().catch(e=>{$('#auth').classList.remove('hidden');$('#auth').innerHTML=`<div class=authCard><h2>Startup error</h2><pre>${esc(e.message)}</pre></div>`});
 
 // v0.7.0 catalogue cache
 const CATALOG_CACHE_PREFIX='myonline-catalog-v1:';
@@ -4463,11 +4483,15 @@ function renderMobileHome364({unifiedMovies=[],unifiedSeries=[],continueItems=[]
   content.innerHTML=`<div class=mobile364Home>
     <section class=mobile364Welcome><span>${esc(authState.user||'')}</span><h1>${new Date().getHours()<12?'Good morning':new Date().getHours()<18?'Good afternoon':'Good evening'}</h1></section>
     <button class=mobile364Search onclick="show('search')"><span>⌕</span><span>Search movies, series, channels…</span></button>
-    ${continueItems.length?`<section class=mobile364Section><header><h2>Continue Watching</h2><button onclick="show('search')">See all ›</button></header><div class=mobile364LandscapeRail>${continueItems.slice(0,10).map(mobile364ContinueCard).join('')}</div></section>`:''}
+    ${mobileHomeStatus('Continue Watching',homeSectionState.continue,continueItems.length)}
+    ${continueItems.length?`<section class=mobile364Section><header><h2>Continue Watching</h2><button onclick="openMobileCollection('continue')">See all ›</button></header><div class=mobile364LandscapeRail>${continueItems.slice(0,10).map(mobile364ContinueCard).join('')}</div></section>`:''}
+    ${mobileHomeStatus('Live Now',homeSectionState.live,homeLiveNow.length)}
     ${homeLiveNow.length?`<section class=mobile364Section><header><h2>Live Now</h2><button onclick="show('guide')">Guide ›</button></header><div class=mobile364LiveStack>${homeLiveNow.slice(0,5).map(mobile364LiveCard).join('')}</div></section>`:''}
     ${continueSeries.length?`<section class=mobile364Section><header><h2>Continue Series</h2><button onclick="show('series')">See all ›</button></header><div class=mobile364LandscapeRail>${continueSeries.map(x=>mobile364Poster(x,'series')).join('')}</div></section>`:''}
+    ${mobileHomeStatus('Movies',homeSectionState.movies,unifiedMovies.length)}
     ${unifiedMovies.length?`<section class=mobile364Section><header><h2>Movies</h2><button onclick="show('movies')">See all ›</button></header><div class=mobile364PosterRail>${unifiedMovies.slice(0,12).map(x=>mobile364Poster(x,'movie')).join('')}</div></section>`:''}
-    ${mediaFavs.length?`<section class=mobile364Section><header><h2>My List</h2><button onclick="show('search')">See all ›</button></header><div class=mobile364PosterRail>${mediaFavs.map(x=>`<button class=mobile364Poster onclick='openHomeFavourite(${JSON.stringify(x)})'>${x.poster?`<img loading=lazy decoding=async src="${escAttr(x.poster)}">`:posterPlaceholder()}<b>${esc(x.name||x.title||'Favourite')}</b></button>`).join('')}</div></section>`:''}
+    <section class=mobile364Section><header><h2>My List</h2><button onclick="openMobileCollection('favourites')">See all ›</button></header>${mediaFavs.length?`<div class=mobile364PosterRail>${mediaFavs.map(x=>`<button class=mobile364Poster onclick='openHomeFavourite(${JSON.stringify(x)})'>${x.poster?`<img loading=lazy decoding=async src="${escAttr(x.poster)}">`:posterPlaceholder()}<b>${esc(x.name||x.title||'Favourite')}</b></button>`).join('')}</div>`:'<p>Add favourites to build your list.</p>'}</section>
+    ${mobileHomeStatus('Series',homeSectionState.series,unifiedSeries.length)}
     ${unifiedSeries.length?`<section class=mobile364Section><header><h2>Series</h2><button onclick="show('series')">See all ›</button></header><div class=mobile364PosterRail>${unifiedSeries.slice(0,12).map(x=>mobile364Poster(x,'series')).join('')}</div></section>`:''}
     <div id=mediaPlayer></div>
   </div>`;

@@ -67,6 +67,7 @@ Directory.CreateDirectory(dataDir);
 var providersFile = Path.Combine(dataDir, "providers.json");
 var favouritesFile = Path.Combine(dataDir, "favourites.json");
 var continueFile = Path.Combine(dataDir, "continue-watching.json");
+var continueStateLock = new object();
 var channelPreferencesFile = Path.Combine(dataDir, "channel-preferences.json");
 var cataloguePreferencesFile = Path.Combine(dataDir, "catalogue-preferences.json");
 var libraryManagementFile = Path.Combine(dataDir, "library-management.json");
@@ -2840,39 +2841,62 @@ app.MapPost("/api/favourites/{id}", (string id, HttpContext ctx) =>
     return Results.Ok(fav);
 }).RequireAuthorization();
 
-app.MapGet("/api/continue", (HttpContext ctx) => Results.Ok(LoadContinue(ctx).OrderByDescending(x => x.Updated).Take(50))).RequireAuthorization();
+app.MapGet("/api/continue", (HttpContext ctx) =>
+{
+    if (!CanUseProfile(ctx, RequestedProfile(ctx))) return Results.Forbid();
+    lock (continueStateLock)
+        return Results.Ok(LoadContinue(ctx).OrderByDescending(x => x.Updated).Take(50).ToList());
+}).RequireAuthorization();
 app.MapPost("/api/continue", (ContinueItem item, HttpContext ctx) =>
 {
+    if (!CanUseProfile(ctx, RequestedProfile(ctx))) return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(item.Id)) return Results.BadRequest("A media ID is required.");
+    lock (continueStateLock)
+    {
     var list = LoadContinue(ctx);
     list.RemoveAll(x => x.Id == item.Id);
     list.Insert(0, item with { Updated = DateTimeOffset.UtcNow });
     Save(ProfileFile(ctx,"continue"), list.Take(100).ToList());
     return Results.Ok();
+    }
 }).RequireAuthorization();
 
 app.MapDelete("/api/continue/{id}", (string id, HttpContext ctx) =>
 {
+    if (!CanUseProfile(ctx, RequestedProfile(ctx))) return Results.Forbid();
+    lock (continueStateLock)
+    {
     var list = LoadContinue(ctx);
-    var removed = list.RemoveAll(x => x.Id == id);
-    if (removed == 0) return Results.NotFound();
+    list.RemoveAll(x => x.Id == id);
+    // Persist even an empty list: otherwise legacy progress can reappear on reload.
+    // Deletion is idempotent and never touches favourites, library entries or files.
     Save(ProfileFile(ctx,"continue"), list);
     return Results.NoContent();
+    }
 }).RequireAuthorization();
 
 app.MapPut("/api/continue/{id}/poster", (string id, ContinuePosterUpdate input, HttpContext ctx) =>
 {
+    if (!CanUseProfile(ctx, RequestedProfile(ctx))) return Results.Forbid();
+    lock (continueStateLock)
+    {
     var list = LoadContinue(ctx);
     var idx = list.FindIndex(x => x.Id == id);
     if (idx < 0) return Results.NotFound();
     list[idx] = list[idx] with { Poster = input.Poster ?? "" };
     Save(ProfileFile(ctx,"continue"), list);
     return Results.NoContent();
+    }
 }).RequireAuthorization();
 
 app.MapDelete("/api/continue", (HttpContext ctx) =>
 {
+    if (!CanUseProfile(ctx, RequestedProfile(ctx))) return Results.Forbid();
+    lock (continueStateLock)
+    {
     Save(ProfileFile(ctx,"continue"), new List<ContinueItem>());
     return Results.NoContent();
+    }
 }).RequireAuthorization();
 
 app.MapGet("/api/downloads", () =>
@@ -2945,7 +2969,7 @@ app.MapGet("/api/downloads/device/{token}", async (string token, string? title, 
         if (!response.IsSuccessStatusCode) { ctx.Response.StatusCode = (int)response.StatusCode; return; }
         var ext = SafeExt(uri.AbsolutePath);
         ctx.Response.ContentType = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
-        ctx.Response.Headers["Content-Disposition"] = $"attachment; filename=\"{safeTitle}{ext}\"";
+        DownloadHeaders.SetAttachment(ctx.Response, $"{safeTitle}{ext}");
         if (response.Content.Headers.ContentLength is long len) ctx.Response.ContentLength = len;
         await using var stream = await response.Content.ReadAsStreamAsync(ctx.RequestAborted);
         await stream.CopyToAsync(ctx.Response.Body, ctx.RequestAborted);
@@ -2963,7 +2987,7 @@ app.MapGet("/api/downloads/device/{token}", async (string token, string? title, 
     var ffmpeg = FindExecutable("ffmpeg");
     if (ffmpeg is null) { ctx.Response.StatusCode = 503; await ctx.Response.WriteAsync("FFmpeg is not installed."); return; }
     ctx.Response.ContentType = "video/x-matroska";
-    ctx.Response.Headers["Content-Disposition"] = $"attachment; filename=\"{safeTitle}.mkv\"";
+    DownloadHeaders.SetAttachment(ctx.Response, $"{safeTitle}.mkv");
 
     var psi = new ProcessStartInfo
     {

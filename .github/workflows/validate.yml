@@ -24,7 +24,18 @@ jobs:
           bash -n scripts/update-local.sh
 
       - name: JavaScript syntax
-        run: node --check app/wwwroot/app.js
+        run: |
+          node --check app/wwwroot/app.js
+          node --check app/wwwroot/mobile.js
+          node --check app/wwwroot/continue-watching.js
+          node --check app/wwwroot/sw.js
+
+      - name: Mobile browser regression tests
+        run: |
+          npm install --prefix tests/mobile
+          cd tests/mobile
+          npx playwright install --with-deps chromium
+          npm test
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
@@ -33,6 +44,12 @@ jobs:
 
       - name: Build web app
         run: dotnet build app/MyOnlineTV.Web.csproj -c Release
+
+      - name: Test download filename headers
+        run: dotnet run --project tests/DownloadHeaders/DownloadHeaders.csproj -c Release
+
+      - name: Test Continue Watching persistence
+        run: python3 tests/continue_api.py
 
       - name: Publish web app
         run: dotnet publish app/MyOnlineTV.Web.csproj -c Release -o dist/publish
@@ -60,4 +77,3 @@ jobs:
           grep -Fq 'playServerMedia(' app/wwwroot/app.js
           grep -Fq 'playLive(' app/wwwroot/app.js
           echo "Core regression markers present."
-

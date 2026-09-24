@@ -1,0 +1,107 @@
+/* Phone layout also applies in landscape, without rebuilding the active player. */
+.continueManagedCard{position:relative;min-width:0;display:flex;flex-direction:column;gap:6px}
+.continueManagedCard>article,.continueManagedCard>.tv361MediaCard{width:100%;flex:1}
+.continueMenuButton{align-self:flex-end;min-width:48px;min-height:44px}
+.continueActionsDialog{width:min(92vw,520px);max-height:85dvh;overflow:auto;padding:24px;background:#091824;color:#fff;border:1px solid #5484a2;border-radius:18px}
+.continueActionsDialog[open]{display:grid;gap:14px}
+.continueActionsDialog::backdrop{background:#000b}
+.continueActionsDialog h2{font-size:1.25rem;line-height:1.5;margin:0 0 8px}
+.continueActionsDialog button{min-height:48px}
+.continueActionsDialog button:focus-visible,.continueMenuButton:focus-visible,.continueClearButton:focus-visible{outline:3px solid #82ddff;outline-offset:3px}
+.tv361Home .continueMenuButton{min-height:56px;font-size:1.2rem}
+.mobile364Section>header,.desktop362Section>header,.tablet365Section>header,.tv361Section>header{flex-wrap:wrap;gap:8px}
+html.isMobile #app{display:block!important}
+html.isMobile #app>aside{display:none!important}
+html.isMobile body{padding-bottom:calc(76px + env(safe-area-inset-bottom))!important}
+html.isMobile main>header{display:flex!important;position:sticky!important;top:0;z-index:45;min-height:56px;height:auto!important;padding:8px max(12px,env(safe-area-inset-right)) 8px max(12px,env(safe-area-inset-left))!important}
+html.isMobile .desktop363HeaderTitle,html.isMobile .desktop363HeaderSearch,html.isMobile .desktop363DateTime,html.isMobile .desktop363HeaderDivider{display:none!important}
+html.isMobile .mobile364HeaderBrand{display:flex!important;align-items:center;gap:8px}
+html.isMobile .mobile364HeaderBrand img{width:28px;height:28px}
+html.isMobile .mobile364Home{display:block!important}
+html.isMobile .mobile364Search{display:flex;align-items:center;gap:10px;width:100%;min-height:48px;padding:12px;border:1px solid #27475f;border-radius:14px;background:#102230;color:#b5c9d8;text-align:left}
+html.isMobile .mobile364Section{margin-top:22px}
+html.isMobile .mobile364Section>header{display:flex!important;align-items:center;justify-content:space-between;height:auto;padding:8px 0;background:transparent}
+html.isMobile .mobile364Section>header button{background:transparent;border:0;color:#82ddff}
+html.isMobile .mobile364Poster{display:flex;flex-direction:column;min-width:0;padding:0;border:0;background:transparent;color:#fff;text-align:left}
+html.isMobile .mobile364Poster img,html.isMobile .mobile364Poster>.posterPlaceholder{width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:12px}
+html.isMobile .mobile364Continue{overflow:hidden;border-radius:14px;background:#102230}
+html.isMobile .mobile364Continue>button{width:100%;border:0;background:transparent;color:#fff;text-align:left}
+html.isMobile .mobile364Continue img,html.isMobile .mobile364Continue .posterPlaceholder{width:100%;aspect-ratio:16/9;object-fit:cover}
+html.isMobile .mobile364Live{display:grid;grid-template-columns:46px 1fr 32px;gap:10px;align-items:center;width:100%;padding:12px;background:#102230;border:1px solid #27475f;border-radius:14px;color:#fff;text-align:left}
+html.isMobile .mobile364Live>span{display:flex;flex-direction:column;min-width:0}
+html.isMobile .mobile364Live img{width:46px;height:46px;object-fit:contain}
+html.isMobile .mobile371PlayerStage{min-width:0;background:#02070b}
+html.isMobile .mobile371PlayerStage video{width:100%;aspect-ratio:16/9;object-fit:contain}
+html.isMobile .mobile371LiveTools{display:grid;grid-template-columns:1fr 48px;gap:8px}
+html.isMobile .mobile371GroupButton{grid-column:1/-1;display:flex;justify-content:space-between;gap:8px;padding:12px;min-height:48px}
+html.isMobile .mobile371LiveSearch{display:flex;align-items:center;gap:8px;min-width:0}
+html.isMobile .mobile371LiveSearch input{width:100%;min-width:0}
+html.isMobile .mobile371GroupButton,html.isMobile .mobile371Fullscreen{background:#102230;color:#fff;border:1px solid #27475f;border-radius:12px}
+html.isMobile .mobile371HiddenSelect{display:none}
+html.isMobile .mobile371ChannelHeading{display:flex;justify-content:space-between;align-items:center}
+html.isMobile .mobile371ChannelList{display:grid;gap:8px}
+html.isMobile .mobile371Channel{display:grid;grid-template-columns:48px minmax(0,1fr) 36px;gap:10px;align-items:center;width:100%;min-height:76px;padding:9px;background:#102230;color:#fff;border:1px solid #27475f;border-radius:12px;text-align:left}
+html.isMobile .mobile371ChannelLogo{width:48px;height:48px;display:grid;place-items:center;background:#f3f6f8;color:#183041;border-radius:10px}
+html.isMobile .mobile371ChannelLogo img{width:100%;height:100%;object-fit:contain}
+html.isMobile .mobile371ChannelText{display:flex;flex-direction:column;min-width:0}
+html.isMobile .mobile371ChannelMeta{display:grid;gap:8px}
+html.isMobile .mobile371Sheet{position:fixed;inset:0;z-index:150;display:flex;align-items:flex-end}
+html.isMobile .mobile371SheetBackdrop{position:absolute;inset:0;border:0;background:#000a}
+html.isMobile .mobile371Sheet>section{position:relative;width:100%;max-height:85dvh;padding:12px 12px calc(14px + env(safe-area-inset-bottom));border-radius:20px 20px 0 0;background:#091824;overflow:auto}
+html.isMobile .mobile371Sheet header{display:flex!important;align-items:center;justify-content:space-between;height:auto;padding:8px}
+html.isMobile .mobile371GroupList{display:grid;gap:6px;max-height:60dvh;overflow-y:auto}
+html.isMobile .mobile371GroupList button{display:flex;justify-content:space-between;min-height:48px;padding:12px;border:1px solid #27475f;border-radius:10px;background:#102230;color:#fff;text-align:left}
+html.isMobile #content{padding:12px max(12px,env(safe-area-inset-right)) 24px max(12px,env(safe-area-inset-left))!important}
+html.isMobile:not(.isTV) .mobileBottomNav{display:grid!important;grid-template-columns:repeat(var(--nav-columns,5),minmax(0,1fr))!important;position:fixed!important;inset:auto 0 0!important;z-index:80;padding-bottom:env(safe-area-inset-bottom)!important;background:#061019!important}
+html.isMobile:not(.isTV) .mobileBottomNav button{min-height:58px!important;padding:6px 3px!important}
+html.isMobile:not(.isTV) .mobileBottomNav button small{font-size:.75rem!important;white-space:normal;line-height:1.2}
+.mobileMoreSheet{max-height:calc(100dvh - 110px - env(safe-area-inset-bottom));overflow-y:auto;overscroll-behavior:contain}
+.mobileSheetHeading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.mobileSheetHeading h2{margin:8px 0 16px}
+.mobileMoreSheet [aria-current=page],.mobileQuickFilters [aria-pressed=true],.mobileGuideSwitch [aria-pressed=true]{background:#174761;border-color:#78d7ff}
+html.isMobile body.mobileSheetOpen{overflow:hidden!important}
+html.isMobile button:focus-visible,html.isMobile input:focus-visible,html.isMobile select:focus-visible{outline:3px solid #82ddff;outline-offset:3px}
+html.isMobile .btn,html.isMobile .linkButton,html.isMobile .historyRemove,html.isMobile .historyWatched,html.isMobile .mediaFavStar{min-width:44px;min-height:44px}
+html.isMobile input,html.isMobile select{font-size:16px!important}
+html.isMobile:not(.isTV) .posterBody b,html.isMobile .mobile364Poster b,html.isMobile .mobile364Continue b,html.isMobile .mobile371ChannelText b{font-size:.94rem!important;white-space:normal!important;display:-webkit-box!important;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.35}
+html.isMobile:not(.isTV) .posterBody small,html.isMobile .mobile364Poster small,html.isMobile .mobile364Continue small,html.isMobile .mobile371ChannelText small{font-size:.8rem!important;color:#b5c9d8!important}
+html.isMobile .mobile371ChannelText em{font-size:.88rem!important;color:#d6e0e7}
+html.isMobile:not(.isTV) .mediaCardActions{display:flex!important;flex-wrap:wrap;gap:6px}
+html.isMobile .mediaCardActions .btn:not(.primaryBtn){display:inline-flex;align-items:center;justify-content:center}
+html.isMobile .mediaFavStar{display:inline-grid;place-items:center}
+html.isMobile .round{min-width:44px;min-height:44px}
+.mobileSeriesCard{min-width:0;display:flex;flex-direction:column;gap:6px}
+.mobileSeriesCard>.seriesButton{width:100%;flex:1}
+.mobileMediaMenu{width:min(94vw,440px);max-height:80dvh;overflow:auto;padding:20px;border:1px solid #27475f;border-radius:18px;background:#091824;color:#fff}
+.mobileMediaMenu[open]{display:grid;gap:10px}
+.mobileMediaMenu h2{margin:0 0 8px;font-size:1.2rem}
+.mobileMediaMenu .btn{min-height:48px}
+.mobileMediaMenu::backdrop{background:#000a}
+html.isMobile .mobile364Section>header button{min-height:44px;padding:8px}
+.mobileGuideList{display:grid;gap:12px;margin-top:12px}
+.mobileGuideList .card{display:grid;gap:8px}
+.mobileGuideProgramme{border:1px solid #27475f;border-radius:10px;background:#102536;color:#eef7ff;text-align:left;padding:12px;min-height:52px;font-size:1rem;line-height:1.5}
+.mobileQuickFilters{margin:12px 0;flex-wrap:wrap}
+.mobilePlayerAnchor{height:1px;scroll-margin-top:70px}
+.mobileRestorePlayer{display:none}
+html.isMobile .mobile371PlayerStage.isMini{position:sticky;top:56px;z-index:40;margin:0 0 12px!important;background:#02070b;border-radius:12px;box-shadow:0 8px 24px #0008}
+html.isMobile .mobile371PlayerStage.isMini #playerWrap{min-height:0!important;width:min(100%,320px)!important;aspect-ratio:16/9;margin:auto}
+html.isMobile .mobile371PlayerStage.isMini #liveDetails{display:none}
+html.isMobile .mobile371PlayerStage.isMini .mobileRestorePlayer{display:block;width:100%;border-radius:0 0 12px 12px}
+.mobileCollection{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px}
+.mobileCollection .card{display:flex;align-items:center;gap:10px}
+.mobileCollectionPlay{display:flex;align-items:center;flex:1;gap:12px;background:transparent;border:0;color:inherit;text-align:left;min-height:64px;font-size:1rem}
+.mobileCollectionPlay img{width:64px;height:88px;object-fit:cover;border-radius:8px}
+.mobileHomeState{padding:14px 0}.mobileHomeState h2{font-size:1.15rem}.mobileHomeState p{color:#b5c9d8;line-height:1.5}
+.mobileSkeleton{height:110px;border-radius:12px;background:linear-gradient(110deg,#102536,#1d4056,#102536);background-size:200% 100%;animation:mobileLoading 1.5s linear infinite}
+@keyframes mobileLoading{to{background-position:-200% 0}}
+@media(prefers-reduced-motion:reduce){.mobileSkeleton{animation:none}}
+@media(orientation:landscape){
+  html.isMobile .mobile371Live{display:grid!important;grid-template-columns:minmax(220px,1fr) minmax(250px,1fr);gap:12px;align-items:start}
+  html.isMobile .mobile371PlayerStage,html.isMobile .mobile371PlayerStage.isMini{grid-column:1;grid-row:1/6;position:sticky;top:60px;margin:0!important;min-width:0}
+  html.isMobile .mobilePlayerAnchor{position:absolute;top:0}
+  html.isMobile .mobile371LiveTools,html.isMobile .mobileQuickFilters,html.isMobile .mobile371ChannelHeading,html.isMobile .mobile371ChannelList{grid-column:2}
+  html.isMobile .mobileRestorePlayer{display:none!important}
+  html.isMobile .mobile364PosterRail{display:grid;grid-auto-flow:column;grid-auto-columns:24vw;gap:12px;overflow-x:auto}
+  html.isMobile .mobile364LandscapeRail{display:grid;grid-auto-flow:column;grid-auto-columns:42vw;gap:12px;overflow-x:auto}
+}
