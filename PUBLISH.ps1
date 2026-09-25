@@ -90,9 +90,11 @@ Assert-LastExitCode "git fetch failed."
 . (Join-Path $PSScriptRoot 'scripts/Release-VersionGuard.ps1')
 $knownTags = @(& git tag --list)
 Assert-LastExitCode "Cannot inspect tags."
-$releaseJson = & gh api --paginate --slurp "repos/{owner}/{repo}/releases?per_page=100"
+# Ask gh to project only tag names. This avoids depending on the JSON shape
+# produced by --paginate/--slurp (which can be nested arrays).
+$releaseTags = @(& gh api --paginate "repos/{owner}/{repo}/releases?per_page=100" --jq '.[].tag_name')
 Assert-LastExitCode "Cannot verify published releases and drafts."
-$releaseTags = @($releaseJson | ConvertFrom-Json | ForEach-Object { $_.tag_name })
+$releaseTags = @($releaseTags | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
 Assert-ReleaseVersion $version ($knownTags + $releaseTags)
 $remoteCandidate = @(& git ls-remote --tags $Remote "refs/tags/$tag" "refs/tags/v.$version")
 Assert-LastExitCode "Cannot verify remote tag collisions."

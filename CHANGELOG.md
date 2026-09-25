@@ -1,3 +1,12 @@
+## 39.8.5 (release candidate) — Stabilization
+
+- Stabilization-only follow-up to v39.8.4; no new product feature surface is introduced.
+- Promote v39.8.4 to the established released baseline and protect the next patch calculation so the historical v37.1.0 anomaly cannot regress versioning.
+- Add an LXC runtime smoke-test script for health, readiness and deployed-version verification after upgrade.
+- Harden `RELEASE.ps1`/`PUBLISH.ps1` GitHub release discovery by projecting release tag names with `gh --jq`, avoiding the paginated/slurped JSON shape failure seen during the first v39.8.5 release attempt.
+- Keep the v39.8.4 multi-user isolation, Continue Watching ownership, Unicode download handling and release gates unchanged.
+- Require runtime smoke verification before v39.8.5 publication.
+
 ## 39.8.4 (release candidate)
 
 - Restore the established 39.8.x version line and assembly-derived product metadata; preserve the historical v37.1.0 tag.

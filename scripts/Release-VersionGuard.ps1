@@ -5,7 +5,7 @@ function Assert-ReleaseVersion {
     throw "Release line must remain 39.8.x; inspect RELEASE.md before changing the scheme."
   }
   $next = [version]$Candidate
-  $baseline = [version]'39.8.3'
+  $baseline = [version]'39.8.4'
   foreach ($name in $KnownTags) {
     if ($name -match '^v\.?([0-9]+\.[0-9]+\.[0-9]+)$') {
       $published = [version]$Matches[1]

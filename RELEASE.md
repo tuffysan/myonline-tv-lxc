@@ -26,10 +26,7 @@ Its commit message and timing do not establish an intentional version reset.
 Never delete, move or overwrite that tag or its release automatically.
 
 The established release line is **39.8.x**. Preserve it unless the user
-explicitly requests a different versioning scheme. The next patch after
-`v39.8.3` is **v39.8.4**, not `v37.1.1`. No `v39.8.4` tag was found locally or
-on origin during this inspection; this observation must be rechecked at release
-time and is not authorization to publish now.
+explicitly requests a different versioning scheme. The published v39.8.4 release is now the established baseline. The next patch is **v39.8.5**, not `v37.1.1`. Candidate availability must still be rechecked locally, on origin and in GitHub releases immediately before publication.
 
 ## Mandatory version calculation for build
 
@@ -42,10 +39,10 @@ time and is not authorization to publish now.
    the sole baseline. A lower `VERSION` value must never lower the established
    release baseline.
 3. Establish the highest valid released patch on the authorized 39.8.x line,
-   with **39.8.3 as the minimum established baseline**. Inspect any higher
+   with **39.8.4 as the minimum established baseline**. Inspect any higher
    version evidence before proceeding. Never automatically decrease a semantic
    version, switch release lines or reuse an existing version.
-4. If 39.8.3 is still the highest valid release, select 39.8.4. If 39.8.4 has
+4. With 39.8.4 established as the released baseline, select 39.8.5. If 39.8.5 has
    already been released, inspect that release and calculate the next unused
    patch on the same line. If it exists only as a tag, draft or partial release,
    investigate its state rather than overwriting it or silently skipping it.
@@ -79,8 +76,19 @@ release/draft tags before committing or pushing. Canonical and legacy spelling
 collisions are rejected; tag deletion/replacement is forbidden. The regression
 suite is `tests/release_version.Tests.ps1`.
 
-The requested `build` on 2026-09-24 prepared **39.8.4** in `VERSION` and
-`release.json`. This is an unreleased candidate, not a new released baseline.
-Do not increment it again merely because a blocked build is resumed; reconcile
-this pending candidate with the actual release history first. Required audit,
-build, native-client and target-runtime blockers still prevent publication.
+v39.8.4 was subsequently published successfully and is the established baseline.
+The current stabilization candidate is **39.8.5** in `VERSION` and `release.json`.
+Do not publish it until the normal build/security gates pass and the target-LXC
+runtime smoke test is completed.
+
+## One-click release (v39.8.5+)
+
+On a Windows development machine with Git, .NET 10 SDK, Python 3 and GitHub CLI installed/authenticated, run:
+
+```powershell
+.\RELEASE.cmd
+```
+
+`RELEASE.cmd` runs the local Release build, download-header regressions, Continue Watching tests, multi-user isolation tests, version guard and production gate. Only after those pass does it call the existing publisher to commit/push/tag. It then waits for `.github/workflows/release.yml` and verifies that the final GitHub Release is non-draft/non-prerelease and contains all four mandatory non-empty assets.
+
+Release tags are immutable. The script aborts instead of replacing an existing local or remote version tag.
