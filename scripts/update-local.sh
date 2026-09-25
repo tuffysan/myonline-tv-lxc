@@ -162,7 +162,10 @@ CURRENT_STEP="6/8 Health check"
 echo "[6/8] Health check..."
 sleep 2
 HEALTH=1
-pct exec "$CTID" -- curl -fsS http://127.0.0.1:5080/health >/dev/null || HEALTH=0
+HEALTH_JSON="$(pct exec "$CTID" -- curl -fsS http://127.0.0.1:5080/health 2>/dev/null || true)"
+[[ -n "$HEALTH_JSON" ]] || HEALTH=0
+RUNTIME_VERSION="$(printf '%s' "$HEALTH_JSON" | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+if [[ "$HEALTH" == "1" && "$RUNTIME_VERSION" != "$TARGET_VERSION" ]]; then echo "Runtime version mismatch: /health reports '${RUNTIME_VERSION:-unknown}', expected '${TARGET_VERSION}'." >&2; HEALTH=0; fi
 pct exec "$CTID" -- curl -fsS http://127.0.0.1:5080/ready >/dev/null || HEALTH=0
 
 if [[ "$HEALTH" != "1" ]]; then

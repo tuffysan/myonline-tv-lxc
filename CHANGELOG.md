@@ -1,3 +1,13 @@
+# v40.1.0 — Home Experience 3.0
+- Unified responsive Home for desktop, laptop, tablet, mobile and TV.
+- Dynamic hero prioritizing Continue Watching.
+- Rails: Continue Watching, Live Now, Favorites, Recently Added, Movies and Series.
+- Quick navigation and improved keyboard/remote focus.
+- Shared playback routing retained.
+- Updater verifies `/health` runtime version after activation.
+- Published app includes diagnostic `VERSION`.
+- New permanent .NET regression tests; Zero-Python policy retained.
+
 # v40.0.0 — MyOnlineTV Experience 2.0
 
 - Activated the shared Experience Migration design contracts as the v40 presentation layer.

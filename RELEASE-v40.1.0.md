@@ -1,0 +1,2 @@
+# MyOnlineTV v40.1.0 — Home Experience 3.0
+Home Experience 3.0 builds on v40.0.0 with one responsive Home model for desktop/laptop, tablet, mobile and TV. Continue Watching, Favorites, Live Now and VOD keep using shared playback. The updater now verifies that `/health` reports the target version after activation, and publish output includes a diagnostic VERSION file. All previous release gates remain and new .NET regression tests are additive. Zero-Python remains mandatory.

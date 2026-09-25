@@ -61,8 +61,15 @@ internal static class Program
         T.Assert(mobileJs.Contains("collectionProgressText") && mobileJs.Contains("% watched"),"collection progress");T.Pass("collection progress");
         Has(mobileJs,"openContinueActions(item.id,actions)","collection actions");
 
+        // v40.1.0 Home Experience 3.0.
+        foreach(var x in new[]{"HOME_EXPERIENCE_3_VERSION='40.1.0'","renderHomeExperience3","homeExperience3Hero","homeExperience3Rail","homeExperience3Card","homeExperience3Capabilities"}) Has(appJs,x,"Home Experience 3.0: "+x);
+        foreach(var x in new[]{"Continue Watching","Live Now","Favorites","Recently Added","Movies","Series","Downloads"}) Has(appJs,x,"Home Experience 3.0 surface: "+x);
+        T.Assert(appJs.Contains("resumeContinueItem("),"Home 3 Continue Watching uses shared playback");T.Pass("Home 3 Continue Watching uses shared playback");
+        T.Assert(appJs.Contains("openHomeFavourite("),"Home 3 Favorites use existing routing");T.Pass("Home 3 Favorites use existing routing");
+        foreach(var x in new[]{".homeExperience3",".hx3Hero",".hx3Quick",".hx3Rail",".hx3Card",".mtv-device-tv.homeExperience3"}) Has(stylesCss,x,"Home Experience 3.0 CSS: "+x);
+        T.Assert(updateLocalSh.Contains("RUNTIME_VERSION"),"Updater validates runtime target version");T.Pass("Updater validates runtime target version");
         // v40.0.0 MyOnlineTV Experience 2.0 — additive to every previous release gate.
-        foreach(var x in new[]{"MyOnlineTV Experience 2.0","MYONLINETV_EXPERIENCE_2_VERSION='40.0.0'","experience40Surface","experience40Home","experience40Library","experience40PlayerChrome","experience40ProfileShell","experience40RoutePlayback","experience40Capabilities"})
+        foreach(var x in new[]{"MyOnlineTV Experience 2.0","MYONLINETV_EXPERIENCE_2_VERSION='40.1.0'","experience40Surface","experience40Home","experience40Library","experience40PlayerChrome","experience40ProfileShell","experience40RoutePlayback","experience40Capabilities"})
             Has(appJs,x,"MyOnlineTV Experience 2.0: "+x);
         T.Assert(appJs.Contains("devices:['mobile','tablet','desktop','tv']"),"v40 supports all target device classes");T.Pass("v40 supports all target device classes");
         T.Assert(appJs.Contains("source==='continue')return playbackFromContinue(item)"),"v40 Continue Watching uses shared playback");T.Pass("v40 Continue Watching uses shared playback");

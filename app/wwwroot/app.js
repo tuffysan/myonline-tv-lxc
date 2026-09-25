@@ -532,6 +532,7 @@ async function loadHomeLiveNow(){
 }
 
 function renderHomeContent({unifiedMovies=[],unifiedSeries=[],continueItems=[],homeHistory=[],homeLiveNow=[]}){
+  if(renderHomeExperience3({unifiedMovies,unifiedSeries,continueItems,homeHistory,homeLiveNow}))return;
   const recentlyAdded=[...unifiedMovies,...unifiedSeries]
     .filter(x=>x.addedAt)
     .sort((a,b)=>new Date(b.addedAt)-new Date(a.addedAt))
@@ -5424,10 +5425,48 @@ function experience19Capabilities(){
 
 
 
+
+// v40.1.0 — Home Experience 3.0
+const HOME_EXPERIENCE_3_VERSION='40.1.0';
+function homeExperience3Hero(movies=[],series=[],cont=[]){
+ const x=cont.find(v=>v?.title),f=[...movies,...series].find(v=>v&&(v.backdrop||v.poster));
+ if(x)return {title:x.title,eyebrow:'CONTINUE WATCHING',subtitle:x.durationSeconds?`${formatMediaTime(x.positionSeconds||0)} of ${formatMediaTime(x.durationSeconds)}`:'Pick up where you left off',image:x.backdrop||x.poster||'',action:`resumeContinueItem(${JSON.stringify(x)})`,label:'▶ Continue'};
+ if(f)return {title:f.name||f.title,eyebrow:'FEATURED',subtitle:[f.year,f.source].filter(Boolean).join(' · '),image:f.backdrop||f.poster||'',action:`playUnifiedItem(${JSON.stringify(f)})`,label:'▶ Play'};
+ return {title:'Everything you watch. One place.',eyebrow:'MYONLINE TV',subtitle:'Live TV, movies, series and personal media on every screen.',image:'',action:`show('live')`,label:'▶ Watch Live'};
+}
+function homeExperience3Card(x,kind='media'){
+ const title=x.title||x.name||x.channel?.name||'Untitled', image=x.poster||x.logo||x.channel?.logo||'';
+ let action=`playUnifiedItem(${JSON.stringify(x)})`;
+ if(kind==='continue')action=`resumeContinueItem(${JSON.stringify(x)})`;
+ if(kind==='favorite')action=`openHomeFavourite(${JSON.stringify(x)})`;
+ if(kind==='live')action=`show("live").then(()=>playLive(${JSON.stringify(x.channel?.key||x.key)},${JSON.stringify(x.channel?.name||x.name||title)}))`;
+ return `<button class="hx3Card hx3-${kind}" onclick='${action}'><div class=hx3Artwork>${image?`<img loading=lazy decoding=async src="${escAttr(image)}">`:posterPlaceholder()}${kind==='live'?'<span class=hx3Live>LIVE</span>':''}</div><div class=hx3CardBody><b>${esc(title)}</b><small>${esc(x.subtitle||x.year||x.source||x.program?.title||'')}</small>${kind==='continue'&&x.durationSeconds?`<div class=hx3Progress><span style="width:${continueProgress(x)}%"></span></div>`:''}</div></button>`;
+}
+function homeExperience3Rail(title,items,kind='media',more=''){
+ if(!items?.length)return '';
+ return `<section class=hx3Section><div class=hx3SectionHead><h2>${esc(title)}</h2>${more}</div><div class=hx3Rail>${items.map(x=>homeExperience3Card(x,kind)).join('')}</div></section>`;
+}
+function renderHomeExperience3({unifiedMovies=[],unifiedSeries=[],continueItems=[],homeHistory=[],homeLiveNow=[]}){
+ const hero=homeExperience3Hero(unifiedMovies,unifiedSeries,continueItems), favs=getMediaFavs().slice(0,16);
+ const recent=[...unifiedMovies,...unifiedSeries].filter(x=>x.addedAt).sort((a,b)=>new Date(b.addedAt)-new Date(a.addedAt)).slice(0,18);
+ const live=homeLiveNow.slice(0,14).map(x=>({...x.channel,channel:x.channel,program:x.program,subtitle:x.program?.title||''}));
+ content.innerHTML=`<main class="homeExperience3 mtv-device-${experience19Device()}" data-home-version="${HOME_EXPERIENCE_3_VERSION}">
+ <section class=hx3Hero${hero.image?` style="--hx3-hero-image:url('${escAttr(hero.image)}')"`:''}><div class=hx3HeroShade></div><div class=hx3HeroContent><span class=hx3Eyebrow>${esc(hero.eyebrow)}</span><h1>${esc(hero.title)}</h1><p>${esc(hero.subtitle)}</p><div class=hx3HeroActions><button class="btn primaryBtn" onclick='${hero.action}'>${esc(hero.label)}</button><button class=btn onclick="show('guide')">▤ Guide</button></div><div class=hx3Search><input id=homeSearch aria-label="Search MyOnlineTV" placeholder="Search movies, series, channels…"><button class=btn id=homeSearchButton>Search</button></div></div></section>
+ <nav class=hx3Quick aria-label="Home shortcuts"><button onclick="show('live')">▣ <span>Live TV</span></button><button onclick="show('guide')">▤ <span>Guide</span></button><button onclick="show('movies')">▶ <span>Movies</span></button><button onclick="show('series')">▦ <span>Series</span></button><button onclick="show('downloads')">↓ <span>Downloads</span></button></nav>
+ ${homeExperience3Rail('Continue Watching',continueItems.slice(0,16),'continue','<button class=linkButton onclick="clearContinueWatching()">Clear all</button>')}
+ ${homeExperience3Rail('Live Now',live,'live','<button class=linkButton onclick="show(\\'guide\\')">Open Guide</button>')}
+ ${homeExperience3Rail('Favorites',favs,'favorite')}
+ ${homeExperience3Rail('Recently Added',recent)}
+ ${homeExperience3Rail('Movies',unifiedMovies.slice(0,18),'media','<button class=linkButton onclick="show(\\'movies\\')">See all</button>')}
+ ${homeExperience3Rail('Series',unifiedSeries.slice(0,18).map(x=>({...x,kind:"series"})),'media','<button class=linkButton onclick="show(\\'series\\')">See all</button>')}<div id=mediaPlayer></div></main>`;
+ $('#homeSearchButton').onclick=homeQuickSearch; $('#homeSearch').onkeydown=e=>{if(e.key==='Enter')homeQuickSearch()}; return true;
+}
+function homeExperience3Capabilities(){return {version:HOME_EXPERIENCE_3_VERSION,responsive:true,hero:true,continueWatching:true,favorites:true,liveNow:true,quickNavigation:true,keyboardAndRemote:true,sharedPlayback:true};}
+
 // v40.0.0 — MyOnlineTV Experience 2.0
 // Activates the shared v39.19 experience contracts as the v40 presentation layer
 // while retaining legacy-compatible routes and Playback Engine 3.0.
-const MYONLINETV_EXPERIENCE_2_VERSION='40.0.0';
+const MYONLINETV_EXPERIENCE_2_VERSION='40.1.0';
 
 function experience40Surface(name,{title='',hero=null,items=[],navigation=[],activeNav='',variant='poster'}={}){
   const device=experience19Device();
