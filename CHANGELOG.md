@@ -1,3 +1,8 @@
+## v39.9.1 - Playback Regression & Release Gate
+- Fixed playback launch from IPTV movie favourites across desktop, mobile, tablet and TV home surfaces.
+- Added Continue Watching compatibility resolver for older profile-scoped entries.
+- Added playback-surface regression tests to the release gate.
+
 # v39.9.0 - Downloads 2.0
 
 - Persistent per-user download queue/history across service restarts.

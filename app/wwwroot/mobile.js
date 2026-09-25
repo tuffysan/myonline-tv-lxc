@@ -150,10 +150,19 @@ async function mobileCollectionView(){
 }
 function openMobileCollection(kind){mobileCollectionKind=kind;return show('collection');}
 async function openHomeFavourite(item){
+  if(!item)return false;
   if(String(item.id).includes(':')&&['plex','jellyfin'].includes(String(item.id).split(':')[0]))return playUnifiedItem({...item,kind:item.type});
   if(item.providerId)currentProvider=item.providerId;
-  if(item.type==='series'){await show('series');await openSeries(item.id);}
-  else{await show('movies');movieDetails(item.id);}
+  // Favourites are a playback surface, not only a shortcut to details. Movies
+  // must start immediately. Series open at the series/episode chooser because
+  // a series favourite does not identify a specific episode.
+  if(item.type==='series'){await show('series');await openSeries(item.id);return true;}
+  if(item.type==='movie'){
+    await show('movies');
+    await playMovie(item.id,item.name||item.title||'Movie');
+    return true;
+  }
+  return false;
 }
 
 function mobileHomeStatus(label,state,hasItems){

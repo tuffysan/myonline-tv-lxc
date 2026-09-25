@@ -3260,6 +3260,26 @@ async function resumeContinueItem(item){
   }
 
   if(item?.url)return playMedia(item.url,item.title,item.id);
+
+  // v39.9.1 compatibility resolver: older Continue Watching rows can lack a
+  // playable URL/stable id. Rehydrate them from the profile-scoped history or
+  // favourites before giving up. This keeps the lookup inside the current
+  // user's privateScope.
+  const wanted=String(item?.title||item?.name||'').trim().toLowerCase();
+  const candidate=[...getMediaHistory(),...getMediaFavs()].find(x=>
+    wanted && String(x.name||x.title||'').trim().toLowerCase()===wanted
+  );
+  if(candidate){
+    if(candidate.providerId)currentProvider=candidate.providerId;
+    if(candidate.type==='movie'){
+      const t=await api(`/api/vod/${currentProvider}/${encodeURIComponent(candidate.id)}/token`,{method:'POST'});
+      return playServerMedia(t.playToken,item.title||candidate.name||'Movie',`iptv-movie:${currentProvider}:${candidate.id}`,false,item.poster||candidate.poster||'');
+    }
+    if(candidate.type==='episode'&&candidate.extension){
+      const t=await api(`/api/series/${currentProvider}/episode/${encodeURIComponent(candidate.id)}/token?ext=${encodeURIComponent(candidate.extension)}`,{method:'POST'});
+      return playServerMedia(t.playToken,item.title||candidate.name||'Episode',`iptv-episode:${currentProvider}:${candidate.id}:${candidate.extension}`,false,item.poster||candidate.poster||'');
+    }
+  }
   pendingResumeSeconds=0;
   alert('This older Continue Watching entry does not contain enough playback information. Remove it and play the item once again to create a new resumable entry.');
   return false;
@@ -4542,7 +4562,7 @@ function tvHome361Hero(continueItems,liveRows,movies,series){
 }
 function tvHome361Poster(item,kind='media'){
   const title=item?.title||item?.name||'Media',poster=item?.backdrop||item?.backdropUrl||item?.fanart||item?.poster||'';
-  const action=kind==='continue'?`resumeContinueItem(${JSON.stringify(item)})`:`playUnifiedItem(${JSON.stringify(item)})`;
+  const action=kind==='continue'?`resumeContinueItem(${JSON.stringify(item)})`:(kind==='favourite'?`openHomeFavourite(${JSON.stringify(item)})`:`playUnifiedItem(${JSON.stringify(item)})`);
   return `<button class=tv361MediaCard onclick='${action}'>${poster?`<img loading=lazy decoding=async src="${escAttr(poster)}">`:posterPlaceholder()}<span><b>${esc(title)}</b>${kind==='continue'&&item.durationSeconds?`<i class=tv361Progress><i style="width:${continueProgress(item)}%"></i></i>`:''}</span></button>`;
 }
 function tvHome361Live(row){return `<button class=tv361LiveCard onclick='show("live").then(()=>playLive(${JSON.stringify(row.channel.key)},${JSON.stringify(row.channel.name)}))'>${row.channel.logo?`<img src="${escAttr(row.channel.logo)}">`:''}<span><small>LIVE</small><b>${esc(channelName(row.channel))}</b><em>${esc(row.program?.title||'Live TV')}</em></span></button>`}
@@ -4555,7 +4575,7 @@ function renderTvHome361({unifiedMovies=[],unifiedSeries=[],continueItems=[],hom
     <section class=tv361Hero style="--tv361-art:${hero.poster?`url('${escAttr(hero.poster)}')`:'none'}"><div class=tv361HeroShade></div><div class=tv361HeroCopy><span>${esc(hero.subtitle||'Featured')}</span><h1>${esc(hero.title)}</h1><p>Your television, movies and series — ready from the sofa.</p><div><button class="btn primaryBtn" onclick='${hero.action}'>▶ Watch now</button><button class=btn onclick="show('guide')">▤ TV Guide</button><button class=btn onclick="show('search')">⌕ Search</button></div></div></section>
     ${continueItems.length?`<section class=tv361Section><header><h2>Continue Watching</h2></header><div class=tv361Rail>${continueItems.slice(0,12).map(x=>tvHome361Poster(x,'continue')).join('')}</div></section>`:''}
     ${homeLiveNow.length?`<section class=tv361Section><header><h2>Live Now</h2><button onclick="show('guide')">View Guide ›</button></header><div class="tv361Rail tv361LiveRail">${homeLiveNow.slice(0,12).map(tvHome361Live).join('')}</div></section>`:''}
-    ${mediaFavs.length?`<section class=tv361Section><header><h2>My List</h2></header><div class=tv361Rail>${mediaFavs.map(x=>tvHome361Poster(x)).join('')}</div></section>`:''}
+    ${mediaFavs.length?`<section class=tv361Section><header><h2>My List</h2></header><div class=tv361Rail>${mediaFavs.map(x=>tvHome361Poster(x,'favourite')).join('')}</div></section>`:''}
     ${recentMovies.length?`<section class=tv361Section><header><h2>Movies</h2><button onclick="show('movies')">View all ›</button></header><div class=tv361Rail>${recentMovies.map(x=>tvHome361Poster(x)).join('')}</div></section>`:''}
     ${recentSeries.length?`<section class=tv361Section><header><h2>Series</h2><button onclick="show('series')">View all ›</button></header><div class=tv361Rail>${recentSeries.map(x=>tvHome361Poster({...x,kind:'series'})).join('')}</div></section>`:''}
   </div>`;
@@ -4591,7 +4611,7 @@ function desktop362Hero(continueItems,liveRows,movies,series){
 }
 function desktop362MediaCard(item,kind='media'){
   const title=item?.title||item?.name||'Media',poster=item?.backdrop||item?.backdropUrl||item?.fanart||item?.poster||'';
-  const action=kind==='continue'?`resumeContinueItem(${JSON.stringify(item)})`:`playUnifiedItem(${JSON.stringify(item)})`;
+  const action=kind==='continue'?`resumeContinueItem(${JSON.stringify(item)})`:(kind==='favourite'?`openHomeFavourite(${JSON.stringify(item)})`:`playUnifiedItem(${JSON.stringify(item)})`);
   return `<article class=desktop362Card><button class=desktop362CardMain onclick='${action}'>${poster?`<img loading=lazy decoding=async src="${escAttr(poster)}">`:posterPlaceholder()}<span><b>${esc(title)}</b>${item?.year?`<small>${esc(item.year)}</small>`:''}${kind==='continue'&&item.durationSeconds?`<i class=desktop362Progress><i style="width:${continueProgress(item)}%"></i></i>`:''}</span></button><div class=desktop362Hover><button title="Play" onclick='${action}'>▶</button><button title="More info" onclick='${action}'>ⓘ</button></div></article>`;
 }
 function desktop362LiveCard(row){
@@ -4609,7 +4629,7 @@ function renderDesktopHome362({unifiedMovies=[],unifiedSeries=[],continueItems=[
   content.innerHTML=`<div class="desktop362Home desktop363Home">
     ${desktopContinue.length?`<section class="desktop362Section desktop363Section desktop363Continue"><header><h2>Continue Watching</h2><button onclick="show('search')">See all ›</button></header><div class="desktop362Rail desktop363Rail">${desktopContinue.slice(0,10).map(x=>desktop362MediaCard(x,'continue')).join('')}</div></section>`:''}
     ${homeLiveNow.length?`<section class="desktop362Section desktop363Section"><header><h2>Live Now</h2><button onclick="show('guide')">Guide ›</button></header><div class="desktop362Rail desktop362LiveRail desktop363LiveRail">${homeLiveNow.slice(0,10).map(desktop362LiveCard).join('')}</div></section>`:''}
-    ${favs.length?`<section class="desktop362Section desktop363Section"><header><h2>My List</h2><button onclick="show('search')">See all ›</button></header><div class="desktop362Rail desktop363Rail">${favs.map(x=>desktop362MediaCard(x)).join('')}</div></section>`:''}
+    ${favs.length?`<section class="desktop362Section desktop363Section"><header><h2>My List</h2><button onclick="show('search')">See all ›</button></header><div class="desktop362Rail desktop363Rail">${favs.map(x=>desktop362MediaCard(x,'favourite')).join('')}</div></section>`:''}
     ${movies.length?`<section class="desktop362Section desktop363Section"><header><h2>Recently Added Movies</h2><button onclick="show('movies')">See all ›</button></header><div class="desktop362Rail desktop363Rail">${movies.map(x=>desktop362MediaCard(x)).join('')}</div></section>`:''}
     ${series.length?`<section class="desktop362Section desktop363Section"><header><h2>Continue Series</h2><button onclick="show('series')">See all ›</button></header><div class="desktop362Rail desktop363Rail">${series.map(x=>desktop362MediaCard({...x,kind:'series'})).join('')}</div></section>`:''}
   </div>`;

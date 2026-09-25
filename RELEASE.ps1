@@ -31,7 +31,7 @@ function Invoke-Python([string]$Script) {
 Set-Location $RepoPath
 $repo = (Get-Location).Path
 
-foreach ($required in @('VERSION','release.json','PUBLISH.ps1','scripts/PRODUCTION-GATE-v30.ps1','tests/release_version.Tests.ps1','tests/security_isolation.py','tests/continue_api.py','tests/DownloadHeaders/DownloadHeaders.csproj')) {
+foreach ($required in @('VERSION','release.json','PUBLISH.ps1','scripts/PRODUCTION-GATE-v30.ps1','tests/release_version.Tests.ps1','tests/security_isolation.py','tests/continue_api.py','tests/playback_surfaces.py','tests/DownloadHeaders/DownloadHeaders.csproj')) {
   if (-not (Test-Path $required)) { throw "Required release file missing: $required" }
 }
 foreach ($command in @('git','dotnet','gh')) {
@@ -86,8 +86,9 @@ Step "[2/7] Download header regression tests"
 Assert-Exit "DownloadHeaders tests failed."
 Invoke-Python 'tests/downloads2_source.py'
 
-Step "[3/7] Continue Watching tests"
+Step "[3/7] Continue Watching and playback-surface tests"
 Invoke-Python 'tests/continue_api.py'
+Invoke-Python 'tests/playback_surfaces.py'
 
 Step "[4/7] Multi-user isolation tests"
 Invoke-Python 'tests/security_isolation.py'
