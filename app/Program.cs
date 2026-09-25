@@ -5096,7 +5096,7 @@ async Task<List<LiveChannel>> LoadXtreamLiveChannels(ProviderConnection c)
     }
 
     var rows = new List<LiveChannel>();
-    foreach (var x in doc.RootElement.EnumerateArray().Take(20000))
+    foreach (var x in doc.RootElement.EnumerateArray().Take(100000))
     {
         var streamId = JsonString(x, "stream_id");
         if (string.IsNullOrWhiteSpace(streamId)) continue;
@@ -5121,7 +5121,7 @@ async Task<List<LiveChannel>> LoadM3uChannels(string url)
     var text = await ProviderTextWithRetry(url, "application/x-mpegURL,text/plain,*/*", TimeSpan.FromSeconds(30), "m3u-playlist");
     if (!text.Contains("#EXTM3U", StringComparison.OrdinalIgnoreCase) && !text.Contains("#EXTINF", StringComparison.OrdinalIgnoreCase))
         throw new InvalidOperationException("Provider response was not an M3U playlist.");
-    return ParseM3u(text).Take(20000).Select(ch =>
+    return ParseM3u(text).Take(100000).Select(ch =>
     {
         var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(ch.Url))).Substring(0, 24);
         return new LiveChannel(key, ch.Id, ch.Name, ch.Group, ch.Number, ch.Logo, ch.Url);

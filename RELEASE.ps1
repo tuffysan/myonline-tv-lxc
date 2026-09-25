@@ -89,6 +89,7 @@ Invoke-Python 'tests/downloads2_source.py'
 Step "[3/7] Continue Watching and playback-surface tests"
 Invoke-Python 'tests/continue_api.py'
 Invoke-Python 'tests/playback_surfaces.py'
+Invoke-Python 'tests/adult_groups_source.py'
 
 Step "[4/7] Multi-user isolation tests"
 Invoke-Python 'tests/security_isolation.py'

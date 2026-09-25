@@ -1,3 +1,12 @@
+# v39.9.3 - Adult Groups & IPTV Diagnostics
+
+- Add Adult (18+) controls directly to My Sources > Edit IPTV > Live TV.
+- Add group search and All/Adult/Active/Inactive filters.
+- Show loaded group/channel counts and detected Adult group/channel counts.
+- Add Reload Live TV action for provider refresh and diagnostics.
+- Raise the Live TV import ceiling from 20,000 to 100,000 channels so providers with large catalogues do not silently lose later groups.
+- Add release regression guards for Adult controls and the expanded import ceiling.
+
 # v39.9.2 - Playback Routing Fix
 
 - Fix Continue Watching playback on Home when the layout has no pre-rendered media player host.

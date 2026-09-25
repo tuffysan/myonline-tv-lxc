@@ -1,9 +1,9 @@
 {
-  "version": "39.9.2",
+  "version": "39.9.3",
   "minimumUpgradeVersion": "0.2.0",
   "dataSchemaVersion": 3,
   "requiresRestart": true,
-  "artifact": "myonline-tv-web-v39.9.2-linux-x64.tar.gz",
+  "artifact": "myonline-tv-web-v39.9.3-linux-x64.tar.gz",
   "sha256": "SHA256SUMS-RELEASE.txt",
   "uiSelfUpdateCompatible": true,
   "uiUpdaterProtocolVersion": 1,
