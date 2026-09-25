@@ -1,3 +1,9 @@
+# v40.1.1 — Release Gate Fix
+- Corrected the v40.1.x release regression gate after Home Experience 3.0.
+- Preserves Home Experience 3.0 feature version 40.1.0 and all existing application behavior.
+- Keeps immutable v40.1.0 release/tag history intact; this maintenance release publishes as v40.1.1.
+- Retains updater runtime-version validation, diagnostic VERSION publishing and Zero-Python policy.
+
 # v40.1.0 — Home Experience 3.0
 - Unified responsive Home for desktop, laptop, tablet, mobile and TV.
 - Dynamic hero prioritizing Continue Watching.
