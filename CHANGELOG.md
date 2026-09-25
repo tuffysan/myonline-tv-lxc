@@ -1,3 +1,14 @@
+# v39.14.0 — Movies & Series 3.0
+
+- Added a shared Movies & Series 3.0 VOD experience layer.
+- Added normalized movie/series detail models and progress calculation.
+- Added season/episode grouping and next-episode navigation.
+- Added Resume and Start Over requests through Playback Engine 3.0.
+- Added VOD search and title/year/recent sorting helpers.
+- Retained all existing v39.13.1 updater, playback, Live TV, IPTV, Continue Watching, download, security and multi-user regression tests.
+- Added permanent .NET regression coverage for Movies & Series 3.0.
+- Zero-Python build/test/release/deployment policy remains enforced.
+
 # v39.13.1 — Update Backup Hardening
 
 - Excludes transient `live-hls` runtime data from pre-update backups.

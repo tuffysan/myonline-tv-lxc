@@ -59,6 +59,13 @@ internal static class Program
         T.Assert(mobileJs.Contains("collectionProgressText") && mobileJs.Contains("% watched"),"collection progress");T.Pass("collection progress");
         Has(mobileJs,"openContinueActions(item.id,actions)","collection actions");
 
+        // Movies & Series 3.0 regression checks — additive to every previous release gate.
+        foreach(var x in new[]{"Movies & Series 3.0","MOVIES_SERIES_3_VERSION='39.14.0'","vod3Progress","vod3EpisodeLabel","vod3GroupEpisodes","vod3PlaybackRequest","vod3Play","vod3Resume","vod3Restart","vod3DetailModel","vod3Search","vod3Sort","vod3NextEpisode"})
+            Has(appJs,x,"Movies & Series 3.0: "+x);
+        T.Assert(appJs.Contains("return playbackEngine(vod3PlaybackRequest(item,options));"),"Movies & Series 3.0 uses Playback Engine 3.0");T.Pass("Movies & Series 3.0 uses Playback Engine 3.0");
+        T.Assert(appJs.Contains("restart?0:Math.max(0,Number(item?.positionSeconds)||0)"),"Movies & Series 3.0 resume/start-over contract");T.Pass("Movies & Series 3.0 resume/start-over contract");
+        T.Assert(appJs.Contains("vod3GroupEpisodes(episodes).flatMap"),"Movies & Series 3.0 next episode navigation");T.Pass("Movies & Series 3.0 next episode navigation");
+
         // v39.13.1 updater backup hardening — additive regression coverage.
         Has(updateLocalSh,"--exclude='./live-hls'","Updater backup excludes transient live-hls");
         Has(updateLocalSh,"--exclude='./downloads'","Updater backup excludes downloads");

@@ -4882,3 +4882,83 @@ async function lmCatalogueCategory(kind,id,hidden){await jpost('/api/catalogue-p
 async function lmLoadItems(kind,cat,btn){const box=btn.parentElement.querySelector('.lmItems');box.innerHTML='Loading…';try{const rows=await api(`/api/${kind}/${encodeURIComponent(lmProviderId())}/items?categoryId=${encodeURIComponent(cat)}&includeHidden=true`);box.innerHTML=rows.slice(0,1000).map(x=>`<label><input type=checkbox onchange="lmCatalogueItem('${kind}','${escAttr(x.id)}',this.checked)"> Hide ${esc(x.name||x.title||x.id)}</label>`).join('')}catch(e){box.textContent=friendlyError(e)}}
 async function lmCatalogueItem(kind,id,hidden){await jpost('/api/catalogue-preferences/'+encodeURIComponent(lmProviderId())+'/item',{kind,itemId:id,hidden})}
 function lmRunCleanup(){const rows=lmState.channels||[],norm=n=>(n||'').toUpperCase().replace(/\b(RAW|4K|UHD|FHD|HD|SD|2160P?|1080P?|720P?)\b/g,'').replace(/\s+/g,' ').trim(),m=new Map();rows.forEach(c=>{const k=norm(c.name);if(!m.has(k))m.set(k,[]);m.get(k).push(c)});const dup=[...m.values()].filter(x=>x.length>1),missing=rows.filter(x=>!x.logo).length;$('#lmCleanup').innerHTML=`<div class=admin2StatusGrid><div class=admin2Card><b>${dup.length}</b><small>duplicate-looking channel sets</small></div><div class=admin2Card><b>${missing}</b><small>channels without logos</small></div><div class=admin2Card><b>${lmState.snapshot.groups.filter(g=>!g.name).length}</b><small>ungrouped sets</small></div></div><h4>Duplicate candidates</h4><div class=manageList>${dup.slice(0,200).map(g=>`<div><b>${esc(norm(g[0].name))}</b><small>${g.map(x=>esc(x.name)+' ['+esc(x.quality||'')+']').join(' · ')}</small></div>`).join('')||'<p>No duplicate-looking channels found.</p>'}</div>`}
+
+
+// v39.14.0 — Movies & Series 3.0
+// Shared VOD experience helpers. Playback is deliberately delegated to Playback Engine 3.0.
+const MOVIES_SERIES_3_VERSION='39.14.0';
+
+function vod3Progress(item){
+  const pos=Math.max(0,Number(item?.positionSeconds)||0);
+  const dur=Math.max(0,Number(item?.durationSeconds)||0);
+  return {positionSeconds:pos,durationSeconds:dur,percent:dur>0?Math.min(100,Math.round(pos*100/dur)):0};
+}
+
+function vod3EpisodeLabel(ep){
+  const s=Number(ep?.season||ep?.seasonNumber||0);
+  const e=Number(ep?.episode||ep?.episodeNumber||0);
+  const prefix=(s>0&&e>0)?`S${String(s).padStart(2,'0')}E${String(e).padStart(2,'0')}`:'Episode';
+  return `${prefix}${ep?.title||ep?.name?` · ${ep.title||ep.name}`:''}`;
+}
+
+function vod3GroupEpisodes(episodes){
+  const groups=new Map();
+  for(const ep of (episodes||[])){
+    const season=Number(ep?.season||ep?.seasonNumber||0);
+    if(!groups.has(season))groups.set(season,[]);
+    groups.get(season).push(ep);
+  }
+  for(const list of groups.values())list.sort((a,b)=>Number(a?.episode||a?.episodeNumber||0)-Number(b?.episode||b?.episodeNumber||0));
+  return [...groups.entries()].sort((a,b)=>a[0]-b[0]).map(([season,items])=>({season,episodes:items}));
+}
+
+function vod3PlaybackRequest(item,{restart=false}={}){
+  const kind=String(item?.kind||item?.type||'').toLowerCase();
+  const resume=restart?0:Math.max(0,Number(item?.positionSeconds)||0);
+  if(kind==='episode'||item?.episodeId)return {kind:'episode',item,name:item?.title||item?.name||'Episode',resumeSeconds:resume};
+  return {kind:'movie',item,name:item?.title||item?.name||'Movie',resumeSeconds:resume};
+}
+
+async function vod3Play(item,options={}){
+  return playbackEngine(vod3PlaybackRequest(item,options));
+}
+
+async function vod3Resume(item){ return vod3Play(item,{restart:false}); }
+async function vod3Restart(item){ return vod3Play(item,{restart:true}); }
+
+function vod3DetailModel(item){
+  const progress=vod3Progress(item);
+  return {
+    id:item?.id||'',
+    kind:item?.kind||item?.type||'movie',
+    title:item?.title||item?.name||'',
+    overview:item?.overview||item?.plot||item?.description||'',
+    poster:item?.poster||item?.posterUrl||item?.cover||'',
+    backdrop:item?.backdrop||item?.backdropUrl||'',
+    year:item?.year||'',
+    rating:item?.rating||item?.voteAverage||'',
+    favourite:!!(item?.favourite||item?.favorite),
+    ...progress
+  };
+}
+
+function vod3Search(items,query){
+  const q=String(query||'').trim().toLocaleLowerCase();
+  if(!q)return [...(items||[])];
+  return (items||[]).filter(x=>`${x?.title||x?.name||''} ${x?.overview||x?.plot||''}`.toLocaleLowerCase().includes(q));
+}
+
+function vod3Sort(items,mode='title'){
+  const out=[...(items||[])];
+  if(mode==='year') return out.sort((a,b)=>Number(b?.year||0)-Number(a?.year||0));
+  if(mode==='recent') return out.sort((a,b)=>String(b?.updated||b?.added||'').localeCompare(String(a?.updated||a?.added||'')));
+  return out.sort((a,b)=>String(a?.title||a?.name||'').localeCompare(String(b?.title||b?.name||''),undefined,{sensitivity:'base'}));
+}
+
+function vod3NextEpisode(episodes,current){
+  const flat=vod3GroupEpisodes(episodes).flatMap(x=>x.episodes);
+  const id=String(current?.id||current?.episodeId||'');
+  const i=flat.findIndex(x=>String(x?.id||x?.episodeId||'')===id);
+  return i>=0&&i+1<flat.length?flat[i+1]:null;
+}
+
