@@ -10,21 +10,17 @@ echo "Base URL: ${BASE_URL}"
 health="$(curl -fsS --max-time 15 "${BASE_URL}/health")"
 ready="$(curl -fsS --max-time 15 "${BASE_URL}/ready")"
 
-python3 - "$EXPECTED_VERSION" "$health" "$ready" <<'PY'
-import json, sys
-expected, health_raw, ready_raw = sys.argv[1:]
-health=json.loads(health_raw)
-ready=json.loads(ready_raw)
-assert health.get('status') == 'ok', f"health status: {health}"
-assert health.get('version') == expected, f"health version {health.get('version')} != {expected}"
-assert ready.get('status') == 'ready', f"readiness status: {ready}"
-assert ready.get('version') == expected, f"ready version {ready.get('version')} != {expected}"
-print(f"PASS: /health reports {expected}")
-print("PASS: /ready reports ready")
-checks=ready.get('checks') or {}
-for key in ('dataDirectory','secretKey','ffmpeg','authConfigured'):
-    if key in checks:
-        print(f"  {key}: {checks[key]}")
-PY
+health_status="$(printf '%s' "$health" | sed -nE 's/.*"status"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' | head -n1)"
+health_version="$(printf '%s' "$health" | sed -nE 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' | head -n1)"
+ready_status="$(printf '%s' "$ready" | sed -nE 's/.*"status"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' | head -n1)"
+ready_version="$(printf '%s' "$ready" | sed -nE 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' | head -n1)"
+
+[[ "$health_status" == "ok" ]] || { echo "ERROR: /health status is '$health_status'" >&2; exit 1; }
+[[ "$health_version" == "$EXPECTED_VERSION" ]] || { echo "ERROR: /health version '$health_version' != '$EXPECTED_VERSION'" >&2; exit 1; }
+[[ "$ready_status" == "ready" ]] || { echo "ERROR: /ready status is '$ready_status'" >&2; exit 1; }
+[[ "$ready_version" == "$EXPECTED_VERSION" ]] || { echo "ERROR: /ready version '$ready_version' != '$EXPECTED_VERSION'" >&2; exit 1; }
+
+echo "PASS: /health reports $EXPECTED_VERSION"
+echo "PASS: /ready reports ready"
 
 echo "PASS: MyOnlineTV runtime smoke test"

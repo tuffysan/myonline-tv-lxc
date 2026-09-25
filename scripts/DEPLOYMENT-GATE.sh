@@ -30,8 +30,8 @@ grep -q 'sha256sum -c' update-from-github.sh
 
 echo '[gate] Version metadata consistency...'
 V="$(tr -d '[:space:]' < VERSION)"
-JSON_V="$(python3 -c 'import json; print(json.load(open("release.json"))["version"])')"
-ART="$(python3 -c 'import json; print(json.load(open("release.json"))["artifact"])')"
+JSON_V="$(sed -nE 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' release.json | head -n1)"
+ART="$(sed -nE 's/.*"artifact"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' release.json | head -n1)"
 [[ "$V" == "$JSON_V" ]]
 [[ "$ART" == "myonline-tv-web-v${V}-linux-x64.tar.gz" ]]
 

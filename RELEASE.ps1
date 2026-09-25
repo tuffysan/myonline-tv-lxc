@@ -17,21 +17,23 @@ function Step([string]$Text) {
   Write-Host " $Text"
   Write-Host "============================================================"
 }
-function Invoke-Python([string]$Script) {
-  if (Get-Command python -ErrorAction SilentlyContinue) {
-    & python $Script
-  } elseif (Get-Command py -ErrorAction SilentlyContinue) {
-    & py -3 $Script
-  } else {
-    throw "Python 3 is required to run $Script."
-  }
-  Assert-Exit "Python test failed: $Script"
+function Invoke-DotNetReleaseTests {
+  & dotnet run --project tests/ReleaseTests/ReleaseTests.csproj -c Release
+  Assert-Exit "Release regression tests failed."
+}
+function Invoke-PSGate([string]$ScriptPath) {
+  if ([string]::IsNullOrWhiteSpace($ScriptPath)) { throw "PowerShell gate path is empty." }
+  $fullPath = Join-Path $repo $ScriptPath
+  if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) { throw "Required PowerShell gate missing: $ScriptPath" }
+  Write-Host "Running PowerShell gate: $ScriptPath"
+  & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $fullPath
+  Assert-Exit "PowerShell gate failed: $ScriptPath"
 }
 
 Set-Location $RepoPath
 $repo = (Get-Location).Path
 
-foreach ($required in @('VERSION','release.json','PUBLISH.ps1','scripts/PRODUCTION-GATE-v30.ps1','tests/release_version.Tests.ps1','tests/security_isolation.py','tests/continue_api.py','tests/playback_surfaces.py','tests/DownloadHeaders/DownloadHeaders.csproj')) {
+foreach ($required in @('VERSION','release.json','PUBLISH.ps1','scripts/PRODUCTION-GATE-v30.ps1','tests/release_version.Tests.ps1','tests/ReleaseTests/ReleaseTests.csproj','tests/DownloadHeaders/DownloadHeaders.csproj')) {
   if (-not (Test-Path $required)) { throw "Required release file missing: $required" }
 }
 foreach ($command in @('git','dotnet','gh')) {
@@ -75,6 +77,30 @@ Assert-Exit "Cannot inspect GitHub Releases."
 $publishedTags = @($publishedTags | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
 Assert-ReleaseVersion $version ($knownTags + $publishedTags)
 
+Step "[0/7] Dependency policy gate"
+Write-Host 'Scanning build/test/release/deployment/update scripts for forbidden runtime dependencies...'
+$forbiddenRuntimeTokens = @(
+  ('py' + 'thon3'),
+  ('py' + 'thon.exe'),
+  ('py' + 'thon3.exe'),
+  ('p' + 'y.exe'),
+  ('p' + 'ip3'),
+  ('p' + 'ip.exe')
+)
+$scriptFiles = @(Get-ChildItem -Path $repo -Recurse -File -Include *.ps1,*.cmd,*.sh,*.yml,*.yaml | Where-Object { $_.FullName -notmatch '[\\/]bin[\\/]|[\\/]obj[\\/]|[\\/]node_modules[\\/]' })
+$dependencyHits = foreach ($file in $scriptFiles) {
+  foreach ($token in $forbiddenRuntimeTokens) {
+    foreach ($match in @(Select-String -LiteralPath $file.FullName -SimpleMatch $token -ErrorAction SilentlyContinue)) {
+      [PSCustomObject]@{ File=$file.FullName.Substring($repo.Length).TrimStart('\','/'); Line=$match.LineNumber; Text=$match.Line.Trim() }
+    }
+  }
+}
+if ($dependencyHits) {
+  $dependencyHits | Sort-Object File,Line -Unique | Format-Table -AutoSize | Out-Host
+  throw 'Forbidden runtime dependency detected. MyOnlineTV distribution tooling must remain .NET/PowerShell/POSIX-shell only.'
+}
+Write-Host 'PASS: distribution tooling has no forbidden runtime dependency.'
+
 Step "[1/7] Restore and Release build"
 & dotnet restore app/MyOnlineTV.Web.csproj
 Assert-Exit "dotnet restore failed."
@@ -84,15 +110,13 @@ Assert-Exit "Release build failed."
 Step "[2/7] Download header regression tests"
 & dotnet run --project tests/DownloadHeaders/DownloadHeaders.csproj -c Release
 Assert-Exit "DownloadHeaders tests failed."
-Invoke-Python 'tests/downloads2_source.py'
 
-Step "[3/7] Continue Watching and playback-surface tests"
-Invoke-Python 'tests/continue_api.py'
-Invoke-Python 'tests/playback_surfaces.py'
-Invoke-Python 'tests/adult_groups_source.py'
+Step "[3/7] .NET application regression tests"
+Invoke-DotNetReleaseTests
 
-Step "[4/7] Multi-user isolation tests"
-Invoke-Python 'tests/security_isolation.py'
+Step "[4/7] Security static gates"
+Invoke-PSGate 'tests/security_static.Tests.ps1'
+Invoke-PSGate 'tests/source_regression.Tests.ps1' 
 
 Step "[5/7] Version and production gates"
 & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tests/release_version.Tests.ps1

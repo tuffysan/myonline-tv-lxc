@@ -33,8 +33,26 @@ function continueDialog(title,actions,trigger){
   dialog.addEventListener('close',()=>{dialog.remove();if(trigger?.isConnected)trigger.focus();else content.querySelector('.continueMenuButton,button')?.focus({preventScroll:true});});
   document.body.append(dialog);dialog.showModal();
 }
+function continueItemById(id){
+  const key=String(id);
+  return continueHomeSnapshot?.continueItems?.find(x=>String(x.id)===key)||null;
+}
+async function restartContinueWatching(id){
+  const item=continueItemById(id);
+  if(!item)throw new Error('Continue Watching item is no longer available.');
+  return resumeContinueItem({...item,positionSeconds:0});
+}
+async function markContinueWatchingWatched(id){
+  // Completing an item removes resume progress but never removes the media,
+  // favourite, provider or downloaded file.
+  await removeContinueWatching(id);
+}
 function openContinueActions(id,trigger){
+  const item=continueItemById(id);
   continueDialog('Continue Watching',[
+    ['Continue',()=>item?resumeContinueItem(item):Promise.reject(new Error('Item is no longer available.'))],
+    ['Start from beginning',()=>restartContinueWatching(id)],
+    ['Mark as watched',()=>markContinueWatchingWatched(id)],
     ['Remove from Continue Watching',()=>removeContinueWatching(id)],
     ['Cancel',()=>{}]
   ],trigger);

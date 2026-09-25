@@ -121,16 +121,27 @@ async function mobileCollectionView(){
     const rows=kind==='continue'?await api('/api/continue'):getMediaFavs();
     if(currentView!=='collection')return;
     if(mobileCollectionSort==='title')rows.sort((a,b)=>String(a.title||a.name).localeCompare(String(b.title||b.name)));
-    content.innerHTML=`<div class="sectionHead"><h1>${kind==='continue'?'Continue Watching':'My List'}</h1><label>Sort <select id="collectionSort"><option value="recent">Recent</option><option value="title">Title</option></select></label></div><div id="collectionItems" class="mobileCollection"></div><div id="mediaPlayer"></div>`;
+    content.innerHTML=`<div class="sectionHead"><h1>${kind==='continue'?'Continue Watching':'My List'}</h1><div class="collectionTools">${kind==='continue'?'<label>Search <input id="collectionSearch" type="search" placeholder="Search Continue Watching…"></label>':''}<label>Sort <select id="collectionSort"><option value="recent">Recent</option><option value="title">Title</option></select></label></div></div><div id="collectionItems" class="mobileCollection"></div><div id="mediaPlayer"></div>`;
     $('#collectionSort').value=mobileCollectionSort;$('#collectionSort').onchange=e=>{mobileCollectionSort=e.target.value;mobileCollectionView();};
+    const search=$('#collectionSearch');if(search)search.oninput=()=>renderMobileCollectionRows(rows,kind,search.value);
     if(kind==='continue'&&rows.length){const clear=document.createElement('button');clear.className='btn';clear.textContent='Clear Continue Watching';clear.onclick=clearContinueWatching;$('.sectionHead').append(clear);}
     if(!rows.length){$('#collectionItems').textContent=kind==='continue'?'Start watching something to see it here.':'Add favourites to build your list.';return;}
-    rows.forEach(item=>{
+    renderMobileCollectionRows(rows,kind,'');
+  }catch(e){content.innerHTML=`${errorCard(e)}<button class="btn" onclick="mobileCollectionView()">Try again</button>`;}
+}
+function renderMobileCollectionRows(rows,kind,query){
+    const host=$('#collectionItems');if(!host)return;
+    host.replaceChildren();
+    const q=String(query||'').trim().toLowerCase();
+    const visible=(rows||[]).filter(item=>!q||String(item.title||item.name||'').toLowerCase().includes(q));
+    if(!visible.length){host.textContent=q?'No matching items.':(kind==='continue'?'Start watching something to see it here.':'Add favourites to build your list.');return;}
+    visible.forEach(item=>{
       const card=document.createElement('article');card.className='card';
       if(kind==='continue')card.dataset.continueId=item.id;
       const play=document.createElement('button');play.className='mobileCollectionPlay';
       if(item.poster){const img=document.createElement('img');img.src=item.poster;img.alt='';img.loading='lazy';play.append(img);}
       const label=document.createElement('span');label.textContent=item.title||item.name||'Media';play.append(label);
+      if(kind==='continue'&&item.durationSeconds){const progress=document.createElement('small');progress.className='collectionProgressText';progress.textContent=`${Math.round(continueProgress(item))}% watched`;play.append(progress);}
       play.onclick=()=>kind==='continue'?resumeContinueItem(item):openHomeFavourite(item);
       const remove=document.createElement('button');remove.className='btn';remove.textContent='Remove';remove.setAttribute('aria-label','Remove '+label.textContent);
       remove.onclick=async()=>{
@@ -144,9 +155,11 @@ async function mobileCollectionView(){
           await mobileCollectionView();
         }catch(e){remove.disabled=false;alert(friendlyError(e));}
       };
-      card.append(play,remove);$('#collectionItems').append(card);
+      if(kind==='continue'){
+        const actions=document.createElement('button');actions.className='btn';actions.textContent='•••';actions.setAttribute('aria-label','Actions for '+label.textContent);actions.onclick=()=>openContinueActions(item.id,actions);card.append(play,actions,remove);
+      }else card.append(play,remove);
+      host.append(card);
     });
-  }catch(e){content.innerHTML=`${errorCard(e)}<button class="btn" onclick="mobileCollectionView()">Try again</button>`;}
 }
 function openMobileCollection(kind){mobileCollectionKind=kind;return show('collection');}
 async function openHomeFavourite(item){

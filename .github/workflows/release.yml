@@ -78,8 +78,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
           dotnet run --project tests/DownloadHeaders/DownloadHeaders.csproj -c Release
-          python3 tests/continue_api.py
-          python3 tests/security_isolation.py
+          dotnet run --project tests/ReleaseTests/ReleaseTests.csproj -c Release
 
       - name: Restore linux-x64
         shell: bash
@@ -151,7 +150,8 @@ jobs:
           tar -tzf "${APP}" >/dev/null
           tar -tzf "${SRC}" >/dev/null
 
-          VERSION_IN_JSON="$(python3 -c 'import json; print(json.load(open("release.json"))["version"])')"
+          VERSION_IN_JSON="$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' release.json | head -n1)"
+          test -n "${VERSION_IN_JSON}"
           test "${VERSION_IN_JSON}" = "${VERSION}"
 
       - name: Smoke test published application archive

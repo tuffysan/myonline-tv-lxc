@@ -48,8 +48,9 @@ commands and checks rather than maintaining a separate release process.
    workflow: install its dependencies and Playwright browser, then run
    `npm test --prefix tests/mobile`. An installed Edge channel is supported for
    local testing. These tests mock APIs; they do not prove real IPTV playback.
-   Run `python3 tests/continue_api.py` and `python3 tests/security_isolation.py`
-   against the Release build, sequentially (both use isolated data on port 5080).
+   Run the .NET regression suite:
+   `dotnet run --project tests/ReleaseTests/ReleaseTests.csproj -c Release`.
+   It includes Continue Watching and multi-user isolation black-box coverage.
 4. Run JavaScript syntax checks for `app.js`, `mobile.js` and `sw.js`, shell
    syntax checks, release metadata consistency and the workflows' regression
    markers. Run `git diff --check`.
@@ -168,3 +169,8 @@ When the user requests `release check`:
 - Stop before destructive or unexpected operations, explain the specific issue,
   and obtain direction. Ordinary safe release steps are authorized by `build`;
   do not ask for redundant confirmation for those steps.
+
+
+## Permanent release dependency rule
+
+Build, test, release, deployment, self-update and runtime smoke-test tooling must not require Python, pip or Python packages. Use .NET 10, PowerShell and POSIX shell tooling already required by the platform. The release gate must fail if an executable script introduces a Python runtime dependency.

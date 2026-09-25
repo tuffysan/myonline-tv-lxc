@@ -15,10 +15,28 @@ trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$DATA" "$DATA/backups"
 
 json_escape() {
-  python3 - "$1" <<'PY'
-import json,sys
-print(json.dumps(sys.argv[1]))
-PY
+  local s="$1"
+  s=${s//\\/\\\\}
+  s=${s//"/\\"}
+  s=${s//$'\n'/\\n}
+  s=${s//$'\r'/\\r}
+  s=${s//$'\t'/\\t}
+  printf '"%s"' "$s"
+}
+
+json_string() {
+  local file="$1" key="$2"
+  sed -nE 's/.*"'"$key"'"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' "$file" | head -n1
+}
+
+json_bool() {
+  local file="$1" key="$2"
+  sed -nE 's/.*"'"$key"'"[[:space:]]*:[[:space:]]*(true|false).*/\1/p' "$file" | head -n1
+}
+
+json_int() {
+  local file="$1" key="$2"
+  sed -nE 's/.*"'"$key"'"[[:space:]]*:[[:space:]]*([0-9]+).*/\1/p' "$file" | head -n1
 }
 
 write_status() {
@@ -70,18 +88,10 @@ curl -fL --retry 4 --retry-all-errors --connect-timeout 15 "${BASE}/release.json
   || fail "Could not download release metadata." "$CURRENT_VERSION"
 
 # Refuse UI installation unless the release explicitly opts in to this updater protocol.
-python3 - "$TMP/release.json" "$TARGET_VERSION" <<'PY' || exit_code=$?
-import json,sys
-p=sys.argv[1]; expected=sys.argv[2]
-d=json.load(open(p,encoding="utf-8"))
-if str(d.get("version","")) != expected:
-    print("release.json version mismatch", file=sys.stderr); sys.exit(2)
-if d.get("uiSelfUpdateCompatible") is not True:
-    print("release is not marked uiSelfUpdateCompatible", file=sys.stderr); sys.exit(3)
-if int(d.get("uiUpdaterProtocolVersion",0)) != 1:
-    print("unsupported UI updater protocol", file=sys.stderr); sys.exit(4)
-PY
-if [[ "${exit_code:-0}" != "0" ]]; then
+META_VERSION="$(json_string "$TMP/release.json" version)"
+META_UI_COMPAT="$(json_bool "$TMP/release.json" uiSelfUpdateCompatible)"
+META_PROTOCOL="$(json_int "$TMP/release.json" uiUpdaterProtocolVersion)"
+if [[ "$META_VERSION" != "$TARGET_VERSION" || "$META_UI_COMPAT" != "true" || "$META_PROTOCOL" != "1" ]]; then
   fail "This release requires the Proxmox/terminal updater and cannot be safely installed from the UI." "$CURRENT_VERSION"
 fi
 

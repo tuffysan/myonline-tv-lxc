@@ -1,3 +1,6 @@
+## v39.10.0 — Continue Watching 2.0
+- Expanded Continue Watching controls, collection search/sort/progress, regression coverage, and hardened Python release environment.
+
 # v39.9.3 - Adult Groups & IPTV Diagnostics
 
 - Add Adult (18+) controls directly to My Sources > Edit IPTV > Live TV.

@@ -52,30 +52,26 @@ jobs:
       - name: Test download filename headers
         run: dotnet run --project tests/DownloadHeaders/DownloadHeaders.csproj -c Release
 
-      - name: Test Continue Watching persistence
-        run: python3 tests/continue_api.py
-
-      - name: Test multi-user isolation
+      - name: Test application regressions and multi-user isolation
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
-          python3 tests/security_isolation.py
+          dotnet run --project tests/ReleaseTests/ReleaseTests.csproj -c Release
 
       - name: Publish web app
         run: dotnet publish app/MyOnlineTV.Web.csproj -c Release -o dist/publish
 
 
       - name: Validate release metadata
+        shell: bash
         run: |
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-          version=Path("VERSION").read_text().strip()
-          meta=json.loads(Path("release.json").read_text())
-          assert meta["version"] == version
-          assert meta["artifact"] == f"myonline-tv-web-v{version}-linux-x64.tar.gz"
-          print("release.json OK")
-          PY
+          set -euo pipefail
+          VERSION_VALUE="$(tr -d '\r\n' < VERSION)"
+          JSON_VERSION="$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' release.json | head -n1)"
+          JSON_ARTIFACT="$(sed -n 's/^[[:space:]]*"artifact"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' release.json | head -n1)"
+          test "${JSON_VERSION}" = "${VERSION_VALUE}"
+          test "${JSON_ARTIFACT}" = "myonline-tv-web-v${VERSION_VALUE}-linux-x64.tar.gz"
+          echo "release.json OK"
       - name: Regression markers
         shell: bash
         run: |
