@@ -1,3 +1,14 @@
+# v39.15.0 — Search & Discovery 2.0
+
+- Added a unified discovery index for Live TV, Movies, Series and Episodes.
+- Added cross-library search with media-type and group filtering.
+- Added grouped search-result sections and query suggestions.
+- Added profile-scoped recent searches with clear-history support.
+- Routed search-result playback through Playback Engine 3.0.
+- Retained every existing v39.14.0 and earlier regression/security gate.
+- Added permanent .NET regression coverage for Search & Discovery 2.0.
+- Zero-Python build/test/release/deployment remains enforced.
+
 # v39.14.0 — Movies & Series 3.0
 
 - Added a shared Movies & Series 3.0 VOD experience layer.

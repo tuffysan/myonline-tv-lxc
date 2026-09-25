@@ -4962,3 +4962,96 @@ function vod3NextEpisode(episodes,current){
   return i>=0&&i+1<flat.length?flat[i+1]:null;
 }
 
+
+
+// v39.15.0 — Search & Discovery 2.0
+// Unified client-side discovery model across Live TV, Movies, Series and Episodes.
+// Playback remains delegated to Playback Engine 3.0.
+const SEARCH_DISCOVERY_2_VERSION='39.15.0';
+
+function discovery2Normalize(item,source='library'){
+  const kind=String(item?.kind||item?.type||source||'').toLowerCase();
+  return {
+    ...item,
+    discoverySource:source,
+    discoveryKind:kind,
+    discoveryTitle:String(item?.title||item?.name||''),
+    discoveryDescription:String(item?.overview||item?.plot||item?.description||''),
+    discoveryGroup:String(item?.group||item?.category||item?.genre||''),
+    discoveryYear:Number(item?.year||0),
+    discoveryUpdated:String(item?.updated||item?.added||'')
+  };
+}
+
+function discovery2Index({live=[],movies=[],series=[],episodes=[]}={}){
+  return [
+    ...live.map(x=>discovery2Normalize(x,'live')),
+    ...movies.map(x=>discovery2Normalize(x,'movie')),
+    ...series.map(x=>discovery2Normalize(x,'series')),
+    ...episodes.map(x=>discovery2Normalize(x,'episode'))
+  ];
+}
+
+function discovery2Search(index,query,{kinds=[],group='',limit=100}={}){
+  const q=String(query||'').trim().toLocaleLowerCase();
+  const allowed=new Set((kinds||[]).map(x=>String(x).toLowerCase()));
+  const g=String(group||'').trim().toLocaleLowerCase();
+  return (index||[])
+    .filter(x=>!allowed.size||allowed.has(String(x.discoveryKind||'').toLowerCase()))
+    .filter(x=>!g||String(x.discoveryGroup||'').toLocaleLowerCase()===g)
+    .filter(x=>!q||`${x.discoveryTitle} ${x.discoveryDescription} ${x.discoveryGroup}`.toLocaleLowerCase().includes(q))
+    .slice(0,Math.max(1,Number(limit)||100));
+}
+
+function discovery2Sections(results){
+  const order=['live','movie','series','episode'];
+  return order
+    .map(kind=>({kind,items:(results||[]).filter(x=>x.discoveryKind===kind)}))
+    .filter(x=>x.items.length);
+}
+
+function discovery2RecentStoreKey(profileId){
+  return `myonlinetv.discovery.recent.${String(profileId||'default')}`;
+}
+
+function discovery2RecentGet(profileId){
+  try{return JSON.parse(localStorage.getItem(discovery2RecentStoreKey(profileId))||'[]');}
+  catch{return [];}
+}
+
+function discovery2RecentAdd(profileId,query){
+  const q=String(query||'').trim();
+  if(!q)return discovery2RecentGet(profileId);
+  const next=[q,...discovery2RecentGet(profileId).filter(x=>String(x).toLocaleLowerCase()!==q.toLocaleLowerCase())].slice(0,10);
+  localStorage.setItem(discovery2RecentStoreKey(profileId),JSON.stringify(next));
+  return next;
+}
+
+function discovery2RecentClear(profileId){
+  localStorage.removeItem(discovery2RecentStoreKey(profileId));
+}
+
+function discovery2Suggestions(index,query,limit=8){
+  const q=String(query||'').trim().toLocaleLowerCase();
+  if(!q)return [];
+  const seen=new Set();
+  const out=[];
+  for(const x of (index||[])){
+    const title=String(x.discoveryTitle||'');
+    if(!title.toLocaleLowerCase().includes(q))continue;
+    const key=title.toLocaleLowerCase();
+    if(seen.has(key))continue;
+    seen.add(key); out.push(title);
+    if(out.length>=limit)break;
+  }
+  return out;
+}
+
+async function discovery2Play(item){
+  const kind=String(item?.discoveryKind||item?.kind||item?.type||'').toLowerCase();
+  if(kind==='live') return playbackEngine({kind:'live',live:item,name:item?.title||item?.name||'Live TV'});
+  if(kind==='movie'||kind==='series'||kind==='episode')
+    return playbackEngine({kind,unified:item,name:item?.title||item?.name||'Media',resumeSeconds:item?.positionSeconds||0});
+  return playbackEngine({kind:'unified',unified:item,name:item?.title||item?.name||'Media'});
+}
+

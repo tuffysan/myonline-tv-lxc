@@ -59,6 +59,14 @@ internal static class Program
         T.Assert(mobileJs.Contains("collectionProgressText") && mobileJs.Contains("% watched"),"collection progress");T.Pass("collection progress");
         Has(mobileJs,"openContinueActions(item.id,actions)","collection actions");
 
+        // Search & Discovery 2.0 regression checks — additive to all previous coverage.
+        foreach(var x in new[]{"Search & Discovery 2.0","SEARCH_DISCOVERY_2_VERSION='39.15.0'","discovery2Normalize","discovery2Index","discovery2Search","discovery2Sections","discovery2RecentStoreKey","discovery2RecentGet","discovery2RecentAdd","discovery2RecentClear","discovery2Suggestions","discovery2Play"})
+            Has(appJs,x,"Search & Discovery 2.0: "+x);
+        T.Assert(appJs.Contains("myonlinetv.discovery.recent.${String(profileId||'default')}"),"Search history is profile scoped");T.Pass("Search history is profile scoped");
+        T.Assert(appJs.Contains("if(kind==='live') return playbackEngine"),"Search Live TV uses Playback Engine 3.0");T.Pass("Search Live TV uses Playback Engine 3.0");
+        T.Assert(appJs.Contains("if(kind==='movie'||kind==='series'||kind==='episode')"),"Search VOD uses Playback Engine 3.0");T.Pass("Search VOD uses Playback Engine 3.0");
+        T.Assert(appJs.Contains(".slice(0,Math.max(1,Number(limit)||100))"),"Search result limit guard");T.Pass("Search result limit guard");
+
         // Movies & Series 3.0 regression checks — additive to every previous release gate.
         foreach(var x in new[]{"Movies & Series 3.0","MOVIES_SERIES_3_VERSION='39.14.0'","vod3Progress","vod3EpisodeLabel","vod3GroupEpisodes","vod3PlaybackRequest","vod3Play","vod3Resume","vod3Restart","vod3DetailModel","vod3Search","vod3Sort","vod3NextEpisode"})
             Has(appJs,x,"Movies & Series 3.0: "+x);
