@@ -1,3 +1,12 @@
+# v39.13.0 — Playback Engine 3.0
+
+- Added a common playback request contract across primary media sources.
+- Routed Continue Watching through Playback Engine 3.0.
+- Added common Live TV recovery, unified media, direct URL, download and server-token paths.
+- Added resume propagation and playback diagnostics.
+- Added new .NET regression checks while retaining all previous tests.
+- Zero-Python release policy remains enforced.
+
 ## v39.12.0 — Live TV 2.0
 
 - Refined Live TV channel browser with Favourites, Recent and On now views.

@@ -3264,6 +3264,7 @@ async function unifiedSeriesDetails(item){
 }
 
 async function resumeContinueItem(item){
+  if(!item?.__fromPlaybackEngine) return playbackFromContinue(item);
   pendingResumeSeconds=Math.max(0,Number(item?.positionSeconds)||0);
   const id=String(item?.id||'');
 
@@ -3303,7 +3304,7 @@ async function resumeContinueItem(item){
     }
   }
 
-  if(item?.url)return playMedia(item.url,item.title,item.id);
+  if(item?.url)return playbackEngine({kind:'direct',url:item.url,name:item.title||'Continue watching',mediaId:item.id,resumeSeconds:item.positionSeconds||0});
 
   // v39.9.2 compatibility resolver: older Continue Watching rows can lack a
   // playable URL/stable id. Rehydrate them from the profile-scoped history or
@@ -4193,13 +4194,64 @@ function focusFirstInteractive(root=document){requestAnimationFrame(()=>root.que
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelector('[data-close]:not([hidden])')?.click()}});
 
 
-// v28.5 — common playback decision entry point for UI callers
+// v39.13.0 — Playback Engine 3.0
+// One playback contract for Live TV, Movies, Series, Continue Watching,
+// Favorites, Search, unified libraries, direct URLs and downloaded media.
 async function playbackEngine(request){
   if(!request) throw new Error('Playback request is required');
-  if(request.url){playMedia(request.url,request.name||'Playback',request.mediaId||null);return {mode:'direct-url'}}
-  if(request.unified){return playUnifiedWithFallback(request.unified)}
-  if(request.live){return playLive(request.live.channelKey,request.name||'',!!request.forceTranscode)}
-  throw new Error('Unsupported playback request');
+  const r={...request};
+  const kind=String(r.kind||'').toLowerCase();
+  const name=r.name||r.title||'Playback';
+
+  try{
+    if(Number(r.resumeSeconds)>0) pendingResumeSeconds=Math.max(0,Number(r.resumeSeconds)||0);
+
+    if(kind==='continue' && r.item)
+      return await resumeContinueItem({...r.item,__fromPlaybackEngine:true});
+
+    if(kind==='live' || r.live){
+      const live=r.live||r;
+      return await recoverLivePlayback(live.channelKey||live.key,name);
+    }
+
+    if(kind==='unified' || kind==='movie' || kind==='series' || kind==='episode' || r.unified){
+      const item=r.unified||r.item||r;
+      return await playUnifiedWithFallback(item);
+    }
+
+    if(kind==='server-token' && r.token){
+      await playServerMedia(r.token,name,r.mediaId||null,!!r.forceTranscode,r.poster||'');
+      return {mode:'server-token'};
+    }
+
+    if(kind==='download' && r.url){
+      playMedia(r.url,name,r.mediaId||r.id||null);
+      return {mode:'download'};
+    }
+
+    if(r.url){
+      playMedia(r.url,name,r.mediaId||r.id||null);
+      return {mode:'direct-url'};
+    }
+
+    throw new Error('Unsupported playback request');
+  }catch(error){
+    console.error('Playback Engine 3.0 failed', {kind,name,error});
+    throw error;
+  }
+}
+
+function playbackFromContinue(item){
+  return playbackEngine({kind:'continue',item,name:item?.title||item?.name||'Continue watching',resumeSeconds:item?.positionSeconds||0});
+}
+
+function playbackFromFavourite(item){
+  if(item?.url) return playbackEngine({kind:'direct',url:item.url,name:item.title||item.name||'Favourite',mediaId:item.id});
+  return openHomeFavourite(item);
+}
+
+function playbackFromSearch(item){
+  return playbackEngine({kind:'unified',unified:item,name:item?.name||item?.title||'Search result'});
 }
 
 

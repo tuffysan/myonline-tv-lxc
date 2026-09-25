@@ -58,6 +58,13 @@ internal static class Program
         T.Assert(mobileJs.Contains("collectionProgressText") && mobileJs.Contains("% watched"),"collection progress");T.Pass("collection progress");
         Has(mobileJs,"openContinueActions(item.id,actions)","collection actions");
 
+        // Playback Engine 3.0 regression checks — additive to all existing release coverage.
+        foreach(var x in new[]{"Playback Engine 3.0","playbackFromContinue","playbackFromFavourite","playbackFromSearch","kind==='live'","kind==='download'","kind==='server-token'","recoverLivePlayback"})
+            Has(appJs,x,"Playback Engine 3.0: "+x);
+        T.Assert(appJs.Contains("if(!item?.__fromPlaybackEngine) return playbackFromContinue(item);"),"Playback Engine 3.0 Continue Watching routing");T.Pass("Playback Engine 3.0 Continue Watching routing");
+        T.Assert(appJs.Contains("resumeSeconds:item?.positionSeconds||0"),"Playback Engine 3.0 resume contract");T.Pass("Playback Engine 3.0 resume contract");
+        T.Assert(appJs.Contains("console.error('Playback Engine 3.0 failed'"),"Playback Engine 3.0 diagnostics");T.Pass("Playback Engine 3.0 diagnostics");
+
         // Live TV 2.0 regression checks — additive to all existing release coverage.
         foreach(var x in new[]{"Live TV 2.0","__favorites","__recent","__now","clearLiveRecents()","refreshLiveEpg()","openMiniGuide()","stepLiveChannel(-1)","stepLiveChannel(1)","liveProgramFor(c)","Record series"}) Has(appJs,x,"Live TV 2.0: "+x);
         T.Assert(appJs.Contains("LIVE_RECENTS_KEY+':'+privateScope()"),"Live TV 2.0 recent channels remain profile scoped");T.Pass("Live TV 2.0 recent channels remain profile scoped");
