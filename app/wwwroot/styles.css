@@ -2065,3 +2065,14 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
 @media (min-width:640px) and (max-width:1023px){.mtv-device-tablet.mtv-rail{gap:var(--mtv-space-md);}}
 @media (min-width:1600px){.mtv-device-tv.mtv-media-card:focus-visible{outline-width:4px;outline-offset:6px;}}
 @media (prefers-reduced-motion:reduce){.mtv-media-card{transition:none;}}
+
+
+/* v40.0.0 — MyOnlineTV Experience 2.0 */
+.mtv-player-chrome{display:flex;align-items:center;justify-content:space-between;gap:var(--mtv-space-md);}
+.mtv-profile-shell{min-width:0;}
+.mtv-device-mobile.mtv-navigation{overflow-x:auto;scrollbar-width:none;}
+.mtv-device-tablet.mtv-navigation,.mtv-device-desktop.mtv-navigation{flex-wrap:wrap;}
+.mtv-device-tv.mtv-navigation{gap:var(--mtv-space-lg);}
+.mtv-device-tv.mtv-navigation :focus-visible{outline:4px solid currentColor;outline-offset:6px;}
+@media (hover:hover){.mtv-media-card:hover{transform:translateY(-2px);}}
+@media (prefers-reduced-motion:reduce){.mtv-media-card:hover{transform:none;}}

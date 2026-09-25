@@ -61,6 +61,18 @@ internal static class Program
         T.Assert(mobileJs.Contains("collectionProgressText") && mobileJs.Contains("% watched"),"collection progress");T.Pass("collection progress");
         Has(mobileJs,"openContinueActions(item.id,actions)","collection actions");
 
+        // v40.0.0 MyOnlineTV Experience 2.0 — additive to every previous release gate.
+        foreach(var x in new[]{"MyOnlineTV Experience 2.0","MYONLINETV_EXPERIENCE_2_VERSION='40.0.0'","experience40Surface","experience40Home","experience40Library","experience40PlayerChrome","experience40ProfileShell","experience40RoutePlayback","experience40Capabilities"})
+            Has(appJs,x,"MyOnlineTV Experience 2.0: "+x);
+        T.Assert(appJs.Contains("devices:['mobile','tablet','desktop','tv']"),"v40 supports all target device classes");T.Pass("v40 supports all target device classes");
+        T.Assert(appJs.Contains("source==='continue')return playbackFromContinue(item)"),"v40 Continue Watching uses shared playback");T.Pass("v40 Continue Watching uses shared playback");
+        T.Assert(appJs.Contains("source==='favorite')return playbackFromFavourite(item)"),"v40 Favorites use shared playback");T.Pass("v40 Favorites use shared playback");
+        T.Assert(appJs.Contains("if(kind==='download')return downloads21Play(item)"),"v40 Downloads use shared playback");T.Pass("v40 Downloads use shared playback");
+        T.Assert(appJs.Contains("policy:profile3Policy(p)"),"v40 profile shell retains family policy");T.Pass("v40 profile shell retains family policy");
+        T.Assert(appJs.Contains("legacyCompatible:true"),"v40 retains migration compatibility");T.Pass("v40 retains migration compatibility");
+        foreach(var x in new[]{".mtv-player-chrome",".mtv-profile-shell",".mtv-device-tv.mtv-navigation"})
+            Has(stylesCss,x,"v40 CSS: "+x);
+
         // v39.19.0 RC3 release-version regression coverage.
         Has(versionGuardPs1,"Sort-Object -Descending","VersionGuard resolves newest published tag");
         Has(versionGuardPs1,"Version upgrade accepted: $currentVersion -> $Candidate","VersionGuard logs current and candidate versions");

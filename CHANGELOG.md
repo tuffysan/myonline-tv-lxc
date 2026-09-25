@@ -1,3 +1,14 @@
+# v40.0.0 — MyOnlineTV Experience 2.0
+
+- Activated the shared Experience Migration design contracts as the v40 presentation layer.
+- Added unified Home, Library, Player Chrome and Profile Shell view models.
+- Added consistent routing from Continue Watching, Favorites, Live TV, VOD and Downloads into shared playback.
+- Added responsive behavior for mobile, tablet, desktop and TV.
+- Retained legacy-compatible v39 routes during the v40 migration.
+- Retained Profiles & Family policy, Search & Discovery, Downloads 2.1, Performance & Reliability and updater hardening.
+- Added permanent .NET regression gates for v40 surfaces and shared playback routing.
+- Zero-Python build/test/release/deployment remains enforced.
+
 # v39.19.0 — Experience Migration
 
 - Added the compatibility-first MyOnlineTV design-system bridge ahead of v40.

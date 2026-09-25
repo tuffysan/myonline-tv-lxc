@@ -5422,3 +5422,105 @@ function experience19Capabilities(){
   };
 }
 
+
+
+// v40.0.0 — MyOnlineTV Experience 2.0
+// Activates the shared v39.19 experience contracts as the v40 presentation layer
+// while retaining legacy-compatible routes and Playback Engine 3.0.
+const MYONLINETV_EXPERIENCE_2_VERSION='40.0.0';
+
+function experience40Surface(name,{title='',hero=null,items=[],navigation=[],activeNav='',variant='poster'}={}){
+  const device=experience19Device();
+  return {
+    version:MYONLINETV_EXPERIENCE_2_VERSION,
+    surface:String(name||'home'),
+    device,
+    title:String(title||''),
+    navigation:experience19Navigation(navigation,activeNav,{device}),
+    hero:hero?experience19Hero(hero,{device}):null,
+    rail:experience19Rail(title,items,{variant,device}),
+    capabilities:experience19Capabilities()
+  };
+}
+
+function experience40Home({hero=null,continueWatching=[],favorites=[],liveNow=[],navigation=[],activeNav='home'}={}){
+  const device=experience19Device();
+  return {
+    version:MYONLINETV_EXPERIENCE_2_VERSION,
+    surface:'home',
+    device,
+    navigation:experience19Navigation(navigation,activeNav,{device}),
+    hero:hero?experience19Hero(hero,{device}):null,
+    rails:[
+      experience19Rail('Continue Watching',continueWatching,{device}),
+      experience19Rail('Favorites',favorites,{device}),
+      experience19Rail('Live Now',liveNow,{variant:'landscape',device})
+    ]
+  };
+}
+
+function experience40Library({title='Library',items=[],kind='all',query='',navigation=[],activeNav='library'}={}){
+  const device=experience19Device();
+  const normalized=discovery2Index({
+    live:kind==='live'||kind==='all'?items.filter(x=>String(x?.kind||x?.type||'').toLowerCase()==='live'):[],
+    movies:kind==='movie'||kind==='all'?items.filter(x=>String(x?.kind||x?.type||'').toLowerCase()==='movie'):[],
+    series:kind==='series'||kind==='all'?items.filter(x=>String(x?.kind||x?.type||'').toLowerCase()==='series'):[],
+    episodes:kind==='episode'||kind==='all'?items.filter(x=>String(x?.kind||x?.type||'').toLowerCase()==='episode'):[]
+  });
+  const results=discovery2Search(normalized,query);
+  return {
+    version:MYONLINETV_EXPERIENCE_2_VERSION,
+    surface:'library',
+    device,
+    title,
+    navigation:experience19Navigation(navigation,activeNav,{device}),
+    sections:discovery2Sections(results).map(s=>experience19Rail(s.kind,s.items,{device}))
+  };
+}
+
+function experience40PlayerChrome({title='',subtitle='',live=false,canRestart=true,canFavorite=true}={}){
+  return {
+    component:'PlayerChrome',
+    className:experience19Class('player-chrome',live?'live':'vod'),
+    title:String(title),
+    subtitle:String(subtitle),
+    actions:{
+      restart:!!canRestart,
+      favorite:!!canFavorite,
+      diagnostics:true
+    }
+  };
+}
+
+function experience40ProfileShell(profile){
+  const p=profile3Normalize(profile);
+  return {
+    component:'ProfileShell',
+    className:experience19Class('profile-shell',p.isKids?'kids':'standard'),
+    profile:p,
+    policy:profile3Policy(p),
+    areas:profile3Areas()
+  };
+}
+
+function experience40RoutePlayback(item,source='library'){
+  const kind=String(item?.kind||item?.type||'').toLowerCase();
+  if(source==='continue')return playbackFromContinue(item);
+  if(source==='favorite')return playbackFromFavourite(item);
+  if(kind==='live')return playbackEngine({kind:'live',live:item,name:item?.title||item?.name||'Live TV'});
+  if(kind==='movie'||kind==='series'||kind==='episode')return vod3Play(item);
+  if(kind==='download')return downloads21Play(item);
+  return playbackEngine({kind:'unified',unified:item,name:item?.title||item?.name||'Media'});
+}
+
+function experience40Capabilities(){
+  return {
+    version:MYONLINETV_EXPERIENCE_2_VERSION,
+    designSystem:'Experience Migration v39.19',
+    playback:'Playback Engine 3.0',
+    devices:['mobile','tablet','desktop','tv'],
+    surfaces:['home','live-tv','movies','series','search','downloads','profiles','settings'],
+    legacyCompatible:true
+  };
+}
+
