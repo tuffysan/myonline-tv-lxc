@@ -59,6 +59,15 @@ internal static class Program
         T.Assert(mobileJs.Contains("collectionProgressText") && mobileJs.Contains("% watched"),"collection progress");T.Pass("collection progress");
         Has(mobileJs,"openContinueActions(item.id,actions)","collection actions");
 
+        // Profiles & Family 3.0 regression checks — additive to all previous coverage.
+        foreach(var x in new[]{"Profiles & Family 3.0","PROFILES_FAMILY_3_VERSION='39.16.0'","profile3Normalize","profile3ScopeKey","profile3Policy","profile3CanShow","profile3Filter","profile3LocalGet","profile3LocalSet","profile3ClearLocal","profile3MigrateDiscoveryHistory","profile3Areas"})
+            Has(appJs,x,"Profiles & Family 3.0: "+x);
+        T.Assert(appJs.Contains("allowAdult:!p.isKids && p.adultEnabled"),"Kids profiles cannot enable Adult content");T.Pass("Kids profiles cannot enable Adult content");
+        T.Assert(appJs.Contains("if(adult && !policy.allowAdult)return false;"),"Adult content obeys profile policy");T.Pass("Adult content obeys profile policy");
+        T.Assert(appJs.Contains("myonlinetv.profile.${String(profileId||'default')}."),"Profile-local state keys are profile scoped");T.Pass("Profile-local state keys are profile scoped");
+        foreach(var area in new[]{"favorites","continue-watching","history","search-history","downloads","recent-channels"})
+            Has(appJs,$"'{area}'","Profiles & Family area: "+area);
+
         // Search & Discovery 2.0 regression checks — additive to all previous coverage.
         foreach(var x in new[]{"Search & Discovery 2.0","SEARCH_DISCOVERY_2_VERSION='39.15.0'","discovery2Normalize","discovery2Index","discovery2Search","discovery2Sections","discovery2RecentStoreKey","discovery2RecentGet","discovery2RecentAdd","discovery2RecentClear","discovery2Suggestions","discovery2Play"})
             Has(appJs,x,"Search & Discovery 2.0: "+x);

@@ -1,3 +1,15 @@
+# v39.16.0 — Profiles & Family 3.0
+
+- Added normalized profile and family-policy helpers.
+- Added profile-scoped local state keys.
+- Added Kids-mode and Adult-content visibility policy.
+- Added optional PIN-policy metadata support.
+- Defined isolated profile areas for Favorites, Continue Watching, history, search history, downloads and recent channels.
+- Added migration helper for Search & Discovery 2.0 recent searches.
+- Existing server-side authorization and multi-user isolation remain authoritative.
+- Retained every previous regression/security test and added new .NET Profiles & Family 3.0 gates.
+- Zero-Python build/test/release/deployment remains enforced.
+
 # v39.15.0 — Search & Discovery 2.0
 
 - Added a unified discovery index for Live TV, Movies, Series and Episodes.

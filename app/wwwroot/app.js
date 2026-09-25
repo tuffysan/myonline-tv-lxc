@@ -5055,3 +5055,81 @@ async function discovery2Play(item){
   return playbackEngine({kind:'unified',unified:item,name:item?.title||item?.name||'Media'});
 }
 
+
+
+// v39.16.0 — Profiles & Family 3.0
+// Client-side profile policy helpers. Server-side authorization and existing
+// multi-user isolation remain authoritative for access to user data.
+const PROFILES_FAMILY_3_VERSION='39.16.0';
+
+function profile3Normalize(profile){
+  return {
+    id:String(profile?.id||profile?.profileId||'default'),
+    name:String(profile?.name||'Profile'),
+    avatar:String(profile?.avatar||''),
+    isKids:!!profile?.isKids,
+    adultEnabled:!!profile?.adultEnabled,
+    pinProtected:!!profile?.pinProtected
+  };
+}
+
+function profile3ScopeKey(profileId,area){
+  return `myonlinetv.profile.${String(profileId||'default')}.${String(area||'state')}`;
+}
+
+function profile3Policy(profile){
+  const p=profile3Normalize(profile);
+  return {
+    profileId:p.id,
+    allowAdult:!p.isKids && p.adultEnabled,
+    requirePin:p.pinProtected,
+    kidsMode:p.isKids
+  };
+}
+
+function profile3CanShow(item,profile){
+  const policy=profile3Policy(profile);
+  const adult=!!(item?.adult||item?.isAdult||String(item?.group||item?.category||'').toLowerCase().includes('adult'));
+  if(adult && !policy.allowAdult)return false;
+  if(policy.kidsMode && item?.kidsAllowed===false)return false;
+  return true;
+}
+
+function profile3Filter(items,profile){
+  return (items||[]).filter(x=>profile3CanShow(x,profile));
+}
+
+function profile3LocalGet(profileId,area,fallback=[]){
+  try{
+    const raw=localStorage.getItem(profile3ScopeKey(profileId,area));
+    return raw===null?fallback:JSON.parse(raw);
+  }catch{return fallback;}
+}
+
+function profile3LocalSet(profileId,area,value){
+  localStorage.setItem(profile3ScopeKey(profileId,area),JSON.stringify(value));
+  return value;
+}
+
+function profile3ClearLocal(profileId){
+  const prefix=`myonlinetv.profile.${String(profileId||'default')}.`;
+  const keys=[];
+  for(let i=0;i<localStorage.length;i++){
+    const key=localStorage.key(i);
+    if(key?.startsWith(prefix))keys.push(key);
+  }
+  for(const key of keys)localStorage.removeItem(key);
+  return keys.length;
+}
+
+function profile3MigrateDiscoveryHistory(profileId){
+  const oldKey=discovery2RecentStoreKey(profileId);
+  const values=discovery2RecentGet(profileId);
+  profile3LocalSet(profileId,'search-history',values);
+  return {source:oldKey,count:values.length};
+}
+
+function profile3Areas(){
+  return ['favorites','continue-watching','history','search-history','downloads','recent-channels'];
+}
+
