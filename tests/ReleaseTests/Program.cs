@@ -59,6 +59,15 @@ internal static class Program
         T.Assert(mobileJs.Contains("collectionProgressText") && mobileJs.Contains("% watched"),"collection progress");T.Pass("collection progress");
         Has(mobileJs,"openContinueActions(item.id,actions)","collection actions");
 
+        // Downloads 2.1 regression checks — additive to all previous coverage.
+        foreach(var x in new[]{"Downloads 2.1","DOWNLOADS_21_VERSION='39.17.0'","downloads21Normalize","downloads21Queue","downloads21CanRetry","downloads21RetryDelay","downloads21Storage","downloads21OfflineLibrary","downloads21SeriesGroups","downloads21CleanupCandidates","downloads21ProfileFilter","downloads21Play"})
+            Has(appJs,x,"Downloads 2.1: "+x);
+        T.Assert(appJs.Contains("return d.status==='failed' && d.retries<"),"Downloads 2.1 bounded retry policy");T.Pass("Downloads 2.1 bounded retry policy");
+        T.Assert(appJs.Contains("Math.min(30000,1000*Math.pow(2,n))"),"Downloads 2.1 retry backoff");T.Pass("Downloads 2.1 retry backoff");
+        T.Assert(appJs.Contains("String(x?.profileId||'default')===pid"),"Downloads 2.1 profile isolation filter");T.Pass("Downloads 2.1 profile isolation filter");
+        T.Assert(appJs.Contains("if(d.status!=='completed')throw new Error('Download is not available offline')"),"Downloads 2.1 offline playback guard");T.Pass("Downloads 2.1 offline playback guard");
+        T.Assert(appJs.Contains("playbackEngine({kind:'download'"),"Downloads 2.1 uses Playback Engine 3.0");T.Pass("Downloads 2.1 uses Playback Engine 3.0");
+
         // Profiles & Family 3.0 regression checks — additive to all previous coverage.
         foreach(var x in new[]{"Profiles & Family 3.0","PROFILES_FAMILY_3_VERSION='39.16.0'","profile3Normalize","profile3ScopeKey","profile3Policy","profile3CanShow","profile3Filter","profile3LocalGet","profile3LocalSet","profile3ClearLocal","profile3MigrateDiscoveryHistory","profile3Areas"})
             Has(appJs,x,"Profiles & Family 3.0: "+x);

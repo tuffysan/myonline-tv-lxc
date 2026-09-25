@@ -5133,3 +5133,92 @@ function profile3Areas(){
   return ['favorites','continue-watching','history','search-history','downloads','recent-channels'];
 }
 
+
+
+// v39.17.0 — Downloads 2.1
+// Offline-library and storage-management helpers. Existing download APIs remain
+// authoritative; these helpers normalize queue/history/recovery presentation.
+const DOWNLOADS_21_VERSION='39.17.0';
+
+function downloads21Normalize(item){
+  const total=Math.max(0,Number(item?.totalBytes)||0);
+  const done=Math.max(0,Number(item?.downloadedBytes)||0);
+  return {
+    ...item,
+    id:String(item?.id||item?.downloadId||''),
+    title:String(item?.title||item?.name||'Download'),
+    status:String(item?.status||'queued').toLowerCase(),
+    totalBytes:total,
+    downloadedBytes:done,
+    percent:total>0?Math.min(100,Math.round(done*100/total)):0,
+    retries:Math.max(0,Number(item?.retries)||0),
+    mediaKind:String(item?.mediaKind||item?.kind||item?.type||'media').toLowerCase(),
+    seriesId:String(item?.seriesId||''),
+    seasonNumber:Number(item?.seasonNumber||item?.season||0),
+    episodeNumber:Number(item?.episodeNumber||item?.episode||0)
+  };
+}
+
+function downloads21Queue(items){
+  const rank={downloading:0,queued:1,retrying:2,paused:3,failed:4,completed:5,cancelled:6};
+  return (items||[]).map(downloads21Normalize)
+    .sort((a,b)=>(rank[a.status]??99)-(rank[b.status]??99));
+}
+
+function downloads21CanRetry(item,maxRetries=3){
+  const d=downloads21Normalize(item);
+  return d.status==='failed' && d.retries<Math.max(0,Number(maxRetries)||3);
+}
+
+function downloads21RetryDelay(retries){
+  const n=Math.max(0,Number(retries)||0);
+  return Math.min(30000,1000*Math.pow(2,n));
+}
+
+function downloads21Storage(items,capacityBytes=0){
+  const list=(items||[]).map(downloads21Normalize);
+  const used=list.filter(x=>x.status==='completed').reduce((n,x)=>n+x.totalBytes,0);
+  const partial=list.filter(x=>x.status!=='completed'&&x.status!=='cancelled').reduce((n,x)=>n+x.downloadedBytes,0);
+  const capacity=Math.max(0,Number(capacityBytes)||0);
+  return {usedBytes:used,partialBytes:partial,capacityBytes:capacity,freeBytes:capacity?Math.max(0,capacity-used-partial):0};
+}
+
+function downloads21OfflineLibrary(items){
+  return (items||[]).map(downloads21Normalize)
+    .filter(x=>x.status==='completed')
+    .sort((a,b)=>String(a.title).localeCompare(String(b.title),undefined,{sensitivity:'base'}));
+}
+
+function downloads21SeriesGroups(items){
+  const map=new Map();
+  for(const d of downloads21OfflineLibrary(items).filter(x=>x.mediaKind==='episode'||x.seriesId)){
+    const key=d.seriesId||d.title;
+    if(!map.has(key))map.set(key,[]);
+    map.get(key).push(d);
+  }
+  return [...map.entries()].map(([seriesId,episodes])=>({
+    seriesId,
+    episodes:episodes.sort((a,b)=>(a.seasonNumber-b.seasonNumber)||(a.episodeNumber-b.episodeNumber))
+  }));
+}
+
+function downloads21CleanupCandidates(items,{keepCompleted=50,failedOlderThanMs=7*24*60*60*1000,now=Date.now()}={}){
+  const list=(items||[]).map(downloads21Normalize);
+  const completed=list.filter(x=>x.status==='completed')
+    .sort((a,b)=>String(b.completedAt||b.updated||'').localeCompare(String(a.completedAt||a.updated||'')));
+  const removeCompleted=completed.slice(Math.max(0,Number(keepCompleted)||50));
+  const staleFailed=list.filter(x=>x.status==='failed' && (now-Date.parse(x.updated||x.failedAt||0))>failedOlderThanMs);
+  return [...new Map([...removeCompleted,...staleFailed].map(x=>[x.id,x])).values()];
+}
+
+function downloads21ProfileFilter(items,profileId){
+  const pid=String(profileId||'default');
+  return (items||[]).filter(x=>String(x?.profileId||'default')===pid);
+}
+
+async function downloads21Play(item){
+  const d=downloads21Normalize(item);
+  if(d.status!=='completed')throw new Error('Download is not available offline');
+  return playbackEngine({kind:'download',url:d.url||d.localUrl,name:d.title,mediaId:d.id});
+}
+

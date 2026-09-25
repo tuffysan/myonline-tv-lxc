@@ -1,3 +1,16 @@
+# v39.17.0 — Downloads 2.1
+
+- Added normalized queue/progress state for downloads.
+- Added bounded retry eligibility and exponential retry backoff.
+- Added storage usage/free-space calculations.
+- Added completed-download offline library.
+- Added series/episode grouping for downloaded episodes.
+- Added cleanup-candidate selection for old completed and stale failed downloads.
+- Added profile filtering for download presentation.
+- Routed offline playback through Playback Engine 3.0.
+- Retained all previous regression/security gates and added Downloads 2.1 .NET gates.
+- Zero-Python build/test/release/deployment remains enforced.
+
 # v39.16.0 — Profiles & Family 3.0
 
 - Added normalized profile and family-policy helpers.
