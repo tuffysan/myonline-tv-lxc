@@ -1,3 +1,9 @@
+# v39.9.2 - Playback Routing Fix
+
+- Fix Continue Watching playback on Home when the layout has no pre-rendered media player host.
+- Start movie favourites directly from Home/My List.
+- Strengthen playback release regression gate.
+
 ## v39.9.1 - Playback Regression & Release Gate
 - Fixed playback launch from IPTV movie favourites across desktop, mobile, tablet and TV home surfaces.
 - Added Continue Watching compatibility resolver for older profile-scoped entries.

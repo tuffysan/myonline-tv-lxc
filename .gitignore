@@ -1,19 +1,30 @@
-# Build output
-app/bin/
-app/obj/
-tests/**/bin/
-tests/**/obj/
-tests/**/node_modules/
-dist/
+# .NET build output
+**/bin/
+**/obj/
+
+# Node dependencies / test output
+**/node_modules/
+**/playwright-report/
+**/test-results/
+
+# Python cache
+**/__pycache__/
+*.pyc
+
+# Local release/build artifacts
+*.zip
+*.tar.gz
+*.tgz
+*.tmp
 *.log
 
-# Local/runtime state
-data/
-.env
-*.local
-
-# OS/editor
-.DS_Store
-Thumbs.db
+# IDE / OS
+.vs/
 .vscode/
 .idea/
+.DS_Store
+Thumbs.db
+
+# Temporary recovery/patch files
+.restore-*
+*.patch

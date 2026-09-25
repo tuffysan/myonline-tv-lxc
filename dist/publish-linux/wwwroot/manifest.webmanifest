@@ -1,0 +1,38 @@
+{
+  "name": "MyOnline TV",
+  "short_name": "MyOnline TV",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#07131d",
+  "theme_color": "#0b1a26",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Live TV",
+      "short_name": "Live",
+      "url": "/?view=live"
+    },
+    {
+      "name": "Guide",
+      "short_name": "Guide",
+      "url": "/?view=guide"
+    },
+    {
+      "name": "DVR",
+      "short_name": "DVR",
+      "url": "/?view=recordings"
+    }
+  ],
+  "display_override": [
+    "window-controls-overlay",
+    "standalone"
+  ]
+}

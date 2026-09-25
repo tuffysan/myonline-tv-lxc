@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>MyOnline TV</title>
+<meta name="theme-color" content="#0b1622">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="apple-touch-icon" href="/app-icon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="mobile.css">
+<link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0b1a26"><link rel="icon" href="/icon.svg">
+</head>
+<body>
+<div id="auth" class="auth hidden"></div>
+<div id="app" class="hidden">
+  <aside>
+    <div class="brand brand3624">
+      <div class="brand3624Row">
+        <h1>MyOnlineTV</h1>
+        <img class="brandIcon brand3624Icon" src="/app-icon.svg" alt="MyOnlineTV logo">
+      </div>
+    </div>
+    <nav>
+      <button data-view="home">⌂ Home</button>
+      <button data-view="live">▣ Live TV</button>
+      <button data-view="guide">▤ Guide</button>
+      <button data-view="movies">▶ Movies</button>
+      <button data-view="series">▦ Series</button>
+      <button data-view="plex" class="hidden media-library-nav">◆ Plex</button>
+      <button data-view="jellyfin" class="hidden media-library-nav">◇ Jellyfin</button>
+      <button data-view="downloads">↓ Downloads</button>
+      <button data-view="recordings">● Recordings</button>
+        <button data-view="notifications" class="navbtn">● Alerts</button>
+        <button data-view="rooms" class="navbtn">▣ Rooms</button>
+        <button data-view="library" class="navbtn">▦ Library</button>
+        <button data-view="search">⌕ Search</button>
+      <button data-view="sources">⚙ My Sources</button>
+      <button data-view="platform" data-admin-only>◆ System overview</button>
+      <button data-view="diagnostics" data-admin-only>✓ Diagnostics</button>
+      <button data-view="appliance" data-admin-only>⚙ Appliance</button>
+      <button data-view="system" data-admin-only>◉ System</button>
+      <button data-view="completion" data-admin-only>✓ Feature Completion</button>
+      <button data-view="admin" data-admin-only>🛡 Admin</button>
+    </nav>
+    <button id="logout" class="logout">Sign out</button>
+  </aside>
+  <main>
+    <header>
+      <div class="mobile364HeaderBrand"><b>MyOnlineTV</b><img src="/app-icon.svg" alt=""></div><div class="desktop363HeaderTitle"><b id="title">Home</b><span id="status"></span></div>
+      <label class="desktop363HeaderSearch" aria-label="Search"><span>⌕</span><input id="desktop363GlobalSearch" placeholder="Search movies, series, channels and programmes…"></label>
+      <div class="headerActions"><button id="updateIndicator" class="updateIndicator hidden" data-admin-only type="button" onclick="show('update')">↑ Update available</button><div id="userBadge"></div><div class="desktop363HeaderDivider" aria-hidden="true"></div><div class="desktop363DateTime"><span id="desktop363Date"></span><b id="desktop363Time"></b></div></div>
+    </header>
+    <section id="content"></section>
+  </main>
+  <nav id="mobileBottomNav" class="mobileBottomNav" aria-label="Mobile navigation"></nav>
+  <div id="mobileMoreSheet" class="mobileMoreSheet hidden" aria-hidden="true"></div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
+<script src="app.js"></script>
+<script src="continue-watching.js"></script>
+<script src="mobile.js"></script>
+</body>
+</html>

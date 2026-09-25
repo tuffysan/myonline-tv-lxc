@@ -158,9 +158,15 @@ async function openHomeFavourite(item){
   // a series favourite does not identify a specific episode.
   if(item.type==='series'){await show('series');await openSeries(item.id);return true;}
   if(item.type==='movie'){
-    await show('movies');
-    await playMovie(item.id,item.name||item.title||'Movie');
-    return true;
+    // Start directly from Home/My List. Navigating to Movies first destroys
+    // the Home surface and made favourites appear to do nothing on some
+    // layouts. playServerMedia now guarantees that a player host exists.
+    try{
+      const t=await api(`/api/vod/${currentProvider}/${encodeURIComponent(item.id)}/token`,{method:'POST'});
+      rememberMediaHistory('movie',{...item,providerId:currentProvider});
+      await playServerMedia(t.playToken,item.name||item.title||'Movie',`iptv-movie:${currentProvider}:${item.id}`,false,item.poster||'');
+      return true;
+    }catch(e){alert(friendlyError(e));return false;}
   }
   return false;
 }

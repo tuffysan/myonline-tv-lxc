@@ -1184,11 +1184,24 @@ function installMediaDurationDisplay(video,totalSeconds){
   refresh();
 }
 
+function ensureMediaPlayerHost(){
+  let wrap=$('#playerWrap')||$('#mediaPlayer');
+  if(wrap)return wrap;
+  // Home surfaces (notably the desktop v36+ layout) historically rendered
+  // Continue Watching/Favourites without a player host. A click then resolved
+  // a valid token but playServerMedia returned silently. Always provide a
+  // profile-local playback surface before starting media.
+  wrap=document.createElement('div');
+  wrap.id='mediaPlayer';
+  wrap.className='dynamicMediaPlayer';
+  content.appendChild(wrap);
+  return wrap;
+}
+
 async function playServerMedia(token,name,mediaId=null,forceTranscode=false,poster=''){
   if(!forceTranscode)mediaFallbackTried=false;
   destroyPlayer();
-  const wrap=$('#playerWrap')||$('#mediaPlayer');
-  if(!wrap)return;
+  const wrap=ensureMediaPlayerHost();
   wrap.innerHTML=`<div class=playerCard><video id=video controls autoplay playsinline></video><div class=mediaTimeBar><span id=mediaCurrentTime>00:00</span><span>/</span><span id=mediaTotalTime>--:--</span></div><div id=mediaPlaybackStatus class=livePlaybackStatus>Preparing video…</div><div class=nowPlaying>${esc(name)}</div></div>`;
   wrap.scrollIntoView({behavior:'smooth',block:'start'});
 
@@ -1301,8 +1314,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
 
 function playMedia(url,name,mediaId=null){
   destroyPlayer();
-  const wrap=$('#playerWrap')||$('#mediaPlayer');
-  if(!wrap)return;
+  const wrap=ensureMediaPlayerHost();
   wrap.innerHTML=`<div class=playerCard><video id=video controls autoplay playsinline></video><div class=mediaTimeBar><span id=mediaCurrentTime>00:00</span><span>/</span><span id=mediaTotalTime>--:--</span></div><div class=nowPlaying>${esc(name)}</div></div>`;
   const video=$('#video');
   installMediaDurationDisplay(video,0);
@@ -3261,7 +3273,7 @@ async function resumeContinueItem(item){
 
   if(item?.url)return playMedia(item.url,item.title,item.id);
 
-  // v39.9.1 compatibility resolver: older Continue Watching rows can lack a
+  // v39.9.2 compatibility resolver: older Continue Watching rows can lack a
   // playable URL/stable id. Rehydrate them from the profile-scoped history or
   // favourites before giving up. This keeps the lookup inside the current
   // user's privateScope.

@@ -1,6 +1,6 @@
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot/../scripts/Release-VersionGuard.ps1"
-Assert-ReleaseVersion '39.9.1' @('v39.9.0','v39.8.5','v39.8.4','v37.1.0')
+Assert-ReleaseVersion '39.9.2' @('v39.9.1','v39.9.0','v39.8.5','v39.8.4','v37.1.0')
 Assert-ReleaseVersion '39.8.6' @('v39.8.5','v37.1.0')
 Assert-ReleaseVersion '40.0.0' @('v39.8.5')
 $bad=@(
