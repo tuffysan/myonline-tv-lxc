@@ -1,3 +1,15 @@
+## v39.11.0 — IPTV Manager 2.0
+
+- Dedicated IPTV Manager 2.0 overview with provider health, catalogue statistics and sync status.
+- Live TV group and channel search/filtering with safe bulk activate/deactivate actions.
+- Explicit Adult (18+) controls remain protected from normal bulk activation.
+- Provider reload preview, full reload, automatic sync settings and sync diagnostics/history.
+- Movies and Series category/title visibility management for Xtream providers.
+- Smart filters plus export/import of provider visibility configuration.
+- Existing multi-user provider ownership/isolation is preserved.
+- Added permanent .NET regression coverage for IPTV Manager 2.0 while retaining all existing release tests.
+- Distribution chain remains Python-free.
+
 ## v39.10.0 — Continue Watching 2.0
 - Expanded Continue Watching controls, collection search/sort/progress, regression coverage, and hardened Python release environment.
 

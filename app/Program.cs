@@ -301,9 +301,20 @@ T? Load<T>(string path)
 }
 void Save<T>(string path, T value)
 {
-    var tmp = path + ".tmp";
-    File.WriteAllText(tmp, JsonSerializer.Serialize(value, jsonOptions));
-    File.Move(tmp, path, true);
+    // Use a per-write temporary file. A shared <file>.tmp name can collide when
+    // independent requests persist state at the same time.
+    var directory = Path.GetDirectoryName(path);
+    if (!string.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
+    var tmp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+    try
+    {
+        File.WriteAllText(tmp, JsonSerializer.Serialize(value, jsonOptions));
+        File.Move(tmp, path, true);
+    }
+    finally
+    {
+        try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+    }
 }
 void PersistDownloads() { try { Save(downloadsStateFile, downloads.Values.OrderByDescending(x => x.Created).ToList()); } catch { } }
 void PutDownload(DownloadJob job) { downloads[job.Id] = job; PersistDownloads(); }
@@ -3089,7 +3100,7 @@ app.MapPost("/api/continue", (ContinueItem item, HttpContext ctx) =>
     {
     var list = LoadContinue(ctx);
     list.RemoveAll(x => x.Id == item.Id);
-    list.Insert(0, item with { Updated = DateTimeOffset.UtcNow });
+    list.Insert(0, item with { Url = item.Url ?? "", Updated = DateTimeOffset.UtcNow });
     Save(ProfileFile(ctx,"continue"), list.Take(100).ToList());
     return Results.Ok();
     }
@@ -5435,7 +5446,7 @@ record Channel(string Id, string Name, string Group, string Logo, string Url, st
 record ProviderProbe(bool Ok, int? StatusCode, string Message, string ContentType, long LatencyMs, string Host);
 record LiveChannel(string Key, string Id, string Name, string Group, string Number, string LogoUrl, string SourceUrl);
 record ChannelCacheEntry(List<LiveChannel> Channels, DateTimeOffset Loaded);
-record ContinueItem(string Id, string Title, string Url, double PositionSeconds, DateTimeOffset Updated, string? Poster = null, double? DurationSeconds = null);
+record ContinueItem(string Id, string Title, string Url = "", double PositionSeconds = 0, DateTimeOffset Updated = default, string? Poster = null, double? DurationSeconds = null);
 record ContinuePosterUpdate(string? Poster);
 record ChannelPreferences(HashSet<string> HiddenGroups, HashSet<string> HiddenChannels, Dictionary<string,string> Aliases);
 sealed class CataloguePreferences

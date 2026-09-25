@@ -58,6 +58,11 @@ internal static class Program
         T.Assert(mobileJs.Contains("collectionProgressText") && mobileJs.Contains("% watched"),"collection progress");T.Pass("collection progress");
         Has(mobileJs,"openContinueActions(item.id,actions)","collection actions");
 
+        // IPTV Manager 2.0 regression checks — keep all previous gates and add coverage for the new manager.
+        foreach(var x in new[]{"IPTV MANAGER 2.0","Search groups…","Active only","Inactive only","Adult (18+)","Search channels…","Activate selected","Deactivate selected","Preview changes","Reload Live TV","Sync diagnostics","Smart Filters","iptvExportFilters()","iptvImportFilters()"}) Has(appJs,x,"IPTV Manager 2.0: "+x);
+        foreach(var x in new[]{"/api/providers/{providerId}/refresh-live-preview","/api/providers/{providerId}/refresh-live","/api/providers/{providerId}/sync-diagnostics","/api/providers/{providerId}/refresh-settings","/api/library-management/{providerId}"}) Has(programCs,x,"IPTV Manager 2.0 API: "+x);
+        T.Assert(appJs.Contains("Adult group(s) stay inactive") || appJs.Contains("Adult (18+) groups are protected"),"IPTV Manager 2.0 Adult bulk protection");T.Pass("IPTV Manager 2.0 Adult bulk protection");
+
         await ContinueApiBlackBox(root);
         await SecurityIsolationBlackBox(root);
         Console.WriteLine("All .NET release regression tests passed.");
@@ -70,7 +75,9 @@ internal static class Program
         using var req=new HttpRequestMessage(method,"http://127.0.0.1:5080"+route); req.Headers.Add("X-MyOnline-Profile",profile);
         if(body!=null) req.Content=JsonContent.Create(body);
         using var res=await c.SendAsync(req); var raw=await res.Content.ReadAsByteArrayAsync();
-        T.Assert(res.StatusCode==expected,$"{method} {route}: {(int)res.StatusCode}, expected {(int)expected}: {Encoding.UTF8.GetString(raw).Take(300)}");
+        var responseText = Encoding.UTF8.GetString(raw);
+        if (responseText.Length > 300) responseText = responseText[..300];
+        T.Assert(res.StatusCode==expected,$"{method} {route}: {(int)res.StatusCode}, expected {(int)expected}: {responseText}");
         if(raw.Length==0)return default; return JsonDocument.Parse(raw).RootElement.Clone();
     }
 

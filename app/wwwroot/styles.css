@@ -2043,3 +2043,5 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
 
 /* v39.8.2 */
 .lmGroupCard[data-adult="true"] .adultGroupBadge{font-weight:900}
+/* v39.11.0 IPTV Manager 2.0 */
+.iptvManagerSync{margin-top:16px}.iptvManagerSync .sectionHead{align-items:center}.iptvManagerSync .lmSyncDiag small{display:block;margin-top:4px}.iptvManagerSync .manageList{margin-top:10px}
