@@ -1,3 +1,9 @@
+## v40.2.0 — Home Experience 3.1
+- Reduced Home hero height and typography on desktop.
+- Restored Continue Watching as the first content rail.
+- Added Continue Watching empty state.
+- Removed redundant large shortcut tiles from Home.
+
 # v40.1.2 — Frontend Syntax Fix
 
 - Fixes invalid quoting in Home Experience 3.0 rail action markup that caused GitHub Actions `node --check app/wwwroot/app.js` to fail.

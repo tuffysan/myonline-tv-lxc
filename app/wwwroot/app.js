@@ -5426,8 +5426,8 @@ function experience19Capabilities(){
 
 
 
-// v40.1.0 — Home Experience 3.0
-const HOME_EXPERIENCE_3_VERSION='40.1.0';
+// v40.2.0 — Home Experience 3.1
+const HOME_EXPERIENCE_3_VERSION='40.2.0';
 function homeExperience3Hero(movies=[],series=[],cont=[]){
  const x=cont.find(v=>v?.title),f=[...movies,...series].find(v=>v&&(v.backdrop||v.poster));
  if(x)return {title:x.title,eyebrow:'CONTINUE WATCHING',subtitle:x.durationSeconds?`${formatMediaTime(x.positionSeconds||0)} of ${formatMediaTime(x.durationSeconds)}`:'Pick up where you left off',image:x.backdrop||x.poster||'',action:`resumeContinueItem(${JSON.stringify(x)})`,label:'▶ Continue'};
@@ -5447,13 +5447,12 @@ function homeExperience3Rail(title,items,kind='media',more=''){
  return `<section class=hx3Section><div class=hx3SectionHead><h2>${esc(title)}</h2>${more}</div><div class=hx3Rail>${items.map(x=>homeExperience3Card(x,kind)).join('')}</div></section>`;
 }
 function renderHomeExperience3({unifiedMovies=[],unifiedSeries=[],continueItems=[],homeHistory=[],homeLiveNow=[]}){
- const hero=homeExperience3Hero(unifiedMovies,unifiedSeries,continueItems), favs=getMediaFavs().slice(0,16);
+ const hero=homeExperience3Hero(unifiedMovies,unifiedSeries,[]), favs=getMediaFavs().slice(0,16);
  const recent=[...unifiedMovies,...unifiedSeries].filter(x=>x.addedAt).sort((a,b)=>new Date(b.addedAt)-new Date(a.addedAt)).slice(0,18);
  const live=homeLiveNow.slice(0,14).map(x=>({...x.channel,channel:x.channel,program:x.program,subtitle:x.program?.title||''}));
  content.innerHTML=`<main class="homeExperience3 mtv-device-${experience19Device()}" data-home-version="${HOME_EXPERIENCE_3_VERSION}">
  <section class=hx3Hero${hero.image?` style="--hx3-hero-image:url('${escAttr(hero.image)}')"`:''}><div class=hx3HeroShade></div><div class=hx3HeroContent><span class=hx3Eyebrow>${esc(hero.eyebrow)}</span><h1>${esc(hero.title)}</h1><p>${esc(hero.subtitle)}</p><div class=hx3HeroActions><button class="btn primaryBtn" onclick='${hero.action}'>${esc(hero.label)}</button><button class=btn onclick="show('guide')">▤ Guide</button></div><div class=hx3Search><input id=homeSearch aria-label="Search MyOnlineTV" placeholder="Search movies, series, channels…"><button class=btn id=homeSearchButton>Search</button></div></div></section>
- <nav class=hx3Quick aria-label="Home shortcuts"><button onclick="show('live')">▣ <span>Live TV</span></button><button onclick="show('guide')">▤ <span>Guide</span></button><button onclick="show('movies')">▶ <span>Movies</span></button><button onclick="show('series')">▦ <span>Series</span></button><button onclick="show('downloads')">↓ <span>Downloads</span></button></nav>
- ${homeExperience3Rail('Continue Watching',continueItems.slice(0,16),'continue','<button class=linkButton onclick="clearContinueWatching()">Clear all</button>')}
+ ${continueItems?.length?homeExperience3Rail('Continue Watching',continueItems.slice(0,16),'continue','<button class=linkButton onclick="clearContinueWatching()">Clear all</button>'):'<section class="hx3Section hx3ContinueEmpty"><div class=hx3SectionHead><h2>Continue Watching</h2></div><p>Start a movie or episode and it will appear here.</p></section>'}
  ${homeExperience3Rail('Live Now',live,'live',`<button class=linkButton onclick="show('guide')">Open Guide</button>`)}
  ${homeExperience3Rail('Favorites',favs,'favorite')}
  ${homeExperience3Rail('Recently Added',recent)}

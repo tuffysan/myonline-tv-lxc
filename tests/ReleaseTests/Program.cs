@@ -62,7 +62,7 @@ internal static class Program
         Has(mobileJs,"openContinueActions(item.id,actions)","collection actions");
 
         // v40.1.0 Home Experience 3.0.
-        foreach(var x in new[]{"HOME_EXPERIENCE_3_VERSION='40.1.0'","renderHomeExperience3","homeExperience3Hero","homeExperience3Rail","homeExperience3Card","homeExperience3Capabilities"}) Has(appJs,x,"Home Experience 3.0: "+x);
+        foreach(var x in new[]{"HOME_EXPERIENCE_3_VERSION='40.2.0'","renderHomeExperience3","homeExperience3Hero","homeExperience3Rail","homeExperience3Card","homeExperience3Capabilities"}) Has(appJs,x,"Home Experience 3.0: "+x);
         foreach(var x in new[]{"Continue Watching","Live Now","Favorites","Recently Added","Movies","Series","Downloads"}) Has(appJs,x,"Home Experience 3.0 surface: "+x);
         T.Assert(appJs.Contains("resumeContinueItem("),"Home 3 Continue Watching uses shared playback");T.Pass("Home 3 Continue Watching uses shared playback");
         T.Assert(appJs.Contains("openHomeFavourite("),"Home 3 Favorites use existing routing");T.Pass("Home 3 Favorites use existing routing");
