@@ -697,6 +697,7 @@ function channelName(c){return channelPrefs.aliases?.[c.key]||c.name}
 async function hideGroup(group){if(!group||group.startsWith('__'))return;if(!confirm('Hide group '+group+'?'))return;await jpost('/api/channel-preferences/'+encodeURIComponent(currentProvider)+'/group',{group,hidden:true});await loadChannelPrefs();renderChannels()}
 async function hideChannel(key){if(!confirm('Hide this channel?'))return;await jpost('/api/channel-preferences/'+encodeURIComponent(currentProvider)+'/channel',{channelKey:key,hidden:true,alias:null});await loadChannelPrefs();renderChannels()}
 
+// v39.12.0 — Live TV 2.0
 const LIVE_RECENTS_KEY='myonline-live-recents-v1';
 let liveSelectedIndex=0;
 let liveVisibleRows=[];
@@ -704,6 +705,14 @@ let liveCurrentChannel=null;
 
 function getLiveRecents(){
   try{return JSON.parse(localStorage.getItem(LIVE_RECENTS_KEY+':'+privateScope())||'[]')}catch{return []}
+}
+function clearLiveRecents(){
+  localStorage.removeItem(LIVE_RECENTS_KEY+':'+privateScope());
+  if($('#group')?.value==='__recent')renderFilter();
+}
+function refreshLiveEpg(){
+  const btn=$('#liveEpgRefresh'); if(btn)btn.disabled=true;
+  return loadLiveEpgQuiet().then(()=>{renderFilter();liveStatus('Guide refreshed.','ready')}).finally(()=>{if(btn)btn.disabled=false});
 }
 function rememberLiveChannel(c){
   const rows=getLiveRecents().filter(x=>x.providerId!==currentProvider||x.key!==c.key);
@@ -775,7 +784,7 @@ function mobile371OpenGroups(){
   const groups=[...new Set(channels.map(x=>x.group).filter(Boolean).filter(g=>!channelPrefs.hiddenGroups.includes(g)))].sort();
   sheet=document.createElement('div');sheet.id='mobileLiveGroupSheet';sheet.className='mobile371Sheet';
   const selected=$('#group')?.value||'';
-  const choices=[['','All channels'],['__favorites','★ Favourites'],['__recent','↻ Recently watched'],...groups.map(g=>[g,g])];
+  const choices=[['','All channels'],['__favorites','★ Favourites'],['__recent','↻ Recently watched'],['__now','● On now'],...groups.map(g=>[g,g])];
   sheet.innerHTML=`<button class=mobile371SheetBackdrop aria-label="Close"></button><section><div class=mobile371SheetHandle></div><header><h2>Channel groups</h2><button class=round aria-label="Close">×</button></header><div class=mobile371GroupList>${choices.map(([v,n])=>`<button data-group="${escAttr(v)}" class="${v===selected?'active':''}"><span>${esc(n)}</span><small>${v&&!v.startsWith('__')?channels.filter(c=>c.group===v&&!isChannelHidden(c)).length:''}</small></button>`).join('')}</div></section>`;
   document.body.appendChild(sheet);document.body.classList.add('mobileSheetOpen');
   const close=()=>{sheet.remove();document.body.classList.remove('mobileSheetOpen')};
@@ -787,7 +796,7 @@ function renderMobile371Channels(){
   content.innerHTML=`<div class=mobile371Live>
     <section class=mobile371PlayerStage><div id=playerWrap class=livePlayerWrap><div class=liveEmptyState><div class=liveEmptyIcon>▶</div><h2>Live TV</h2><p>Choose a channel below to start watching.</p></div></div><div id=liveDetails class=liveDetailsPanel></div></section>
     <div class=mobile371LiveTools><button class=mobile371GroupButton onclick="mobile371OpenGroups()"><span>Groups</span><b id=mobile371GroupLabel>All channels</b><i>⌄</i></button><label class=mobile371LiveSearch><span>⌕</span><input id=q placeholder="Search channels"></label><button class=mobile371Fullscreen id=liveFullscreenQuick title="Fullscreen">⛶</button></div>
-    <select id=group class=mobile371HiddenSelect><option value="">All channels</option><option value="__favorites">Favourites</option><option value="__recent">Recent</option>${groups.map(g=>`<option>${esc(g)}</option>`).join('')}</select>
+    <select id=group class=mobile371HiddenSelect><option value="">All channels</option><option value="__favorites">Favourites</option><option value="__recent">Recent</option><option value="__now">On now</option>${groups.map(g=>`<option>${esc(g)}</option>`).join('')}</select>
     <div class=mobile371ChannelHeading><h2>Channels</h2><span id=liveChannelCount></span></div><div id=chan class=mobile371ChannelList></div>
   </div>`;
   $('#q').oninput=renderFilter;$('#group').onchange=renderFilter;$('#liveFullscreenQuick').onclick=toggleLiveFullscreen;renderFilter();
@@ -801,10 +810,14 @@ function renderChannels(){
       <option value="">All channels</option>
       <option value="__favorites">★ Favourites</option>
       <option value="__recent">↻ Recently watched</option>
+      <option value="__now">● On now</option>
       ${[...new Set(channels.map(x=>x.group).filter(Boolean).filter(g=>!channelPrefs.hiddenGroups.includes(g)))].sort().map(g=>`<option>${esc(g)}</option>`).join('')}
     </select>
     <button class=btn id=liveFavQuick>★ Favourites</button>
     <button class=btn id=liveRecentQuick>↻ Recent</button>
+    <button class=btn id=liveNowQuick>● On now</button>
+    <button class=btn id=liveEpgRefresh>↻ Guide</button>
+    <button class=btn id=liveClearRecent title="Clear recently watched channels">Clear recent</button>
     <button class=btn id=liveFullscreenQuick>⛶ Fullscreen</button>
     <button class=btn id=hideGroupBtn>Hide group</button>
   </div>
@@ -822,7 +835,7 @@ function renderChannels(){
         </div>
       </div>
       <div id=liveDetails class=liveDetailsPanel></div>
-      <div class="liveHelp">Remote/keyboard: ↑ ↓ select · Enter play · ← → previous/next · F fullscreen · Esc exit</div>
+      <div class="liveHelp"><b>Live TV 2.0</b> · Remote/keyboard: ↑ ↓ select · Enter play · ← → previous/next · G mini guide · F fullscreen · Esc exit</div>
     </section>
   </div>`;
   $('#provider').onchange=async e=>{currentProvider=e.target.value;await live()};
@@ -830,6 +843,9 @@ function renderChannels(){
   $('#group').onchange=renderFilter;
   $('#liveFavQuick').onclick=()=>{$('#group').value='__favorites';renderFilter()};
   $('#liveRecentQuick').onclick=()=>{$('#group').value='__recent';renderFilter()};
+  $('#liveNowQuick').onclick=()=>{$('#group').value='__now';renderFilter()};
+  $('#liveEpgRefresh').onclick=()=>refreshLiveEpg();
+  $('#liveClearRecent').onclick=()=>{if(confirm('Clear recently watched Live TV channels?'))clearLiveRecents()};
   $('#liveFullscreenQuick').onclick=()=>toggleLiveFullscreen();
   $('#hideGroupBtn').onclick=()=>hideGroup($('#group').value);
   $('#chan').addEventListener('keydown',liveKeyHandler);
@@ -891,6 +907,7 @@ function renderFilter(){
   const q=($('#q')?.value||'').toLowerCase(),g=$('#group')?.value||'';
   let rows=channels.filter(c=>!isChannelHidden(c)).filter(c=>(!q||channelName(c).toLowerCase().includes(q)));
   if(g==='__favorites')rows=rows.filter(c=>fav.has(c.id));
+  else if(g==='__now')rows=rows.filter(c=>!!liveProgramFor(c).now);
   else if(g==='__recent'){
     const order=getLiveRecents().filter(x=>x.providerId===currentProvider).map(x=>x.key);
     rows=order.map(k=>channelByKey(k)).filter(Boolean).filter(c=>!q||channelName(c).toLowerCase().includes(q));
@@ -944,6 +961,7 @@ function liveKeyHandler(e){
     e.preventDefault();const c=liveVisibleRows[liveSelectedIndex];if(c)playLive(c.key,c.name);
   }else if(e.key==='ArrowLeft'){e.preventDefault();stepLiveChannel(-1)}
   else if(e.key==='ArrowRight'){e.preventDefault();stepLiveChannel(1)}
+  else if(e.key.toLowerCase()==='g'){e.preventDefault();openMiniGuide()}
   else if(e.key.toLowerCase()==='f'){e.preventDefault();toggleLiveFullscreen()}
 }
 document.addEventListener('keydown',e=>{

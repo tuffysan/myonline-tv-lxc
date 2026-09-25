@@ -58,6 +58,11 @@ internal static class Program
         T.Assert(mobileJs.Contains("collectionProgressText") && mobileJs.Contains("% watched"),"collection progress");T.Pass("collection progress");
         Has(mobileJs,"openContinueActions(item.id,actions)","collection actions");
 
+        // Live TV 2.0 regression checks — additive to all existing release coverage.
+        foreach(var x in new[]{"Live TV 2.0","__favorites","__recent","__now","clearLiveRecents()","refreshLiveEpg()","openMiniGuide()","stepLiveChannel(-1)","stepLiveChannel(1)","liveProgramFor(c)","Record series"}) Has(appJs,x,"Live TV 2.0: "+x);
+        T.Assert(appJs.Contains("LIVE_RECENTS_KEY+':'+privateScope()"),"Live TV 2.0 recent channels remain profile scoped");T.Pass("Live TV 2.0 recent channels remain profile scoped");
+        T.Assert(appJs.Contains("if(g==='__favorites')") && appJs.Contains("fav.has(c.id)"),"Live TV 2.0 favourites filter");T.Pass("Live TV 2.0 favourites filter");
+
         // IPTV Manager 2.0 regression checks — keep all previous gates and add coverage for the new manager.
         foreach(var x in new[]{"IPTV MANAGER 2.0","Search groups…","Active only","Inactive only","Adult (18+)","Search channels…","Activate selected","Deactivate selected","Preview changes","Reload Live TV","Sync diagnostics","Smart Filters","iptvExportFilters()","iptvImportFilters()"}) Has(appJs,x,"IPTV Manager 2.0: "+x);
         foreach(var x in new[]{"/api/providers/{providerId}/refresh-live-preview","/api/providers/{providerId}/refresh-live","/api/providers/{providerId}/sync-diagnostics","/api/providers/{providerId}/refresh-settings","/api/library-management/{providerId}"}) Has(programCs,x,"IPTV Manager 2.0 API: "+x);
@@ -112,6 +117,9 @@ internal static class Program
             Stop(p);p=StartApp(root,data);s=await Login("continue-test","Test-password-4729!");T.Assert((await Call(s,HttpMethod.Get,"/api/continue")).GetArrayLength()==1,"restart persistence");
             await Call(s,HttpMethod.Delete,"/api/continue/"+Uri.EscapeDataString(episode),expected:HttpStatusCode.NoContent);T.Assert((await Call(s,HttpMethod.Get,"/api/continue")).GetArrayLength()==0,"episode removal");
             await Call(s,HttpMethod.Post,"/api/continue",new{id=movie,title="Ångström episode/movie",url="",positionSeconds=75,durationSeconds=600,updated="2026-09-24T10:00:00Z"});
+            await Call(s,HttpMethod.Post,"/api/continue",new{id="optional-fields",title="Optional fields only"});
+            T.Assert((await Call(s,HttpMethod.Get,"/api/continue")).EnumerateArray().Any(x=>x.GetProperty("id").GetString()=="optional-fields"),"continue accepts optional metadata");
+            await Call(s,HttpMethod.Delete,"/api/continue/optional-fields",expected:HttpStatusCode.NoContent);
             var tasks=Enumerable.Range(0,16).Select(i=>Call(s,HttpMethod.Post,"/api/continue",new{id="episode:"+i,title="x",positionSeconds=75,durationSeconds=600}));await Task.WhenAll(tasks);T.Assert((await Call(s,HttpMethod.Get,"/api/continue")).GetArrayLength()==17,"concurrent saves");
             await Call(s,HttpMethod.Delete,"/api/continue",expected:HttpStatusCode.NoContent);Stop(p);p=StartApp(root,data);s=await Login("continue-test","Test-password-4729!");T.Assert((await Call(s,HttpMethod.Get,"/api/continue")).GetArrayLength()==0,"clear persistence");
             T.Assert((await Call(s,HttpMethod.Get,"/api/profile-state/default")).GetRawText()==before,"favourite preservation");T.Assert(Encoding.UTF8.GetString(File.ReadAllBytes(Path.Combine(data,"untouched-media.mkv")))=="original media","media preservation");

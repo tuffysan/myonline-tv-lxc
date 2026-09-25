@@ -1,3 +1,13 @@
+## v39.12.0 — Live TV 2.0
+
+- Refined Live TV channel browser with Favourites, Recent and On now views.
+- Added one-click EPG/Now-Next refresh without leaving Live TV.
+- Added per-user/profile recent-channel cleanup while preserving account isolation.
+- Expanded keyboard/remote navigation with mini-guide shortcut and existing fast zapping.
+- Preserved Now/Next, recording, favourites, playback fallback and channel visibility behaviour.
+- Added permanent .NET regression guards for Live TV 2.0 while retaining all earlier release tests.
+- Distribution chain remains Python-free.
+
 ## v39.11.0 — IPTV Manager 2.0
 
 - Dedicated IPTV Manager 2.0 overview with provider health, catalogue statistics and sync status.
@@ -1673,3 +1683,7 @@ Release candidate only: native-client/target-LXC validation and review of functi
 ## v9.0.1 — Kestrel loopback hotfix
 - Fixed Kestrel bind address 129.0.0.1 -> 127.0.0.1 on port 5080.
 - Added regression check for the expected local loopback binding.
+
+
+### 39.12.0 RC2
+- Continue API hardening: profile-scoped serialized persistence and expanded black-box regression coverage.

@@ -502,6 +502,16 @@ List<ContinueItem> LoadContinue(HttpContext ctx)
     if ((OwnsLegacyProfile(ctx) || OwnsLegacyGlobal(ctx)) && File.Exists(legacy)) return Load<List<ContinueItem>>(legacy) ?? new();
     return OwnsLegacyGlobal(ctx) ? Load<List<ContinueItem>>(continueFile) ?? new() : new();
 }
+void SaveContinue(HttpContext ctx, List<ContinueItem> items)
+{
+    // Continue Watching mutations are serialized by continueStateLock. Writing the
+    // profile file directly avoids Windows replace/move races observed by the real
+    // black-box release gate while still preventing concurrent writers.
+    var path = ProfileFile(ctx, "continue");
+    var directory = Path.GetDirectoryName(path);
+    if (!string.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
+    File.WriteAllText(path, JsonSerializer.Serialize(items, jsonOptions));
+}
 List<ViewerProfile> LoadProfiles()
 {
     return Load<List<ViewerProfile>>(profilesFile) ?? new List<ViewerProfile>();
@@ -3101,7 +3111,7 @@ app.MapPost("/api/continue", (ContinueItem item, HttpContext ctx) =>
     var list = LoadContinue(ctx);
     list.RemoveAll(x => x.Id == item.Id);
     list.Insert(0, item with { Url = item.Url ?? "", Updated = DateTimeOffset.UtcNow });
-    Save(ProfileFile(ctx,"continue"), list.Take(100).ToList());
+    SaveContinue(ctx, list.Take(100).ToList());
     return Results.Ok();
     }
 }).RequireAuthorization();
@@ -3115,7 +3125,7 @@ app.MapDelete("/api/continue/{id}", (string id, HttpContext ctx) =>
     list.RemoveAll(x => x.Id == id);
     // Persist even an empty list: otherwise legacy progress can reappear on reload.
     // Deletion is idempotent and never touches favourites, library entries or files.
-    Save(ProfileFile(ctx,"continue"), list);
+    SaveContinue(ctx, list);
     return Results.NoContent();
     }
 }).RequireAuthorization();
@@ -3129,7 +3139,7 @@ app.MapPut("/api/continue/{id}/poster", (string id, ContinuePosterUpdate input, 
     var idx = list.FindIndex(x => x.Id == id);
     if (idx < 0) return Results.NotFound();
     list[idx] = list[idx] with { Poster = input.Poster ?? "" };
-    Save(ProfileFile(ctx,"continue"), list);
+    SaveContinue(ctx, list);
     return Results.NoContent();
     }
 }).RequireAuthorization();
@@ -3139,7 +3149,7 @@ app.MapDelete("/api/continue", (HttpContext ctx) =>
     if (!CanUseProfile(ctx, RequestedProfile(ctx))) return Results.Forbid();
     lock (continueStateLock)
     {
-    Save(ProfileFile(ctx,"continue"), new List<ContinueItem>());
+    SaveContinue(ctx, new List<ContinueItem>());
     return Results.NoContent();
     }
 }).RequireAuthorization();
