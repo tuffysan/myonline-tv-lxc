@@ -37,6 +37,10 @@ jobs:
           npx playwright install --with-deps chromium
           npm test
 
+      - name: Test release version safety
+        shell: pwsh
+        run: ./tests/release_version.Tests.ps1
+
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
@@ -50,6 +54,12 @@ jobs:
 
       - name: Test Continue Watching persistence
         run: python3 tests/continue_api.py
+
+      - name: Test multi-user isolation
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python3 tests/security_isolation.py
 
       - name: Publish web app
         run: dotnet publish app/MyOnlineTV.Web.csproj -c Release -o dist/publish

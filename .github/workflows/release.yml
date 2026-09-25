@@ -47,6 +47,14 @@ jobs:
 
           echo "Accepted release tag: ${TAG}"
 
+      - name: Guard established release line
+        shell: pwsh
+        run: |
+          . ./scripts/Release-VersionGuard.ps1
+          $otherTags = @(git tag --list | Where-Object { $_ -ne $env:GITHUB_REF_NAME })
+          Assert-ReleaseVersion (Get-Content VERSION -Raw).Trim() $otherTags
+          ./tests/release_version.Tests.ps1
+
       - name: Validate scripts and frontend
         shell: bash
         run: |
@@ -64,6 +72,14 @@ jobs:
 
       - name: Build
         run: dotnet build app/MyOnlineTV.Web.csproj -c Release --no-restore
+
+      - name: Test headers, persistence and multi-user isolation
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          dotnet run --project tests/DownloadHeaders/DownloadHeaders.csproj -c Release
+          python3 tests/continue_api.py
+          python3 tests/security_isolation.py
 
       - name: Restore linux-x64
         shell: bash
@@ -151,6 +167,9 @@ jobs:
           test -s "${TMP}/MyOnlineTV.Web.runtimeconfig.json"
           test -s "${TMP}/wwwroot/index.html"
           test -s "${TMP}/wwwroot/app.js"
+          test -s "${TMP}/wwwroot/mobile.js"
+          test -s "${TMP}/wwwroot/mobile.css"
+          test -s "${TMP}/wwwroot/continue-watching.js"
           grep -q "MyOnline TV" "${TMP}/wwwroot/index.html"
           echo "Release smoke test passed."
 

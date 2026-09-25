@@ -65,7 +65,11 @@ with tempfile.TemporaryDirectory(prefix='myonline-continue-') as directory:
         request(session,'DELETE','/api/continue/'+urllib.parse.quote(movie,safe=''))
         request(session,'DELETE','/api/continue/'+urllib.parse.quote(movie,safe=''))
         assert [x['id'] for x in request(session,'GET','/api/continue')]==[episode]
-        assert len(request(session,'GET','/api/continue',profile='other-profile'))==2
+        try:
+            request(session,'GET','/api/continue',profile='other-profile')
+            raise AssertionError('Foreign profile was accessible')
+        except urllib.error.HTTPError as error:
+            assert error.code in (403,404)
         request(session,'POST','/api/auth/logout')
         session=client();request(session,'POST','/api/auth/login',credentials)
         assert [x['id'] for x in request(session,'GET','/api/continue')]==[episode]

@@ -6,7 +6,11 @@ quoted, documented, or discussed.
 
 ## Repository conventions
 
-- `VERSION` is the product version source of truth. Read it each time; never
+- Read `RELEASE.md` before `build` or `release check`. Its version-history guard
+  preserves the established 39.8.x line and overrides a patch calculation from
+  anomalous metadata or a chronologically newer, lower-numbered tag.
+- `VERSION` is the build/runtime product version source. Validate it against
+  the release history under `RELEASE.md` each time; never
   infer the current version from the highest-numbered historical document.
 - `app/MyOnlineTV.Web.csproj` is the production .NET 10 web project. Its package,
   assembly, file and informational versions derive from `VERSION`. Runtime
@@ -44,6 +48,8 @@ commands and checks rather than maintaining a separate release process.
    workflow: install its dependencies and Playwright browser, then run
    `npm test --prefix tests/mobile`. An installed Edge channel is supported for
    local testing. These tests mock APIs; they do not prove real IPTV playback.
+   Run `python3 tests/continue_api.py` and `python3 tests/security_isolation.py`
+   against the Release build, sequentially (both use isolated data on port 5080).
 4. Run JavaScript syntax checks for `app.js`, `mobile.js` and `sw.js`, shell
    syntax checks, release metadata consistency and the workflows' regression
    markers. Run `git diff --check`.
@@ -76,8 +82,10 @@ When the user says exactly `build`, perform the complete release operation:
    latest published release and its commit, then inspect all committed and
    working-tree changes since that release. Do not assume the highest tag or
    newest release document is the latest published release.
-2. Determine the current version from `VERSION` and reconcile it with
-   `release.json` and published releases. Increment the patch component once
+2. Determine the validated release baseline using `RELEASE.md`, Git history,
+   remote tags and published releases; reconcile `VERSION` and `release.json`.
+   Preserve the established 39.8.x line: after 39.8.3 the next candidate is
+   39.8.4, subject to collision checks. Increment the validated patch once
    (`X.Y.Z` -> `X.Y.(Z+1)`). Stop and report conflicting version history rather
    than guessing, downgrading or reusing an existing release/tag.
 3. Update all applicable version references and add a changelog entry covering
@@ -145,11 +153,10 @@ When the user requests `release check`:
   permission to skip validation and publish.
 - Always use the repository's existing release scripts and workflows. Do not
   invent a parallel release process.
-- Inspect `PUBLISH.ps1` before execution: its current collision handling can
-  delete/recreate local tags and delete remote tags. These paths are forbidden.
-  Check local and remote canonical and legacy tag names, plus existing releases,
-  before publishing. Make the existing script fail safely on collisions if
-  necessary; do not execute destructive replacement branches.
+- Inspect `PUBLISH.ps1` before execution. Its release-version guard must reject
+  regressions and local/remote canonical or legacy tag collisions before commit
+  or push, and recheck collisions before creating a new immutable tag.
+  Run `tests/release_version.Tests.ps1`; never restore tag-replacement paths.
 - Do not use legacy `PUBLISH-TO-GITHUB.ps1` or repair/hotfix helpers that force
   tags, reset branches, rewrite remotes or target an old repository. The safety
   rules here take precedence over unsafe behavior in any existing helper.

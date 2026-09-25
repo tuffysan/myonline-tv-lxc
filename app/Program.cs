@@ -15,6 +15,7 @@ using MyOnlineTV;
 
 var builder = WebApplication.CreateBuilder(args);
 var appVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
+builder.Services.AddHttpContextAccessor();
 builder.WebHost.UseUrls("http://127.0.0.1:5080");
 
 builder.Services
@@ -36,6 +37,11 @@ builder.Services
                 return Task.CompletedTask;
             }
             ctx.Response.Redirect(ctx.RedirectUri);
+            return Task.CompletedTask;
+        };
+        o.Events.OnRedirectToAccessDenied = ctx =>
+        {
+            ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
             return Task.CompletedTask;
         };
     });
@@ -72,6 +78,8 @@ var channelPreferencesFile = Path.Combine(dataDir, "channel-preferences.json");
 var cataloguePreferencesFile = Path.Combine(dataDir, "catalogue-preferences.json");
 var libraryManagementFile = Path.Combine(dataDir, "library-management.json");
 var providerRefreshFile = Path.Combine(dataDir, "provider-refresh.json");
+var providerSyncHistoryFile = Path.Combine(dataDir, "provider-sync-history.json");
+var adultGroupStateFile = Path.Combine(dataDir, "adult-group-state.json");
 var profilesFile = Path.Combine(dataDir, "profiles.json");
 var adminFile = Path.Combine(dataDir, "admin.json");
 var usersFile = Path.Combine(dataDir, "users.json");
@@ -147,7 +155,7 @@ async Task<JsonElement> GetGithubUpdateInfo(bool force = false)
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(12));
         using var req = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/repos/tuffysan/myonline-tv-lxc/releases/latest");
         req.Headers.Accept.ParseAdd("application/vnd.github+json");
-        req.Headers.UserAgent.ParseAdd("MyOnline-TV-Updater/34.1.0");
+        req.Headers.UserAgent.ParseAdd(AppIdentity.UserAgent("MyOnline-TV-Updater"));
         using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseContentRead, cts.Token);
         resp.EnsureSuccessStatusCode();
 
@@ -168,7 +176,7 @@ async Task<JsonElement> GetGithubUpdateInfo(bool force = false)
                 using var metaCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
                 var metaUrl = $"https://github.com/tuffysan/myonline-tv-lxc/releases/download/{Uri.EscapeDataString(tag)}/release.json";
                 using var metaReq = new HttpRequestMessage(HttpMethod.Get, metaUrl);
-                metaReq.Headers.UserAgent.ParseAdd("MyOnline-TV-Updater/34.1.0");
+                metaReq.Headers.UserAgent.ParseAdd(AppIdentity.UserAgent("MyOnline-TV-Updater"));
                 using var metaResp = await http.SendAsync(metaReq, HttpCompletionOption.ResponseContentRead, metaCts.Token);
                 if (metaResp.IsSuccessStatusCode)
                 {
@@ -220,7 +228,7 @@ object? ReadUiUpdateWorkerStatus()
 
 async Task<IResult> BuildUiUpdateStatus(bool force)
 {
-    var current = File.Exists(versionFile) ? File.ReadAllText(versionFile).Trim() : "34.1.0";
+    var current = File.Exists(versionFile) ? File.ReadAllText(versionFile).Trim() : appVersion;
     try
     {
         var latest = await GetGithubUpdateInfo(force);
@@ -405,26 +413,72 @@ string SafeProfileKey(string? value)
     var raw = string.IsNullOrWhiteSpace(value) ? "default" : value.Trim();
     return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw))).ToLowerInvariant()[..24];
 }
-string RequestedProfile(HttpContext ctx) => ctx.Request.Headers.TryGetValue("X-MyOnline-Profile", out var h) && !string.IsNullOrWhiteSpace(h) ? h.ToString() : "default";
+string UserKey(HttpContext ctx) => LoadUsers().FirstOrDefault(x => x.Username.Equals(ctx.User.Identity?.Name, StringComparison.OrdinalIgnoreCase))?.Id ?? throw new UnauthorizedAccessException();
+string CurrentUserKey() => UserKey(app.Services.GetRequiredService<IHttpContextAccessor>().HttpContext ?? throw new UnauthorizedAccessException());
+string RequestedProfile(HttpContext ctx)
+{
+    var requested = ctx.Request.Headers["X-MyOnline-Profile"].ToString();
+    return string.IsNullOrWhiteSpace(requested) || requested == "default"
+        ? AccessFor(ctx.User.Identity?.Name ?? "").DefaultProfileId : requested;
+}
 bool CanUseProfile(HttpContext ctx, string profileId)
 {
     var username = ctx.User.Identity?.Name ?? "";
     if (string.IsNullOrWhiteSpace(username)) return false;
     var allowed = AccessFor(username).AllowedProfileIds;
-    return ctx.User.IsInRole("Admin") || allowed.Contains(profileId, StringComparer.OrdinalIgnoreCase);
+    return allowed.Contains(profileId, StringComparer.OrdinalIgnoreCase) ||
+        (profileId == "default" && username.Equals(PrimaryAccountOwner(), StringComparison.OrdinalIgnoreCase));
 }
-string ProfileFile(HttpContext ctx, string kind) => Path.Combine(profileDataDir, $"{SafeProfileKey(RequestedProfile(ctx))}-{kind}.json");
+string ProfileFile(HttpContext ctx, string kind) => Path.Combine(profileDataDir, $"{SafeProfileKey(UserKey(ctx))}-{SafeProfileKey(RequestedProfile(ctx))}-{kind}.json");
+string UserFile(HttpContext ctx, string kind) => Path.Combine(profileDataDir, $"{SafeProfileKey(UserKey(ctx))}-{kind}.json");
+string LegacyStateOwnerId()
+{
+    lock (continueStateLock)
+    {
+        var owner = LocalDb.GetMeta(databaseFile, "legacy_state_owner_id");
+        if (!string.IsNullOrEmpty(owner)) return owner;
+        owner = LoadUsers().FirstOrDefault(x => x.Username.Equals(PrimaryAccountOwner(), StringComparison.OrdinalIgnoreCase))?.Id ?? "";
+        if (owner.Length > 0) LocalDb.SetMeta(databaseFile, "legacy_state_owner_id", owner);
+        return owner;
+    }
+}
+bool OwnsLegacyState(HttpContext ctx) => UserKey(ctx) == LegacyStateOwnerId();
+List<T> LoadUserList<T>(HttpContext ctx, string kind, string legacyPath)
+{
+    var path = UserFile(ctx, kind);
+    if (File.Exists(path)) return Load<List<T>>(path) ?? new();
+    return OwnsLegacyState(ctx)
+        ? Load<List<T>>(legacyPath) ?? new() : new();
+}
+List<ProfileMediaState> LoadUserMediaState(HttpContext ctx)
+{
+    var path = UserFile(ctx, "media-state");
+    if (File.Exists(path)) return Load<List<ProfileMediaState>>(path) ?? new();
+    var owned = LoadProfiles().Where(p => string.Equals(p.OwnerUsername, ctx.User.Identity?.Name, StringComparison.OrdinalIgnoreCase)).Select(p => p.Id).ToHashSet();
+    if (OwnsLegacyState(ctx)) owned.Add("default");
+    return (Load<List<ProfileMediaState>>(profileStateFile) ?? new()).Where(x => owned.Contains(x.ProfileId)).ToList();
+}
+bool OwnsLegacyProfile(HttpContext ctx) => LoadProfiles().Any(p => p.Id == RequestedProfile(ctx) &&
+    string.Equals(p.OwnerUsername, ctx.User.Identity?.Name, StringComparison.OrdinalIgnoreCase));
+bool OwnsLegacyGlobal(HttpContext ctx) => OwnsLegacyState(ctx) &&
+    (RequestedProfile(ctx) == "default" || RequestedProfile(ctx) == AccessFor(ctx.User.Identity?.Name ?? "").DefaultProfileId);
 HashSet<string> LoadFavourites(HttpContext ctx)
 {
     var path=ProfileFile(ctx,"favourites");
     if (File.Exists(path)) return Load<HashSet<string>>(path) ?? new(StringComparer.OrdinalIgnoreCase);
-    return Load<HashSet<string>>(favouritesFile) ?? new(StringComparer.OrdinalIgnoreCase);
+    var legacy = Path.Combine(profileDataDir, $"{SafeProfileKey(RequestedProfile(ctx))}-favourites.json");
+    if (!File.Exists(legacy) && OwnsLegacyGlobal(ctx)) legacy = Path.Combine(profileDataDir, $"{SafeProfileKey("default")}-favourites.json");
+    if ((OwnsLegacyProfile(ctx) || OwnsLegacyGlobal(ctx)) && File.Exists(legacy)) return Load<HashSet<string>>(legacy) ?? new();
+    return OwnsLegacyGlobal(ctx) ? Load<HashSet<string>>(favouritesFile) ?? new() : new();
 }
 List<ContinueItem> LoadContinue(HttpContext ctx)
 {
     var path=ProfileFile(ctx,"continue");
     if (File.Exists(path)) return Load<List<ContinueItem>>(path) ?? new();
-    return Load<List<ContinueItem>>(continueFile) ?? new();
+    var legacy = Path.Combine(profileDataDir, $"{SafeProfileKey(RequestedProfile(ctx))}-continue.json");
+    if (!File.Exists(legacy) && OwnsLegacyGlobal(ctx)) legacy = Path.Combine(profileDataDir, $"{SafeProfileKey("default")}-continue.json");
+    if ((OwnsLegacyProfile(ctx) || OwnsLegacyGlobal(ctx)) && File.Exists(legacy)) return Load<List<ContinueItem>>(legacy) ?? new();
+    return OwnsLegacyGlobal(ctx) ? Load<List<ContinueItem>>(continueFile) ?? new() : new();
 }
 List<ViewerProfile> LoadProfiles()
 {
@@ -617,6 +671,21 @@ bool CanAccessMediaLibrary(HttpContext ctx, MediaLibraryProvider p)
     return !string.IsNullOrWhiteSpace(username) && username.Equals(MediaOwner(p), StringComparison.OrdinalIgnoreCase);
 }
 
+void RenameSourceOwner(string oldName, string newName)
+{
+    Save(providersFile, LoadProviders().Select(p => ProviderOwner(p).Equals(oldName, StringComparison.OrdinalIgnoreCase)
+        ? p with { OwnerUsername = newName } : p).ToList());
+    Save(mediaLibrariesFile, LoadMediaLibraries().Select(p => MediaOwner(p).Equals(oldName, StringComparison.OrdinalIgnoreCase)
+        ? p with { OwnerUsername = newName } : p).ToList());
+    Save(userSourcesFile, LoadUserSources().Select(p => p.Username.Equals(oldName, StringComparison.OrdinalIgnoreCase)
+        ? p with { Username = newName } : p).ToList());
+    foreach (var file in new[] { playerPrefsFile, epgPrefsFile, libraryPrefsFile, householdPrefsFile })
+    {
+        var rows = Load<Dictionary<string, Dictionary<string, object>>>(file) ?? new();
+        if (rows.Remove(oldName, out var preferences)) { rows[newName] = preferences; Save(file, rows); }
+    }
+}
+
 bool CanManageProvider(HttpContext ctx, ProviderStored p) => CanAccessProvider(ctx, p);
 
 bool CanManageMediaLibrary(HttpContext ctx, MediaLibraryProvider p) => CanAccessMediaLibrary(ctx, p);
@@ -657,7 +726,7 @@ UserProfileAccess AccessFor(string username)
 {
     var rows = LoadProfileAccess();
     if (rows.TryGetValue(username, out var hit)) return hit;
-    var profileIds = LoadProfiles().Select(x => x.Id).ToArray();
+    var profileIds = LoadProfiles().Where(x => string.Equals(x.OwnerUsername, username, StringComparison.OrdinalIgnoreCase)).Select(x => x.Id).ToArray();
     return new UserProfileAccess(profileIds, profileIds.FirstOrDefault() ?? "default");
 }
 
@@ -915,7 +984,7 @@ async Task RecordingSchedulerLoop()
 string RegisterProxy(string url, string kind = "media")
 {
     var token = Guid.NewGuid().ToString("N");
-    proxyTokens[token] = new ProxyTarget(url, kind, DateTimeOffset.UtcNow);
+    proxyTokens[token] = new ProxyTarget(url, kind, DateTimeOffset.UtcNow, CurrentUserKey());
     if (proxyTokens.Count > 20000)
     {
         var cutoff = DateTimeOffset.UtcNow.AddHours(-12);
@@ -931,6 +1000,48 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Authentication alone does not grant access to another user's resource IDs.
+app.Use(async (ctx, next) =>
+{
+    if (ctx.Request.Path.StartsWithSegments("/api"))
+    {
+        ctx.Response.Headers.CacheControl = "no-store";
+        ctx.Response.Headers.Pragma = "no-cache";
+        if (ctx.Request.Path.StartsWithSegments("/api/admin") && !IsAdmin(ctx))
+        {
+            ctx.Response.StatusCode = ctx.User.Identity?.IsAuthenticated == true ? 403 : 401;
+            return;
+        }
+        if (ctx.User.Identity?.IsAuthenticated == true)
+        {
+            var user = LoadUsers().FirstOrDefault(x => x.Username.Equals(ctx.User.Identity.Name, StringComparison.OrdinalIgnoreCase));
+            if (user is null || !user.Enabled || !ctx.User.IsInRole(user.Role) || ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value != user.Id)
+            {
+                await ctx.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                ctx.User = new System.Security.Claims.ClaimsPrincipal();
+                if (ctx.Request.Path.StartsWithSegments("/api/auth")) await next();
+                else ctx.Response.StatusCode = 401;
+                return;
+            }
+            ctx.Response.Headers["X-MyOnline-User"] = user.Id;
+            var seg = ctx.Request.Path.Value!.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            var area = seg.Length > 1 ? seg[1].ToLowerInvariant() : "";
+            var action = seg.Length > 2 ? seg[2].ToLowerInvariant() : "";
+            bool deny = false;
+            if (seg.Length > 1 && area is "continue" or "favourites") deny = !CanUseProfile(ctx, RequestedProfile(ctx));
+            string? token = seg.Length > 2 && area == "proxy" ? seg[2] :
+                seg.Length > 3 && ((area == "downloads" && action == "device") || (area == "media" && action == "start")) ? seg[3] : null;
+            if (token is not null) deny |= !proxyTokens.TryGetValue(token, out var target) || target.OwnerUserId != user.Id;
+            if (seg.Length > 2 && area == "downloads" && action is not ("device" or "media"))
+                deny |= !downloads.TryGetValue(seg[2], out var job) || job.OwnerUserId != user.Id;
+            if (seg.Length > 3 && area == "live" && action is "status" or "hls" or "session")
+                deny |= !liveSessions.TryGetValue(seg[3], out var session) || session.OwnerUserId != user.Id;
+            if (deny) { ctx.Response.StatusCode = 404; return; }
+        }
+    }
+    await next();
+});
 
 // A temporary password cannot be used to access the application API.
 // The only authenticated actions permitted until it is changed are status, logout and change-password.
@@ -980,12 +1091,12 @@ app.Use(async (ctx, next) =>
         {
             var area = seg[1].ToLowerInvariant();
             if (area is "channels" or "epg" or "vod" or "series" or "channel-preferences")
-                providerId = seg[2];
+                providerId = ctx.Request.RouteValues["providerId"]?.ToString();
             else if (area == "providers" && seg.Length >= 4)
                 providerId = seg[2];
-            else if (area == "catalogue-cache" && seg.Length >= 4 && seg[2] == "clear")
+            else if (area == "catalogue-cache" && seg.Length >= 4 && seg[2].Equals("clear", StringComparison.OrdinalIgnoreCase))
                 providerId = seg[3];
-            else if (area == "live" && seg.Length >= 4 && seg[2] == "start")
+            else if (area == "live" && seg.Length >= 4 && seg[2].Equals("start", StringComparison.OrdinalIgnoreCase))
                 providerId = seg[3];
             else if (area == "unified" && seg.Length >= 5 && seg[2] is not ("movies" or "series"))
                 mediaId = seg[3];
@@ -996,7 +1107,7 @@ app.Use(async (ctx, next) =>
         if (!string.IsNullOrWhiteSpace(providerId))
         {
             var provider = LoadProviders().FirstOrDefault(x => x.Id == providerId);
-            if (provider is not null && !CanAccessProvider(ctx, provider))
+            if (provider is null || !CanAccessProvider(ctx, provider))
             {
                 ctx.Response.StatusCode = StatusCodes.Status404NotFound;
                 return;
@@ -1006,7 +1117,7 @@ app.Use(async (ctx, next) =>
         if (!string.IsNullOrWhiteSpace(mediaId))
         {
             var library = LoadMediaLibraries().FirstOrDefault(x => x.Id == mediaId);
-            if (library is not null && !CanAccessMediaLibrary(ctx, library))
+            if (library is null || !CanAccessMediaLibrary(ctx, library))
             {
                 ctx.Response.StatusCode = StatusCodes.Status404NotFound;
                 return;
@@ -1318,6 +1429,7 @@ app.MapGet("/api/auth/status", (HttpContext ctx) =>
         configured = AuthConfigured(),
         authenticated = ctx.User.Identity?.IsAuthenticated == true,
         user = ctx.User.Identity?.Name,
+        userId = current?.Id,
         role = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "",
         requirePasswordChange = current?.RequirePasswordChange ?? false,
         onboardingRequired = current is not null &&
@@ -1335,10 +1447,11 @@ app.MapPost("/api/auth/setup", async (SetupRequest req, HttpContext ctx) =>
     var user = new AppUser(Guid.NewGuid().ToString("N"), username, "Admin", true,
         PasswordCredential.Create(username, req.Password), username);
     Save(usersFile, new List<AppUser> { user });
-    await SignIn(ctx, user.Username, user.Role);
+    await SignIn(ctx, user.Username, user.Role, user.Id);
     return Results.Ok(new
     {
         user = user.Username,
+        userId = user.Id,
         role = user.Role,
         requirePasswordChange = user.RequirePasswordChange,
         onboardingRequired = !user.OnboardingCompleted && !user.OnboardingSkipped && !user.OnboardingNeverShow
@@ -1356,10 +1469,11 @@ app.MapPost("/api/auth/login", async (LoginRequest req, HttpContext ctx) =>
         return Results.Unauthorized();
     }
 
-    await SignIn(ctx, user.Username, user.Role);
+    await SignIn(ctx, user.Username, user.Role, user.Id);
     return Results.Ok(new
     {
         user = user.Username,
+        userId = user.Id,
         role = user.Role,
         requirePasswordChange = user.RequirePasswordChange,
         onboardingRequired = !user.OnboardingCompleted && !user.OnboardingSkipped && !user.OnboardingNeverShow
@@ -1424,6 +1538,7 @@ app.MapPost("/api/admin/users/{id}/reset-password", (string id, HttpContext ctx)
     return Results.Ok(new
     {
         user = user.Username,
+        userId = user.Id,
         password = generated,
         requirePasswordChange = true,
         showOnce = true
@@ -1505,6 +1620,9 @@ app.MapPost("/api/admin/users", (UserInput input, HttpContext ctx) =>
     if (!HasEnabledAdmin(candidate))
         return Results.BadRequest("At least one enabled administrator account is required.");
 
+    if (existing is not null && !existing.Username.Equals(username, StringComparison.OrdinalIgnoreCase))
+        RenameSourceOwner(existing.Username, username);
+
     var oldUsername = existing?.Username;
     var idx = users.FindIndex(x => x.Id == id);
     if (idx >= 0) users[idx] = updated; else users.Add(updated);
@@ -1568,6 +1686,8 @@ app.MapDelete("/api/admin/users/{id}", (string id, HttpContext ctx) =>
     if (!HasEnabledAdmin(candidate))
         return Results.BadRequest("The last enabled administrator cannot be deleted.");
 
+    RenameSourceOwner(target.Username, "deleted-user:" + target.Id);
+    LocalDb.UpsertUser(databaseFile, target.Id, "deleted-user:" + target.Id);
     Save(usersFile, candidate);
 
     var profiles = LoadProfiles();
@@ -1642,6 +1762,8 @@ app.MapPost("/api/providers", (ProviderInput input, HttpContext ctx) =>
     var list = LoadProviders();
     var id = string.IsNullOrWhiteSpace(input.Id) ? Guid.NewGuid().ToString("N") : input.Id.Trim();
     var existing = list.FirstOrDefault(x => x.Id == id);
+
+    if (existing is null && !string.IsNullOrWhiteSpace(input.Id)) return Results.NotFound();
 
     ProviderConnection c;
     if (existing is not null && input.KeepExistingConnection)
@@ -2369,6 +2491,7 @@ app.MapPost("/api/media-libraries", (MediaLibraryInput input, HttpContext ctx) =
     var rows = LoadMediaLibraries();
     var id = string.IsNullOrWhiteSpace(input.Id) ? Guid.NewGuid().ToString("N") : input.Id.Trim();
     var old = rows.FirstOrDefault(x => x.Id == id);
+    if (old is null && !string.IsNullOrWhiteSpace(input.Id)) return Results.NotFound();
     var oldConn = old is null ? null : MediaConnection(old);
     var token = old is not null && input.KeepExistingToken && string.IsNullOrWhiteSpace(input.Token) ? oldConn?.Token ?? "" : input.Token ?? "";
     var conn = new MediaLibraryConnection((input.BaseUrl ?? "").Trim().TrimEnd('/'), token);
@@ -2525,15 +2648,16 @@ app.MapGet("/api/access/me", (HttpContext ctx) =>
 {
     var username = ctx.User.Identity?.Name ?? "";
     var access = AccessFor(username);
-    var isAdmin = ctx.User.IsInRole("Admin");
-    var allowed = isAdmin ? LoadProfiles().Select(x => x.Id).ToArray() : access.AllowedProfileIds;
+    var allowed = access.AllowedProfileIds;
     return Results.Ok(new
     {
         allowedProfileIds = allowed,
-        defaultProfileId = isAdmin ? (allowed.FirstOrDefault() ?? "default") : access.DefaultProfileId,
-        policies = allowed.ToDictionary(id => id, id => PolicyFor(id))
+        defaultProfileId = access.DefaultProfileId,
+        policies = allowed.ToDictionary(id => id, id => { var p = PolicyFor(id); return new { p.Live, p.Movies, p.Series, p.Downloads, p.AllowedProviderIds, hasPin = p.PinCredential is not null }; })
     });
 }).RequireAuthorization();
+
+app.MapGet("/api/admin/profiles", () => Results.Ok(LoadProfiles())).RequireAuthorization(p => p.RequireRole("Admin"));
 
 app.MapGet("/api/admin/profile-access", () =>
 {
@@ -2568,17 +2692,18 @@ app.MapPost("/api/admin/profile-access/profile/{profileId}", (string profileId, 
     return Results.Ok(new { policy.Live, policy.Movies, policy.Series, policy.Downloads, policy.AllowedProviderIds, hasPin = policy.PinCredential is not null });
 }).RequireAuthorization(p => p.RequireRole("Admin"));
 
-app.MapPost("/api/profile/{profileId}/verify-pin", (string profileId, PinRequest input) =>
+app.MapPost("/api/profile/{profileId}/verify-pin", (string profileId, PinRequest input, HttpContext ctx) =>
 {
+    if (!CanUseProfile(ctx, profileId)) return Results.NotFound();
     var policy = PolicyFor(profileId);
     if (policy.PinCredential is null) return Results.Ok(new { valid = true });
     return Results.Ok(new { valid = policy.PinCredential.Verify(profileId, input.Pin ?? "") });
 }).RequireAuthorization();
 
-app.MapGet("/api/profiles", () =>
+app.MapGet("/api/profiles", (HttpContext ctx) =>
 {
     EnsureUserProfiles();
-    return Results.Ok(LoadProfiles());
+    return Results.Ok(LoadProfiles().Where(p => CanUseProfile(ctx, p.Id)));
 }).RequireAuthorization();
 
 app.MapPost("/api/profiles", (ViewerProfileInput req) =>
@@ -2668,6 +2793,36 @@ app.MapDelete("/api/profiles/{id}", (string id) =>
 }).RequireAuthorization(p => p.RequireRole("Admin"));
 
 
+// v39.7.1 IPTV Sync & Diagnostics
+List<ProviderSyncEvent> LoadProviderSyncHistory() => Load<List<ProviderSyncEvent>>(providerSyncHistoryFile) ?? new();
+void AddProviderSyncEvent(string providerId,string trigger,bool ok,int added,int updated,int removed,int unchanged,string? error=null)
+{
+    var rows=LoadProviderSyncHistory();
+    rows.Insert(0,new ProviderSyncEvent(DateTimeOffset.UtcNow,providerId,trigger,ok,added,updated,removed,unchanged,error));
+    Save(providerSyncHistoryFile,rows.Take(200).ToList());
+}
+
+// v39.8.1 Adult / 18+ group control
+static bool IsAdultGroupName(string? group)
+{
+    if(string.IsNullOrWhiteSpace(group)) return false;
+    var g=group.Trim().ToLowerInvariant();
+    string[] tokens={"adult","adults","xxx","xx ","18+","18 +","18plus","18 plus","18 years","erotic","erotica","porn","porno","sex","playboy","redlight","red light","hot xxx"};
+    return tokens.Any(t=>g.Contains(t,StringComparison.OrdinalIgnoreCase));
+}
+void EnsureAdultGroupsHidden(string providerId,IEnumerable<LiveChannel> channels)
+{
+    var groups=channels.Select(x=>x.Group??"").Where(IsAdultGroupName).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    if(groups.Length==0)return;
+    var states=Load<Dictionary<string,HashSet<string>>>(adultGroupStateFile)??new(StringComparer.OrdinalIgnoreCase);
+    var known=states.TryGetValue(providerId,out var k)?k:new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var all=LoadChannelPreferences();
+    var cp=all.TryGetValue(providerId,out var old)?old:new ChannelPreferences(new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase));
+    var changed=false;foreach(var g in groups)if(known.Add(g)){cp.HiddenGroups.Add(g);changed=true;}
+    states[providerId]=known;Save(adultGroupStateFile,states);
+    if(changed){all[providerId]=cp;Save(channelPreferencesFile,all);}
+}
+
 // v37.0.0 Library Management & Provider Refresh
 Dictionary<string, LibraryManagementPreferences> LoadLibraryManagement() =>
     Load<Dictionary<string, LibraryManagementPreferences>>(libraryManagementFile) ?? new(StringComparer.OrdinalIgnoreCase);
@@ -2723,24 +2878,74 @@ app.MapPost("/api/library-management/{providerId}/quality", (string providerId, 
     all[providerId]=pref; Save(libraryManagementFile,all); return Results.Ok(pref.Groups[req.Group]);
 }).RequireAuthorization();
 
+app.MapPost("/api/providers/{providerId}/adult-groups", async (string providerId,HttpContext ctx) =>
+{
+    if(!CanManageProviderId(ctx,providerId))return Results.Forbid();
+    var req=await ctx.Request.ReadFromJsonAsync<AdultGroupControlRequest>();if(req is null)return Results.BadRequest();
+    var p=LoadProviders().FirstOrDefault(x=>x.Id==providerId);if(p is null)return Results.NotFound();
+    var channels=channelCache.TryGetValue(providerId,out var c)?c.Channels:await LoadProviderChannels(p);
+    var groups=channels.Select(x=>x.Group??"").Where(IsAdultGroupName).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    var all=LoadChannelPreferences();
+    var cp=all.TryGetValue(providerId,out var old)?old:new ChannelPreferences(new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase));
+    foreach(var g in groups){if(req.Active)cp.HiddenGroups.Remove(g);else cp.HiddenGroups.Add(g);}
+    all[providerId]=cp;Save(channelPreferencesFile,all); var states=Load<Dictionary<string,HashSet<string>>>(adultGroupStateFile)??new(StringComparer.OrdinalIgnoreCase); states[providerId]=new HashSet<string>(groups,StringComparer.OrdinalIgnoreCase); Save(adultGroupStateFile,states);
+    return Results.Ok(new{active=req.Active,groups=groups.Length,names=groups});
+}).RequireAuthorization();
+
+app.MapPost("/api/providers/{providerId}/refresh-live-preview", async (string providerId, HttpContext ctx) =>
+{
+    if (!CanManageProviderId(ctx, providerId)) return Results.Forbid();
+    var p=LoadProviders().FirstOrDefault(x=>x.Id==providerId); if(p is null)return Results.NotFound();
+    var before=channelCache.TryGetValue(providerId,out var old)?old.Channels:(TryLoadLiveChannelDiskCache(providerId,TimeSpan.FromDays(7),out var disk)?disk:new List<LiveChannel>());
+    var fresh=await LoadProviderChannels(p);
+    var b=before.ToDictionary(x=>x.Key,StringComparer.OrdinalIgnoreCase); var f=fresh.ToDictionary(x=>x.Key,StringComparer.OrdinalIgnoreCase);
+    var added=f.Keys.Where(k=>!b.ContainsKey(k)).ToArray();
+    var removed=b.Keys.Where(k=>!f.ContainsKey(k)).ToArray();
+    var updated=f.Keys.Where(k=>b.TryGetValue(k,out var z)&&(z.Name!=f[k].Name||z.Group!=f[k].Group||z.SourceUrl!=f[k].SourceUrl)).ToArray();
+    return Results.Ok(new {
+        added=added.Length, updated=updated.Length, removed=removed.Length,
+        unchanged=Math.Max(0,fresh.Count-added.Length-updated.Length), total=fresh.Count,
+        sampleAdded=added.Take(20).Select(k=>new { key=k,name=f[k].Name,group=f[k].Group }),
+        sampleUpdated=updated.Take(20).Select(k=>new { key=k,name=f[k].Name,group=f[k].Group }),
+        sampleRemoved=removed.Take(20).Select(k=>new { key=k,name=b[k].Name,group=b[k].Group })
+    });
+}).RequireAuthorization();
+
 app.MapPost("/api/providers/{providerId}/refresh-live", async (string providerId, HttpContext ctx) =>
 {
     if (!CanManageProviderId(ctx, providerId)) return Results.Forbid();
     var p=LoadProviders().FirstOrDefault(x=>x.Id==providerId); if(p is null)return Results.NotFound();
     var before=channelCache.TryGetValue(providerId,out var old)?old.Channels:(TryLoadLiveChannelDiskCache(providerId,TimeSpan.FromDays(7),out var disk)?disk:new List<LiveChannel>());
-    var fresh=await LoadProviderChannels(p); channelCache[providerId]=new ChannelCacheEntry(fresh,DateTimeOffset.UtcNow); SaveLiveChannelDiskCache(providerId,fresh);
+    var fresh=await LoadProviderChannels(p); channelCache[providerId]=new ChannelCacheEntry(fresh,DateTimeOffset.UtcNow); SaveLiveChannelDiskCache(providerId,fresh); EnsureAdultGroupsHidden(providerId,fresh);
     var b=before.ToDictionary(x=>x.Key,StringComparer.OrdinalIgnoreCase); var f=fresh.ToDictionary(x=>x.Key,StringComparer.OrdinalIgnoreCase);
-    var added=f.Keys.Count(k=>!b.ContainsKey(k)); var removed=b.Keys.Count(k=>!f.ContainsKey(k));
+    var addedKeys=f.Keys.Where(k=>!b.ContainsKey(k)).ToArray(); var added=addedKeys.Length; var removed=b.Keys.Count(k=>!f.ContainsKey(k));
     var updated=f.Keys.Count(k=>b.TryGetValue(k,out var z)&&(z.Name!=f[k].Name||z.Group!=f[k].Group||z.SourceUrl!=f[k].SourceUrl));
     var unchanged=Math.Max(0,fresh.Count-added-updated); var now=DateTimeOffset.UtcNow;
-    var all=LoadLibraryManagement(); var pref=all.TryGetValue(providerId,out var lm)&&lm is not null?lm:new LibraryManagementPreferences(); pref.Refresh.LastRefresh=now; pref.Refresh.LastAdded=added; pref.Refresh.LastUpdated=updated; pref.Refresh.LastRemoved=removed; pref.Refresh.LastUnchanged=unchanged; all[providerId]=pref; Save(libraryManagementFile,all);
+    var all=LoadLibraryManagement(); var pref=all.TryGetValue(providerId,out var lm)&&lm is not null?lm:new LibraryManagementPreferences(); if(!pref.Refresh.NewChannelsActive&&addedKeys.Length>0){var cpAll=LoadChannelPreferences();var cp=cpAll.TryGetValue(providerId,out var cpx)?cpx:new ChannelPreferences(new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase));foreach(var k in addedKeys)cp.HiddenChannels.Add(k);cpAll[providerId]=cp;Save(channelPreferencesFile,cpAll);} pref.Refresh.LastRefresh=now; pref.Refresh.LastAdded=added; pref.Refresh.LastUpdated=updated; pref.Refresh.LastRemoved=removed; pref.Refresh.LastUnchanged=unchanged; all[providerId]=pref; Save(libraryManagementFile,all); AddProviderSyncEvent(providerId,"manual",true,added,updated,removed,unchanged);
     return Results.Ok(new { added,updated,removed,unchanged,total=fresh.Count,lastRefresh=now });
+}).RequireAuthorization();
+
+app.MapGet("/api/providers/{providerId}/sync-history", (string providerId,HttpContext ctx) =>
+{
+    if(!CanManageProviderId(ctx,providerId))return Results.Forbid();
+    return Results.Ok(LoadProviderSyncHistory().Where(x=>x.ProviderId.Equals(providerId,StringComparison.OrdinalIgnoreCase)).Take(50));
+}).RequireAuthorization();
+
+app.MapGet("/api/providers/{providerId}/sync-diagnostics", (string providerId,HttpContext ctx) =>
+{
+    if(!CanManageProviderId(ctx,providerId))return Results.Forbid();
+    var p=LoadProviders().FirstOrDefault(x=>x.Id==providerId);if(p is null)return Results.NotFound();
+    var pref=LibraryManagementFor(providerId).Refresh;
+    var history=LoadProviderSyncHistory().Where(x=>x.ProviderId.Equals(providerId,StringComparison.OrdinalIgnoreCase)).Take(20).ToArray();
+    return Results.Ok(new { providerId,provider=p.Name,type=p.Type,mode=pref.Mode,intervalHours=pref.IntervalHours,lastRefresh=pref.LastRefresh,
+        lastAdded=pref.LastAdded,lastUpdated=pref.LastUpdated,lastRemoved=pref.LastRemoved,lastUnchanged=pref.LastUnchanged,
+        recentFailures=history.Count(x=>!x.Ok),history });
 }).RequireAuthorization();
 
 app.MapPost("/api/providers/{providerId}/refresh-settings", (string providerId, RefreshSettings req, HttpContext ctx) =>
 {
     if(!CanManageProviderId(ctx,providerId))return Results.Forbid(); var all=LoadLibraryManagement(); var pref=all.TryGetValue(providerId,out var x)&&x is not null?x:new LibraryManagementPreferences();
-    pref.Refresh.Mode=(req.Mode??"manual").ToLowerInvariant(); pref.Refresh.IntervalHours=Math.Clamp(req.IntervalHours,1,168); all[providerId]=pref; Save(libraryManagementFile,all); return Results.Ok(pref.Refresh);
+    pref.Refresh.Mode=(req.Mode??"manual").ToLowerInvariant(); pref.Refresh.IntervalHours=Math.Clamp(req.IntervalHours,1,168); pref.Refresh.NewChannelsActive=req.NewChannelsActive; all[providerId]=pref; Save(libraryManagementFile,all); return Results.Ok(pref.Refresh);
 }).RequireAuthorization();
 
 app.MapPost("/api/library-management/{providerId}/bulk-channels", (string providerId, BulkLibraryChannelsRequest req, HttpContext ctx) =>
@@ -2816,6 +3021,24 @@ app.MapPost("/api/catalogue-preferences/{providerId}/item", (string providerId, 
     var pref = all.TryGetValue(providerId, out var existing) && existing is not null ? existing : new CataloguePreferences();
     var set = kind == "vod" ? pref.HiddenVodItems : pref.HiddenSeriesItems;
     if (req.Hidden) set.Add(req.ItemId); else set.Remove(req.ItemId);
+    all[providerId] = pref; Save(cataloguePreferencesFile, all);
+    return Results.Ok(pref);
+}).RequireAuthorization();
+
+app.MapPost("/api/catalogue-preferences/{providerId}/bulk", (string providerId, BulkCatalogueVisibilityRequest req, HttpContext ctx) =>
+{
+    if (!CanManageProviderId(ctx, providerId)) return Results.Forbid();
+    var kind = (req.Kind ?? "").Trim().ToLowerInvariant();
+    if (kind is not ("vod" or "series")) return Results.BadRequest("Kind must be vod or series.");
+    var all = LoadCataloguePreferences();
+    var pref = all.TryGetValue(providerId, out var existing) && existing is not null ? existing : new CataloguePreferences();
+    var categories = new HashSet<string>((req.HiddenCategories ?? Array.Empty<string>()).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.OrdinalIgnoreCase);
+    if (kind == "vod") pref.HiddenVodCategories = categories; else pref.HiddenSeriesCategories = categories;
+    if (req.ReplaceItems)
+    {
+        var items = new HashSet<string>((req.HiddenItems ?? Array.Empty<string>()).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.OrdinalIgnoreCase);
+        if (kind == "vod") pref.HiddenVodItems = items; else pref.HiddenSeriesItems = items;
+    }
     all[providerId] = pref; Save(cataloguePreferencesFile, all);
     return Results.Ok(pref);
 }).RequireAuthorization();
@@ -2899,13 +3122,13 @@ app.MapDelete("/api/continue", (HttpContext ctx) =>
     }
 }).RequireAuthorization();
 
-app.MapGet("/api/downloads", () =>
-    Results.Ok(downloads.Values.OrderByDescending(x => x.Created).Select(x => x.Safe())))
+app.MapGet("/api/downloads", (HttpContext ctx) =>
+    Results.Ok(downloads.Values.Where(x => x.OwnerUserId == UserKey(ctx)).OrderByDescending(x => x.Created).Select(x => x.Safe())))
     .RequireAuthorization();
 
-app.MapPost("/api/downloads/media", (MediaDownloadRequest req) =>
+app.MapPost("/api/downloads/media", (MediaDownloadRequest req, HttpContext ctx) =>
 {
-    if (!proxyTokens.TryGetValue(req.Token, out var source) || source.Kind is not ("download" or "media"))
+    if (!proxyTokens.TryGetValue(req.Token, out var source) || source.OwnerUserId != UserKey(ctx) || source.Kind is not ("download" or "media"))
         return Results.BadRequest("The media token has expired. Reload the movie or episode list and try again.");
 
     var storage = FindStorageTarget(req.StorageTargetId, downloadDefault: true);
@@ -2916,11 +3139,11 @@ app.MapPost("/api/downloads/media", (MediaDownloadRequest req) =>
     var ext = SafeExt(new Uri(source.Url).AbsolutePath);
     var finalName = StorageFileName(title, ext);
     var path = storage.Type.Equals("path", StringComparison.OrdinalIgnoreCase)
-        ? PathTargetFile(storage, finalName)
+        ? PathTargetFile(storage, $"{id}-{finalName}")
         : Path.Combine(downloadsDir, $"{id}-{finalName}");
 
     var job = new DownloadJob(id, title, source.Url, path, "Queued", 0, null, DateTimeOffset.UtcNow,
-        storage.Id, storage.Name, storage.Type, storage.Destination);
+        storage.Id, storage.Name, storage.Type, storage.Destination, UserKey(ctx));
     downloads[id] = job;
     _ = Task.Run(async () =>
     {
@@ -2934,7 +3157,7 @@ app.MapPost("/api/downloads/media", (MediaDownloadRequest req) =>
                 var uploadName = Path.GetFileName(completed.Path);
                 if (uploadName.StartsWith(job.Id + "-", StringComparison.OrdinalIgnoreCase))
                     uploadName = uploadName[(job.Id.Length + 1)..];
-                await UploadWithRclone(completed.Path, storage, uploadName);
+                await UploadWithRclone(completed.Path, storage, $"{job.OwnerUserId}/{job.Id}-{uploadName}");
                 try { File.Delete(completed.Path); } catch { }
                 downloads[job.Id] = downloads[job.Id] with { Status = "Completed", Progress = 100 };
             }
@@ -3023,7 +3246,7 @@ app.MapDelete("/api/downloads/{id}", async (string id) =>
                 var fileName = Path.GetFileName(job.Path);
                 if (fileName.StartsWith(job.Id + "-", StringComparison.OrdinalIgnoreCase))
                     fileName = fileName[(job.Id.Length + 1)..];
-                var remotePath = (job.StorageDestination ?? "").TrimEnd('/') + "/" + fileName;
+                var remotePath = (job.StorageDestination ?? "").TrimEnd('/') + "/" + job.OwnerUserId + "/" + job.Id + "-" + fileName;
                 var psi = new ProcessStartInfo { FileName = rclone, UseShellExecute = false, RedirectStandardError = true, CreateNoWindow = true };
                 psi.ArgumentList.Add("deletefile");
                 psi.ArgumentList.Add(remotePath);
@@ -3111,7 +3334,7 @@ app.MapPost("/api/media/start/{token}", async (string token, bool? transcode) =>
 
     var durationSeconds = await ProbeDurationSeconds(sourceUrl);
 
-    foreach (var existing in liveSessions.Keys.ToArray())
+    foreach (var existing in liveSessions.Where(x => x.Value.OwnerUserId == CurrentUserKey()).Select(x => x.Key).ToArray())
         await StopLiveSession(existing);
 
     var sessionId = Guid.NewGuid().ToString("N");
@@ -3176,7 +3399,7 @@ app.MapPost("/api/media/start/{token}", async (string token, bool? transcode) =>
         return Results.Problem($"Could not start FFmpeg: {ex.Message}", statusCode: 500);
     }
 
-    var session = new LiveSession(sessionId, sessionDir, process, errorLog, sourceUrl, DateTimeOffset.UtcNow, durationSeconds);
+    var session = new LiveSession(sessionId, sessionDir, process, errorLog, sourceUrl, DateTimeOffset.UtcNow, durationSeconds, CurrentUserKey());
     liveSessions[sessionId] = session;
 
     _ = Task.Run(async () =>
@@ -3241,7 +3464,7 @@ app.MapPost("/api/live/start/{providerId}/{channelKey}", async (string providerI
     if (ffmpeg is null)
         return Results.Problem("FFmpeg is not installed in the MyOnline TV container.", statusCode: 503);
 
-    foreach (var existing in liveSessions.Keys.ToArray())
+    foreach (var existing in liveSessions.Where(x => x.Value.OwnerUserId == CurrentUserKey()).Select(x => x.Key).ToArray())
         await StopLiveSession(existing);
 
     var sessionId = Guid.NewGuid().ToString("N");
@@ -3298,7 +3521,7 @@ app.MapPost("/api/live/start/{providerId}/{channelKey}", async (string providerI
         return Results.Problem($"Could not start FFmpeg: {ex.Message}", statusCode: 500);
     }
 
-    var session = new LiveSession(sessionId, sessionDir, process, errorLog, sourceUrl, DateTimeOffset.UtcNow);
+    var session = new LiveSession(sessionId, sessionDir, process, errorLog, sourceUrl, DateTimeOffset.UtcNow, OwnerUserId: CurrentUserKey());
     liveSessions[sessionId] = session;
 
     _ = Task.Run(async () =>
@@ -3654,29 +3877,31 @@ app.MapPost("/api/admin/storage-targets/{id}/test", async (string id, HttpContex
     catch (Exception ex) { return Results.BadRequest(new { ok = false, message = ex.GetBaseException().Message }); }
 }).RequireAuthorization();
 
-app.MapGet("/api/dvr/rules", () => Results.Ok(Load<List<DvrRule>>(dvrRulesFile) ?? new())).RequireAuthorization();
-app.MapPost("/api/dvr/rules", (DvrRuleInput input) =>
+app.MapGet("/api/dvr/rules", (HttpContext ctx) => Results.Ok((Load<List<DvrRule>>(dvrRulesFile) ?? new()).Where(x => CanManageProviderId(ctx,x.ProviderId)))).RequireAuthorization();
+app.MapPost("/api/dvr/rules", (DvrRuleInput input, HttpContext ctx) =>
 {
+    if (!CanManageProviderId(ctx, input.ProviderId)) return Results.NotFound();
     if (string.IsNullOrWhiteSpace(input.ProviderId) || string.IsNullOrWhiteSpace(input.ChannelKey) || string.IsNullOrWhiteSpace(input.TitlePattern))
         return Results.BadRequest("Provider, channel and title are required.");
     var rows=Load<List<DvrRule>>(dvrRulesFile) ?? new();
     var id=string.IsNullOrWhiteSpace(input.Id)?Guid.NewGuid().ToString("N"):input.Id;
+    if(rows.Any(x=>x.Id==id && !CanManageProviderId(ctx,x.ProviderId))) return Results.NotFound();
     rows.RemoveAll(x=>x.Id==id);
     rows.Add(new DvrRule(id,input.ProviderId,input.ChannelKey,input.ChannelName??"Channel",input.TitlePattern.Trim(),
         input.NewOnly,input.Enabled,input.PaddingBeforeMinutes,input.PaddingAfterMinutes,input.KeepLatest,input.StorageTargetId,DateTimeOffset.UtcNow));
     Save(dvrRulesFile,rows);
-    return Results.Ok(rows);
+    return Results.Ok(rows.Where(x => CanManageProviderId(ctx,x.ProviderId)));
 }).RequireAuthorization();
-app.MapDelete("/api/dvr/rules/{id}", (string id) =>
+app.MapDelete("/api/dvr/rules/{id}", (string id, HttpContext ctx) =>
 {
     var rows=Load<List<DvrRule>>(dvrRulesFile) ?? new();
-    if(rows.RemoveAll(x=>x.Id==id)==0)return Results.NotFound();
+    if(rows.RemoveAll(x=>x.Id==id && CanManageProviderId(ctx,x.ProviderId))==0)return Results.NotFound();
     Save(dvrRulesFile,rows); return Results.NoContent();
 }).RequireAuthorization();
 
-app.MapGet("/api/recordings", () =>
+app.MapGet("/api/recordings", (HttpContext ctx) =>
 {
-    var rows = LoadRecordingJobs()
+    var rows = LoadRecordingJobs().Where(x => CanManageProviderId(ctx, x.ProviderId))
         .OrderByDescending(x => x.Start)
         .Select(x => new
         {
@@ -3691,8 +3916,9 @@ app.MapGet("/api/recordings", () =>
     return Results.Ok(rows);
 }).RequireAuthorization();
 
-app.MapPost("/api/recordings", (RecordingRequest input) =>
+app.MapPost("/api/recordings", (RecordingRequest input, HttpContext ctx) =>
 {
+    if (!CanManageProviderId(ctx, input.ProviderId)) return Results.NotFound();
     if (string.IsNullOrWhiteSpace(input.ProviderId) || string.IsNullOrWhiteSpace(input.ChannelKey))
         return Results.BadRequest("Provider and channel are required.");
     if (input.End <= input.Start) return Results.BadRequest("End must be after start.");
@@ -3717,10 +3943,10 @@ app.MapPost("/api/recordings", (RecordingRequest input) =>
     return Results.Ok(job);
 }).RequireAuthorization();
 
-app.MapPost("/api/recordings/{id}/cancel", (string id) =>
+app.MapPost("/api/recordings/{id}/cancel", (string id, HttpContext ctx) =>
 {
     var rows = LoadRecordingJobs();
-    var idx = rows.FindIndex(x => x.Id == id);
+    var idx = rows.FindIndex(x => x.Id == id && CanManageProviderId(ctx, x.ProviderId));
     if (idx < 0) return Results.NotFound();
 
     if (recordingProcesses.TryRemove(id, out var process))
@@ -3733,10 +3959,10 @@ app.MapPost("/api/recordings/{id}/cancel", (string id) =>
     return Results.Ok();
 }).RequireAuthorization();
 
-app.MapDelete("/api/recordings/{id}", async (string id) =>
+app.MapDelete("/api/recordings/{id}", async (string id, HttpContext ctx) =>
 {
     var rows = LoadRecordingJobs();
-    var job = rows.FirstOrDefault(x => x.Id == id);
+    var job = rows.FirstOrDefault(x => x.Id == id && CanManageProviderId(ctx, x.ProviderId));
     if (job is null) return Results.NotFound();
     if (recordingProcesses.TryRemove(id, out var process))
     {
@@ -3771,9 +3997,9 @@ app.MapDelete("/api/recordings/{id}", async (string id) =>
     return Results.Ok();
 }).RequireAuthorization();
 
-app.MapGet("/api/recordings/{id}/file", (string id) =>
+app.MapGet("/api/recordings/{id}/file", (string id, HttpContext ctx) =>
 {
-    var job = LoadRecordingJobs().FirstOrDefault(x => x.Id == id);
+    var job = LoadRecordingJobs().FirstOrDefault(x => x.Id == id && CanManageProviderId(ctx, x.ProviderId));
     if (job is null || string.IsNullOrWhiteSpace(job.StoredPath) || string.IsNullOrWhiteSpace(job.FileName)) return Results.NotFound();
     var target = FindStorageTarget(job.StorageTargetId);
     if (target?.Type.Equals("path", StringComparison.OrdinalIgnoreCase) != true || !File.Exists(job.StoredPath))
@@ -3785,45 +4011,45 @@ _ = Task.Run(RecordingSchedulerLoop);
 
 app.MapFallbackToFile("index.html");
 
-app.MapGet("/api/rooms", () => Results.Ok(Load<List<RoomDevice>>(roomsFile) ?? new())).RequireAuthorization();
-app.MapPost("/api/rooms/register", (RoomDeviceInput input) =>
+app.MapGet("/api/rooms", (HttpContext ctx) => Results.Ok(LoadUserList<RoomDevice>(ctx, "rooms", roomsFile) ?? new())).RequireAuthorization();
+app.MapPost("/api/rooms/register", (RoomDeviceInput input, HttpContext ctx) =>
 {
-    var rows=Load<List<RoomDevice>>(roomsFile) ?? new();
+    var rows=LoadUserList<RoomDevice>(ctx, "rooms", roomsFile) ?? new();
     var id=string.IsNullOrWhiteSpace(input.Id)?Guid.NewGuid().ToString("N"):input.Id;
     rows.RemoveAll(x=>x.Id==id);
     rows.Add(new RoomDevice(id,string.IsNullOrWhiteSpace(input.Name)?"Device":input.Name.Trim(),input.DeviceType??"Browser",DateTimeOffset.UtcNow,input.ActiveMediaId,input.ActiveTitle,input.PositionSeconds));
-    Save(roomsFile,rows); return Results.Ok(rows);
+    Save(UserFile(ctx,"rooms"),rows); return Results.Ok(rows);
 }).RequireAuthorization();
-app.MapPost("/api/rooms/{id}/handoff", (string id, RoomHandoff input) =>
+app.MapPost("/api/rooms/{id}/handoff", (string id, RoomHandoff input, HttpContext ctx) =>
 {
-    var rows=Load<List<RoomDevice>>(roomsFile) ?? new(); var i=rows.FindIndex(x=>x.Id==id); if(i<0)return Results.NotFound();
+    var rows=LoadUserList<RoomDevice>(ctx, "rooms", roomsFile) ?? new(); var i=rows.FindIndex(x=>x.Id==id); if(i<0)return Results.NotFound();
     rows[i]=rows[i] with { ActiveMediaId=input.MediaId,ActiveTitle=input.Title,PositionSeconds=input.PositionSeconds,Updated=DateTimeOffset.UtcNow };
-    Save(roomsFile,rows); return Results.Ok(rows[i]);
+    Save(UserFile(ctx,"rooms"),rows); return Results.Ok(rows[i]);
 }).RequireAuthorization();
 
 
-app.MapGet("/api/notifications", () => Results.Ok((Load<List<AppNotification>>(notificationsFile) ?? new()).OrderByDescending(x=>x.Created).Take(100))).RequireAuthorization();
-app.MapPost("/api/notifications", (AppNotificationInput input) =>
+app.MapGet("/api/notifications", (HttpContext ctx) => Results.Ok((LoadUserList<AppNotification>(ctx, "notifications", notificationsFile) ?? new()).OrderByDescending(x=>x.Created).Take(100))).RequireAuthorization();
+app.MapPost("/api/notifications", (AppNotificationInput input, HttpContext ctx) =>
 {
-    var rows=Load<List<AppNotification>>(notificationsFile) ?? new();
+    var rows=LoadUserList<AppNotification>(ctx, "notifications", notificationsFile) ?? new();
     rows.Add(new AppNotification(Guid.NewGuid().ToString("N"),input.Title,input.Message,input.Kind??"info",DateTimeOffset.UtcNow,false));
-    Save(notificationsFile,rows.TakeLast(500).ToList()); return Results.Ok();
+    Save(UserFile(ctx,"notifications"),rows.TakeLast(500).ToList()); return Results.Ok();
 }).RequireAuthorization();
-app.MapPost("/api/notifications/{id}/read", (string id) =>
+app.MapPost("/api/notifications/{id}/read", (string id, HttpContext ctx) =>
 {
-    var rows=Load<List<AppNotification>>(notificationsFile) ?? new();var i=rows.FindIndex(x=>x.Id==id);if(i<0)return Results.NotFound();
-    rows[i]=rows[i] with { Read=true };Save(notificationsFile,rows);return Results.NoContent();
+    var rows=LoadUserList<AppNotification>(ctx, "notifications", notificationsFile) ?? new();var i=rows.FindIndex(x=>x.Id==id);if(i<0)return Results.NotFound();
+    rows[i]=rows[i] with { Read=true };Save(UserFile(ctx,"notifications"),rows);return Results.NoContent();
 }).RequireAuthorization();
 
 
-app.MapGet("/api/appliance/health", () =>
+app.MapGet("/api/appliance/health", (HttpContext ctx) =>
 {
     var drive=new DriveInfo(Path.GetPathRoot(dataDir)!);
     return Results.Ok(new {
         version=appVersion, dataDirectory=dataDir,
         storageTargets=LoadStorageTargets().Count,
-        dvrRules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count,
-        rooms=(Load<List<RoomDevice>>(roomsFile)??new()).Count,
+        dvrRules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count(x=>CanManageProviderId(ctx,x.ProviderId)),
+        rooms=LoadUserList<RoomDevice>(ctx,"rooms",roomsFile).Count,
         diskFreeBytes=drive.AvailableFreeSpace,diskTotalBytes=drive.TotalSize,
         utc=DateTimeOffset.UtcNow
     });
@@ -3860,9 +4086,9 @@ app.MapGet("/api/diagnostics", async (HttpContext ctx) =>
 
 
 
-app.MapGet("/api/dvr/conflicts", () =>
+app.MapGet("/api/dvr/conflicts", (HttpContext ctx) =>
 {
-    var jobs=LoadRecordingJobs().Where(x=>x.Status is "Scheduled" or "Recording").OrderBy(x=>x.Start).ToList();
+    var jobs=LoadRecordingJobs().Where(x=>CanManageProviderId(ctx,x.ProviderId)).ToList().Where(x=>x.Status is "Scheduled" or "Recording").OrderBy(x=>x.Start).ToList();
     var conflicts=new List<object>();
     for(var i=0;i<jobs.Count;i++) for(var j=i+1;j<jobs.Count;j++)
         if(jobs[i].ProviderId==jobs[j].ProviderId && jobs[i].Start<jobs[j].End && jobs[j].Start<jobs[i].End)
@@ -3870,13 +4096,13 @@ app.MapGet("/api/dvr/conflicts", () =>
     return Results.Ok(conflicts);
 }).RequireAuthorization();
 
-app.MapGet("/api/dvr/status", () =>
+app.MapGet("/api/dvr/status", (HttpContext ctx) =>
 {
-    var jobs=LoadRecordingJobs();
+    var jobs=LoadRecordingJobs().Where(x=>CanManageProviderId(ctx,x.ProviderId)).ToList();
     return Results.Ok(new {
         scheduled=jobs.Count(x=>x.Status=="Scheduled"),recording=jobs.Count(x=>x.Status=="Recording"),
         failed=jobs.Count(x=>x.Status=="Failed"),completed=jobs.Count(x=>x.Status=="Completed"),
-        rules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count(x=>x.Enabled)
+        rules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count(x=>x.Enabled && CanManageProviderId(ctx,x.ProviderId))
     });
 }).RequireAuthorization();
 
@@ -3903,20 +4129,26 @@ app.MapPut("/api/admin/navigation",(NavigationConfig input)=>{
 app.MapGet("/api/profile-state/{profileId}", (string profileId, HttpContext ctx) =>
 {
     if(!CanUseProfile(ctx,profileId)) return Results.Forbid();
-    var rows=Load<List<ProfileMediaState>>(profileStateFile)??new();
+    var rows=LoadUserMediaState(ctx);
     return Results.Ok(rows.Where(x=>x.ProfileId==profileId).OrderByDescending(x=>x.Updated));
 }).RequireAuthorization();
 app.MapPut("/api/profile-state/{profileId}/{mediaId}", (string profileId,string mediaId,ProfileMediaStateInput input,HttpContext ctx) =>
 {
     if(!CanUseProfile(ctx,profileId)) return Results.Forbid();
-    var rows=Load<List<ProfileMediaState>>(profileStateFile)??new();var i=rows.FindIndex(x=>x.ProfileId==profileId&&x.MediaId==mediaId);
+    lock (continueStateLock)
+    {
+    var rows=LoadUserMediaState(ctx);var i=rows.FindIndex(x=>x.ProfileId==profileId&&x.MediaId==mediaId);
     var item=new ProfileMediaState(profileId,mediaId,input.Title??mediaId,input.Kind??"media",input.PositionSeconds,input.DurationSeconds,input.Watched,input.Favourite,input.Poster,DateTimeOffset.UtcNow);
-    if(i>=0)rows[i]=item;else rows.Add(item);Save(profileStateFile,rows);return Results.Ok(item);
+    if(i>=0)rows[i]=item;else rows.Add(item);Save(UserFile(ctx,"media-state"),rows);return Results.Ok(item);
+    }
 }).RequireAuthorization();
 app.MapDelete("/api/profile-state/{profileId}/{mediaId}", (string profileId,string mediaId,HttpContext ctx) =>
 {
     if(!CanUseProfile(ctx,profileId)) return Results.Forbid();
-    var rows=Load<List<ProfileMediaState>>(profileStateFile)??new();rows.RemoveAll(x=>x.ProfileId==profileId&&x.MediaId==mediaId);Save(profileStateFile,rows);return Results.NoContent();
+    lock (continueStateLock)
+    {
+    var rows=LoadUserMediaState(ctx);rows.RemoveAll(x=>x.ProfileId==profileId&&x.MediaId==mediaId);Save(UserFile(ctx,"media-state"),rows);return Results.NoContent();
+    }
 }).RequireAuthorization();
 
 
@@ -3938,16 +4170,16 @@ app.MapPost("/api/downloads/{id}/retry", (string id) =>
 
 
 
-app.MapGet("/api/platform/status", () =>
+app.MapGet("/api/platform/status", (HttpContext ctx) =>
 {
     var drive=new DriveInfo(Path.GetPathRoot(dataDir)!);
     return Results.Ok(new {
         version=appVersion,platform="MyOnline TV Platform",
-        providers=LoadProviders().Count,
+        providers=LoadProviders().Count(x=>CanAccessProvider(ctx,x)),
         storageTargets=LoadStorageTargets().Count(x=>x.Enabled),
-        dvrRules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count(x=>x.Enabled),
-        rooms=(Load<List<RoomDevice>>(roomsFile)??new()).Count,
-        notifications=(Load<List<AppNotification>>(notificationsFile)??new()).Count(x=>!x.Read),
+        dvrRules=(Load<List<DvrRule>>(dvrRulesFile)??new()).Count(x=>x.Enabled && CanManageProviderId(ctx,x.ProviderId)),
+        rooms=LoadUserList<RoomDevice>(ctx,"rooms",roomsFile).Count,
+        notifications=LoadUserList<AppNotification>(ctx,"notifications",notificationsFile).Count(x=>!x.Read),
         diskFreeBytes=drive.AvailableFreeSpace,
         features=new[]{"IPTV","EPG","DVR","Storage","Plex","Jellyfin","Unified Library","Profile Sync","Search","Multi-room","PWA","Notifications","Diagnostics"}
     });
@@ -3997,9 +4229,9 @@ app.MapGet("/api/dvr/engine",()=>Results.Ok(Load<Dictionary<string,object>>(dvrE
 app.MapPut("/api/admin/dvr/engine",(Dictionary<string,object> input)=>{
  Save(dvrEngineFile,input);return Results.Ok(input);
 }).RequireAuthorization(p=>p.RequireRole("Admin"));
-app.MapGet("/api/dvr/upcoming",()=>{
+app.MapGet("/api/dvr/upcoming",(HttpContext ctx)=>{
  var now=DateTimeOffset.UtcNow;
- var rows=(Load<List<RecordingJob>>(recordingsFile)??new()).Where(x=>x.Status=="Scheduled"&&x.Start>now).OrderBy(x=>x.Start).Take(100);
+ var rows=(Load<List<RecordingJob>>(recordingsFile)??new()).Where(x=>CanManageProviderId(ctx,x.ProviderId) && x.Status=="Scheduled"&&x.Start>now).OrderBy(x=>x.Start).Take(100);
  return Results.Ok(rows);
 }).RequireAuthorization();
 
@@ -4051,8 +4283,8 @@ app.MapPut("/api/household/preferences",(Dictionary<string,object> input,HttpCon
 }).RequireAuthorization();
 app.MapGet("/api/household/sync-status",(HttpContext ctx)=>{
  var username=ctx.User.Identity?.Name??"";
- var states=Load<List<ProfileMediaState>>(profileStateFile)??new();
- return Results.Ok(new{username,profiles=LoadProfiles().Count,states=states.Count,lastSync=DateTimeOffset.UtcNow});
+ var states=LoadUserMediaState(ctx);
+ return Results.Ok(new{username,profiles=LoadProfiles().Count(p=>CanUseProfile(ctx,p.Id)),states=states.Count,lastSync=DateTimeOffset.UtcNow});
 }).RequireAuthorization();
 
 
@@ -4173,7 +4405,7 @@ app.MapGet("/api/rooms/v24/capabilities",()=>Results.Ok(RoomsHandoffV2430.Capabi
 app.MapGet("/api/platform/v25/capabilities",()=>Results.Ok(AdvancedTvV2500.Capabilities()));
 
 app.MapGet("/api/admin/overview-v2", () => Results.Ok(new {
-    version = File.Exists("VERSION") ? File.ReadAllText("VERSION").Trim() : "unknown",
+    version = appVersion,
     health = "healthy",
     uptime = Environment.TickCount64,
     runtime = Environment.Version.ToString(),
@@ -4411,7 +4643,7 @@ app.MapPost("/api/admin/update/install", async (HttpContext ctx) =>
 {
     if (!IsAdmin(ctx)) return Results.NotFound();
 
-    var current = File.Exists(versionFile) ? File.ReadAllText(versionFile).Trim() : "34.1.0";
+    var current = File.Exists(versionFile) ? File.ReadAllText(versionFile).Trim() : appVersion;
     var latest = await GetGithubUpdateInfo(true);
     var target = latest.TryGetProperty("latestVersion", out var lv) ? lv.GetString() ?? "" : "";
     var tag = latest.TryGetProperty("latestTag", out var lt) ? lt.GetString() ?? "" : "";
@@ -4484,6 +4716,46 @@ app.MapGet("/api/iptv/transport/capabilities", () => Results.Ok(new
     paidAiRequired = false
 })).RequireAuthorization();
 
+async Task ProviderRefreshSchedulerLoop()
+{
+    while(true)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromMinutes(5));
+            foreach(var p in LoadProviders())
+            {
+                var all=LoadLibraryManagement();
+                var pref=all.TryGetValue(p.Id,out var lm)&&lm is not null?lm:new LibraryManagementPreferences();
+                var r=pref.Refresh;
+                if(r.Mode=="manual")continue;
+                var due=!r.LastRefresh.HasValue || DateTimeOffset.UtcNow-r.LastRefresh.Value >= TimeSpan.FromHours(r.Mode=="daily"?24:Math.Clamp(r.IntervalHours,1,168));
+                if(!due)continue;
+                try
+                {
+                    var before=channelCache.TryGetValue(p.Id,out var old)?old.Channels:(TryLoadLiveChannelDiskCache(p.Id,TimeSpan.FromDays(7),out var disk)?disk:new List<LiveChannel>());
+                    var fresh=await LoadProviderChannels(p);
+                    var b=before.ToDictionary(x=>x.Key,StringComparer.OrdinalIgnoreCase);var f=fresh.ToDictionary(x=>x.Key,StringComparer.OrdinalIgnoreCase);
+                    var addedKeys=f.Keys.Where(k=>!b.ContainsKey(k)).ToArray();var added=addedKeys.Length;
+                    var removed=b.Keys.Count(k=>!f.ContainsKey(k));
+                    var updated=f.Keys.Count(k=>b.TryGetValue(k,out var z)&&(z.Name!=f[k].Name||z.Group!=f[k].Group||z.SourceUrl!=f[k].SourceUrl));
+                    var unchanged=Math.Max(0,fresh.Count-added-updated);
+                    channelCache[p.Id]=new ChannelCacheEntry(fresh,DateTimeOffset.UtcNow);SaveLiveChannelDiskCache(p.Id,fresh);EnsureAdultGroupsHidden(p.Id,fresh);
+                    if(!r.NewChannelsActive&&addedKeys.Length>0){var cpAll=LoadChannelPreferences();var cp=cpAll.TryGetValue(p.Id,out var cpx)?cpx:new ChannelPreferences(new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase),new(StringComparer.OrdinalIgnoreCase));foreach(var k in addedKeys)cp.HiddenChannels.Add(k);cpAll[p.Id]=cp;Save(channelPreferencesFile,cpAll);}
+                    r.LastRefresh=DateTimeOffset.UtcNow;r.LastAdded=added;r.LastUpdated=updated;r.LastRemoved=removed;r.LastUnchanged=unchanged;all[p.Id]=pref;Save(libraryManagementFile,all);
+                    AddProviderSyncEvent(p.Id,"scheduled",true,added,updated,removed,unchanged);
+                }
+                catch(Exception ex){app.Logger.LogWarning(ex,"Scheduled IPTV refresh failed for {ProviderId}",p.Id);AddProviderSyncEvent(p.Id,"scheduled",false,0,0,0,0,ex.Message);}
+            }
+        }
+        catch(Exception ex){app.Logger.LogWarning(ex,"IPTV provider refresh scheduler iteration failed.");}
+    }
+}
+_ = Task.Run(ProviderRefreshSchedulerLoop);
+
+
+// Pin unattributed legacy state to its original account before accepting requests.
+LegacyStateOwnerId();
 app.Run();
 
 async Task StopLiveSession(string sessionId)
@@ -4607,7 +4879,7 @@ async Task<string> ProviderTextWithRetry(string url, string accept, TimeSpan tim
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.TryAddWithoutValidation("Accept", accept);
-            request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/34.1.0");
+            request.Headers.TryAddWithoutValidation("User-Agent", AppIdentity.UserAgent());
             using var cts = new CancellationTokenSource(timeout);
             using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
             if (!response.IsSuccessStatusCode)
@@ -4830,7 +5102,7 @@ async Task<HttpResponseMessage> SendProviderRequest(string url, HttpCompletionOp
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-    request.Headers.TryAddWithoutValidation("User-Agent", "MyOnline-TV/34.1.0");
+    request.Headers.TryAddWithoutValidation("User-Agent", AppIdentity.UserAgent());
     using var cts = new CancellationTokenSource(timeout);
     return await http.SendAsync(request, completion, cts.Token);
 }
@@ -4868,10 +5140,11 @@ static string SafeProviderError(Exception ex)
 }
 
 
-static async Task SignIn(HttpContext ctx, string username, string role)
+static async Task SignIn(HttpContext ctx, string username, string role, string userId)
 {
     var claims = new[]
     {
+        new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, userId),
         new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, username),
         new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role, role)
     };
@@ -5075,7 +5348,7 @@ static string? FindExecutable(string name)
     var path = Environment.GetEnvironmentVariable("PATH") ?? "";
     foreach (var dir in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
     {
-        var candidate = Path.Combine(dir, name);
+        var candidate = Path.Combine(dir, OperatingSystem.IsWindows() ? name + ".exe" : name);
         if (File.Exists(candidate)) return candidate;
     }
     return null;
@@ -5145,6 +5418,7 @@ sealed class CataloguePreferences
 record CatalogueCategoryVisibilityRequest(string? Kind, string CategoryId, bool Hidden);
 record CatalogueItemVisibilityRequest(string? Kind, string ItemId, bool Hidden);
 record CatalogueResetRequest(string? Kind);
+record BulkCatalogueVisibilityRequest(string? Kind, string[]? HiddenCategories, string[]? HiddenItems, bool ReplaceItems = false);
 record ViewerProfile(string Id, string Name, bool IsKids, string Icon, string? OwnerUsername = null);
 record ViewerProfileInput(string? Id, string? Name, bool IsKids, string? Icon, string? OwnerUsername = null);
 record BulkChannelVisibilityRequest(string[]? HiddenGroups, string[]? HiddenChannels);
@@ -5154,9 +5428,11 @@ sealed class LibraryManagementPreferences
     public ProviderRefreshState Refresh { get; set; } = new();
 }
 sealed class GroupQualityRule { public string[] Allowed { get; set; } = Array.Empty<string>(); public bool BestOnly { get; set; } public string[] Priority { get; set; } = new[]{"RAW","4K","FHD","HD","SD","Unknown"}; }
-sealed class ProviderRefreshState { public string Mode { get; set; }="manual"; public int IntervalHours { get; set; }=24; public DateTimeOffset? LastRefresh { get; set; } public int LastAdded { get; set; } public int LastUpdated { get; set; } public int LastRemoved { get; set; } public int LastUnchanged { get; set; } }
+sealed class ProviderRefreshState { public string Mode { get; set; }="manual"; public int IntervalHours { get; set; }=24; public bool NewChannelsActive { get; set; }=true; public DateTimeOffset? LastRefresh { get; set; } public int LastAdded { get; set; } public int LastUpdated { get; set; } public int LastRemoved { get; set; } public int LastUnchanged { get; set; } }
 record GroupQualityRuleRequest(string Group,string[]? Allowed,bool BestOnly,string[]? Priority);
-record RefreshSettings(string? Mode,int IntervalHours);
+record RefreshSettings(string? Mode,int IntervalHours,bool NewChannelsActive=true);
+record AdultGroupControlRequest(bool Active);
+record ProviderSyncEvent(DateTimeOffset At,string ProviderId,string Trigger,bool Ok,int Added,int Updated,int Removed,int Unchanged,string? Error);
 record BulkLibraryChannelsRequest(string[]? ChannelKeys,bool Hidden);
 
 record GroupVisibilityRequest(string Group, bool Hidden);
@@ -5197,12 +5473,12 @@ record RecordingJob(string Id, string ProviderId, string ChannelKey, string Chan
 record StorageTarget(string Id, string Name, string Type, string Destination, bool DefaultDvr, bool DefaultDownload, bool Enabled);
 record StorageTargetInput(string? Id, string Name, string? Type, string Destination, bool DefaultDvr, bool DefaultDownload, bool Enabled);
 record MediaDownloadRequest(string Token, string? Title, string? StorageTargetId = null);
-record ProxyTarget(string Url, string Kind, DateTimeOffset Created);
-record LiveSession(string Id, string Directory, Process Process, StringBuilder ErrorLog, string SourceUrl, DateTimeOffset Started, double? DurationSeconds = null);
+record ProxyTarget(string Url, string Kind, DateTimeOffset Created, string OwnerUserId);
+record LiveSession(string Id, string Directory, Process Process, StringBuilder ErrorLog, string SourceUrl, DateTimeOffset Started, double? DurationSeconds = null, string? OwnerUserId = null);
 record RecentError(DateTimeOffset At, string Area, string Message);
 
 record DownloadJob(string Id, string Title, string SourceUrl, string Path, string Status, double Progress, string? Error, DateTimeOffset Created,
-    string? StorageTargetId = null, string? StorageTargetName = null, string? StorageType = null, string? StorageDestination = null)
+    string? StorageTargetId = null, string? StorageTargetName = null, string? StorageType = null, string? StorageDestination = null, string? OwnerUserId = null)
 {
     public object Safe() => new
     {

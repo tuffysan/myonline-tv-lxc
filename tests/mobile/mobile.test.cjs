@@ -198,6 +198,39 @@ const server = http.createServer(async (req, res) => {
     await page.setViewportSize({width:390,height:844});
     assert.deepEqual(errors,[],'No browser JavaScript errors');
     if(process.env.MOBILE_SCREENSHOT)await page.screenshot({path:process.env.MOBILE_SCREENSHOT,fullPage:true});
+    const isolation=await page.evaluate(()=>{
+      const original=authState;
+      authState={user:'Alice',userId:'account-a',role:'User'};currentProfile='default';
+      const keysA=[homeCacheKey('private'),catalogueCacheKey('movies','same',''),historyKey(),mediaFavKey(),watchedKey(),searchHistoryKey(),UnifiedWatchlist.key(),MyOnlineChannelHistory.key,NotificationCenter.key];
+      keysA.forEach(k=>localStorage.setItem(k,JSON.stringify(['Alice private data'])));
+      setHomeCache('private',[{title:'Alice private data'}]);
+      perfCache.set(privateScope()+':test',{at:Date.now(),value:['Alice private data']});
+      authState={user:'Bob',userId:'account-b',role:'User'};
+      const keysB=[homeCacheKey('private'),catalogueCacheKey('movies','same',''),historyKey(),mediaFavKey(),watchedKey(),searchHistoryKey(),UnifiedWatchlist.key(),MyOnlineChannelHistory.key,NotificationCenter.key];
+      const result={different:keysA.every((k,i)=>k!==keysB[i]),empty:keysB.every(k=>localStorage.getItem(k)===null),memory:perfCacheGet('test',10000)};
+      authState=original;return result;
+    });
+    assert.deepEqual(isolation,{different:true,empty:true,memory:null});
+    console.log('PASS user-specific browser cache, favourites, history, watchlist and notifications');
+    await page.evaluate(async()=>{
+      currentProvider='p';
+      content.innerHTML='<div id="lmRefreshStatus"></div><div id="libraryManagementBody"></div>';
+      lmState={tab:'groups',channels:[],snapshot:{groups:[{name:'News',count:1,hidden:false},{name:'Adult 18+',count:1,hidden:true}]}};
+      renderLmRefresh({mode:'manual',intervalHours:24,newChannelsActive:false});
+      await renderLibraryManagementTab();
+    });
+    assert.equal(await page.getByRole('button',{name:'Preview provider changes',exact:true}).count(),1);
+    assert.equal(await page.getByRole('button',{name:'Sync diagnostics',exact:true}).count(),1);
+    assert.equal(await page.locator('#lmNewChannelsActive').isChecked(),false);
+    await page.locator('#lmGroupState').selectOption('adult');
+    assert.equal(await page.locator('.lmGroupCard:not([hidden])').count(),1);
+    assert.match(await page.locator('.lmGroupCard:not([hidden])').innerText(),/Adult 18\+/);
+    let adultConfirmation=false;
+    page.once('dialog',async dialog=>{adultConfirmation=/Enable all detected Adult/.test(dialog.message());await dialog.dismiss()});
+    await page.getByRole('button',{name:'Enable Adult (18+)',exact:true}).click();
+    assert.equal(adultConfirmation,true);
+    assert.deepEqual(errors,[]);
+    console.log('PASS restored library controls, group filtering and adult enable confirmation');
     console.log('All mobile regression checks passed.');
   } catch(e) {
     const page=browser.contexts()[0]?.pages()[0];

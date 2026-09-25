@@ -1,7 +1,10 @@
-\
-        $ErrorActionPreference="Stop"
-        $root=Split-Path -Parent $PSScriptRoot
-        & (Join-Path $PSScriptRoot "VERIFY-v31.2.0.ps1")
+$ErrorActionPreference = "Stop"
+# Keep this entry point, composing the repository's maintained local gates.
+# The removed VERIFY-v31.2.0.ps1 was never present in repository history.
+& (Join-Path $PSScriptRoot "Validate-Architecture.ps1")
+& (Join-Path $PSScriptRoot "ARCHITECTURE-GATE.ps1")
+& (Join-Path $PSScriptRoot "../tests/release_version.Tests.ps1")
+Write-Host "Local structural checks passed; this is not runtime production sign-off." -ForegroundColor Green
         Write-Host ""
         Write-Host "Runtime sign-off still required:" -ForegroundColor Yellow
         @(

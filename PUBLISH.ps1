@@ -1,4 +1,4 @@
-﻿param(
+param(
   [string]$RepoPath = ".",
   [string]$Remote = "origin",
   [string]$Branch = "main"
@@ -87,6 +87,17 @@ Write-Host "[1/9] Fetching repository..."
 & git fetch $Remote --tags
 Assert-LastExitCode "git fetch failed."
 
+. (Join-Path $PSScriptRoot 'scripts/Release-VersionGuard.ps1')
+$knownTags = @(& git tag --list)
+Assert-LastExitCode "Cannot inspect tags."
+$releaseJson = & gh api --paginate --slurp "repos/{owner}/{repo}/releases?per_page=100"
+Assert-LastExitCode "Cannot verify published releases and drafts."
+$releaseTags = @($releaseJson | ConvertFrom-Json | ForEach-Object { $_.tag_name })
+Assert-ReleaseVersion $version ($knownTags + $releaseTags)
+$remoteCandidate = @(& git ls-remote --tags $Remote "refs/tags/$tag" "refs/tags/v.$version")
+Assert-LastExitCode "Cannot verify remote tag collisions."
+if ($remoteCandidate.Count -gt 0) { throw "Release tag already exists; investigate without replacing it." }
+
 Write-Host "[2/9] Local .NET build preflight..."
 $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
 if ($dotnet) {
@@ -95,7 +106,7 @@ if ($dotnet) {
   & dotnet build app/MyOnlineTV.Web.csproj -c Release --no-restore
   Assert-LastExitCode "dotnet build failed. Release not published."
 } else {
-  Write-Warning ".NET SDK not found locally; GitHub Actions will perform the compile gate."
+  throw ".NET SDK is required; release preflight cannot be skipped."
 }
 
 Write-Host "[3/9] Adding files..."
@@ -117,36 +128,17 @@ Assert-LastExitCode "git push failed even though authentication preflight succee
 
 $headCommit = (& git rev-parse HEAD).Trim()
 
-Write-Host "[6/9] Checking local tag..."
-$localTag = (@(& git tag --list $tag) -join "`n").Trim()
-if ($localTag) {
-  $localCommit = (& git rev-list -n 1 $tag).Trim()
-  if ($localCommit -ne $headCommit) {
-    Write-Host "Local $tag points to an older commit; recreating it."
-    & git tag -d $tag | Out-Null
-    Assert-LastExitCode "Could not delete old local tag $tag."
-  }
-}
-
-Write-Host "[7/9] Checking remote tag..."
-$remoteTagLine = (@(& git ls-remote --tags $Remote "refs/tags/$tag") -join "`n").Trim()
-if ($remoteTagLine) {
-  $remoteCommit = (($remoteTagLine -split '\s+')[0]).Trim()
-  if ($remoteCommit -ne $headCommit) {
-    Write-Host "Remote $tag points to another commit; replacing it."
-    & git push $Remote ":refs/tags/$tag"
-    Assert-LastExitCode "Could not delete old remote tag $tag."
-  } else {
-    Write-Host "Remote $tag already points to HEAD."
-  }
-}
-
-Write-Host "[8/9] Creating tag when needed..."
-$existingTag = (@(& git tag --list $tag) -join "`n").Trim()
-if ([string]::IsNullOrWhiteSpace($existingTag)) {
-  & git tag -a $tag -m "MyOnline TV $tag"
-  Assert-LastExitCode "Could not create tag $tag."
-}
+Write-Host "[6/9] Rechecking immutable tag names..."
+$existing = @(& git tag --list $tag "v.$version")
+Assert-LastExitCode "Cannot recheck local tags."
+if ($existing.Count -gt 0) { throw "Tag collision detected; no existing tag was changed." }
+Write-Host "[7/9] Rechecking remote tags..."
+$existingRemote = @(& git ls-remote --tags $Remote "refs/tags/$tag" "refs/tags/v.$version")
+Assert-LastExitCode "Cannot recheck remote tags."
+if ($existingRemote.Count -gt 0) { throw "Remote tag collision detected; no existing tag was changed." }
+Write-Host "[8/9] Creating new tag..."
+& git tag -a $tag -m "MyOnline TV $tag"
+Assert-LastExitCode "Could not create tag $tag."
 
 Write-Host "[9/9] Push tag..."
 & git push $Remote "refs/tags/$tag"

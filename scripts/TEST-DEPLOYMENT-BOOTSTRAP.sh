@@ -12,7 +12,7 @@ printf '#!/usr/bin/env bash\nexit 0\n' > "$T/release-src/scripts/update-local.sh
 printf '#!/usr/bin/env bash\n' > "$T/release-src/scripts/github-common.sh"
 tar -C "$T/release-src" -czf "$T/myonline-tv-lxc-v${VERSION_VALUE}-source.tar.gz" .
 printf 'fake-app\n' > "$T/myonline-tv-web-v${VERSION_VALUE}-linux-x64.tar.gz"
-(cd "$T" && sha256sum "myonline-tv-lxc-v${VERSION_VALUE}-source.tar.gz" "myonline-tv-web-v${VERSION_VALUE}-linux-x64.tar.gz" > SHA256SUMS-RELEASE.txt)
+(cd "$T" && sha256sum --text "myonline-tv-lxc-v${VERSION_VALUE}-source.tar.gz" "myonline-tv-web-v${VERSION_VALUE}-linux-x64.tar.gz" > SHA256SUMS-RELEASE.txt)
 cat > "$T/bin/curl" <<MOCK
 #!/bin/bash
 set -e
@@ -25,7 +25,7 @@ while ((\$#)); do
     *) url="\$1"; shift;;
   esac
 done
-if [[ "\$url" == *'/releases/latest' ]]; then printf '{"tag_name":"v${VERSION_VALUE}"}\\n'; exit 0; fi
+if [[ "\$url" == *'/releases/latest'* ]]; then printf '{"tag_name":"v${VERSION_VALUE}"}\\n'; exit 0; fi
 name="\${url##*/}"; cp "$T/\$name" "\$out"
 MOCK
 cat > "$T/bin/pct" <<'MOCK'

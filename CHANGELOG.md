@@ -1,3 +1,15 @@
+## 39.8.4 (release candidate)
+
+- Restore the established 39.8.x version line and assembly-derived product metadata; preserve the historical v37.1.0 tag.
+- Isolate Continue Watching, favourites, profile media state, rooms and notifications by account. Remove or clear progress persistently without deleting media or watchlist entries; rewatching can add it again.
+- Enforce token, download, playback-session, provider, media-library and DVR ownership. Prevent account recreation from inheriting old cookies or sources and isolate browser caches/history.
+- Use an ASCII filename fallback and RFC-compatible UTF-8 filename* for Unicode downloads.
+- Preserve the mobile redesign and add accessible navigation, menus, detail history, collection actions, responsive Guide/player layouts and Continue Watching controls for desktop, phone, tablet and TV.
+- Add real multi-user API, persistence, browser and download-header regression tests, plus immutable-tag/version guards in the existing release process.
+- Preserve the release-upload recovery and artifact verification changes introduced after v39.8.3.
+
+Release candidate only: native-client/target-LXC validation and review of functionality removed by the anomalous v37.1.0 commit remain required. See MULTI-USER-AUDIT.md.
+
 ## 37.1.0
 
 - Mobile Experience Redesign: dedicated Home, Live TV, Movies, Series, navigation and mobile Library Management layouts.

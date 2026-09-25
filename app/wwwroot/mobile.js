@@ -230,7 +230,7 @@ show=async function(view){
   }finally{mobileNavigationDepth--;}
   if(top){
     const replace=!mobileRoute||(mobileRoute.view===currentView&&!mobileRoute.steps.length&&mobileRoute.collection===mobileCollectionKind);
-    mobileRoute={view:currentView,steps:[],provider:currentProvider,collection:mobileCollectionKind,sort:mobileCollectionSort,form:{},scroll:0};
+    mobileRoute={user:userScope(),view:currentView,steps:[],provider:currentProvider,collection:mobileCollectionKind,sort:mobileCollectionSort,form:{},scroll:0};
     history[replace?'replaceState':'pushState']({myonline:structuredClone(mobileRoute)},'');
     window.scrollTo(0,0);
   }
@@ -262,6 +262,7 @@ playUnifiedItem=routeAction('playUnifiedItem',playUnifiedItem);
 resumeContinueItem=routeAction('resumeContinueItem',resumeContinueItem);
 openHomeFavourite=routeAction('openHomeFavourite',openHomeFavourite);
 window.addEventListener('popstate',async e=>{
+  if(e.state?.myonline?.user!==userScope()){mobileRoute=null;if(authState.user)await show('home');return}
   if(!e.state?.myonline)return;
   mobileHistoryRestoring=true;
   try{
