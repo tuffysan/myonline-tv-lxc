@@ -278,6 +278,9 @@ var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteI
 var secretBox = new SecretBox(secretKeyFile);
 var proxyTokens = new ConcurrentDictionary<string, ProxyTarget>();
 var downloads = new ConcurrentDictionary<string, DownloadJob>();
+var downloadCancellations = new ConcurrentDictionary<string, CancellationTokenSource>();
+var downloadSlots = new SemaphoreSlim(2, 2);
+var downloadsStateFile = Path.Combine(dataDir, "downloads-state.json");
 var liveSessions = new ConcurrentDictionary<string, LiveSession>();
 var recordingProcesses = new ConcurrentDictionary<string, Process>();
 var channelCache = new ConcurrentDictionary<string, ChannelCacheEntry>();
@@ -301,6 +304,14 @@ void Save<T>(string path, T value)
     var tmp = path + ".tmp";
     File.WriteAllText(tmp, JsonSerializer.Serialize(value, jsonOptions));
     File.Move(tmp, path, true);
+}
+void PersistDownloads() { try { Save(downloadsStateFile, downloads.Values.OrderByDescending(x => x.Created).ToList()); } catch { } }
+void PutDownload(DownloadJob job) { downloads[job.Id] = job; PersistDownloads(); }
+var restoredDownloads = Load<List<DownloadJob>>(downloadsStateFile) ?? new();
+foreach (var restored in restoredDownloads)
+{
+    var interrupted = restored.Status is "Queued" or "Checking" or "Downloading" or "Downloading HLS" or "Uploading";
+    downloads[restored.Id] = interrupted ? restored with { Status = "Interrupted", Error = "Service restarted before this download completed. Use Retry to continue." } : restored;
 }
 
 void RecordError(string area, Exception ex)
@@ -1033,7 +1044,7 @@ app.Use(async (ctx, next) =>
             string? token = seg.Length > 2 && area == "proxy" ? seg[2] :
                 seg.Length > 3 && ((area == "downloads" && action == "device") || (area == "media" && action == "start")) ? seg[3] : null;
             if (token is not null) deny |= !proxyTokens.TryGetValue(token, out var target) || target.OwnerUserId != user.Id;
-            if (seg.Length > 2 && area == "downloads" && action is not ("device" or "media"))
+            if (seg.Length > 2 && area == "downloads" && action is not ("device" or "media" or "summary" or "history"))
                 deny |= !downloads.TryGetValue(seg[2], out var job) || job.OwnerUserId != user.Id;
             if (seg.Length > 3 && area == "live" && action is "status" or "hls" or "session")
                 deny |= !liveSessions.TryGetValue(seg[3], out var session) || session.OwnerUserId != user.Id;
@@ -3144,7 +3155,7 @@ app.MapPost("/api/downloads/media", (MediaDownloadRequest req, HttpContext ctx) 
 
     var job = new DownloadJob(id, title, source.Url, path, "Queued", 0, null, DateTimeOffset.UtcNow,
         storage.Id, storage.Name, storage.Type, storage.Destination, UserKey(ctx));
-    downloads[id] = job;
+    PutDownload(job);
     _ = Task.Run(async () =>
     {
         await RunDownload(job);
@@ -3153,21 +3164,32 @@ app.MapPost("/api/downloads/media", (MediaDownloadRequest req, HttpContext ctx) 
         {
             try
             {
-                downloads[job.Id] = completed with { Status = "Uploading", Progress = -1 };
+                PutDownload(completed with { Status = "Uploading", Progress = -1 });
                 var uploadName = Path.GetFileName(completed.Path);
                 if (uploadName.StartsWith(job.Id + "-", StringComparison.OrdinalIgnoreCase))
                     uploadName = uploadName[(job.Id.Length + 1)..];
                 await UploadWithRclone(completed.Path, storage, $"{job.OwnerUserId}/{job.Id}-{uploadName}");
                 try { File.Delete(completed.Path); } catch { }
-                downloads[job.Id] = downloads[job.Id] with { Status = "Completed", Progress = 100 };
+                PutDownload(downloads[job.Id] with { Status = "Completed", Progress = 100 });
             }
             catch (Exception ex)
             {
-                downloads[job.Id] = downloads[job.Id] with { Status = "Failed", Error = ex.GetBaseException().Message };
+                PutDownload(downloads[job.Id] with { Status = "Failed", Error = ex.GetBaseException().Message });
             }
         }
     });
     return Results.Accepted($"/api/downloads/{id}", job.Safe());
+}).RequireAuthorization();
+
+app.MapGet("/api/downloads/summary", (HttpContext ctx) =>
+{
+    var rows = downloads.Values.Where(x => x.OwnerUserId == UserKey(ctx)).ToList();
+    long bytes = 0; foreach (var row in rows.Where(x => x.Status == "Completed" && File.Exists(x.Path))) { try { bytes += new FileInfo(row.Path).Length; } catch { } }
+    return Results.Ok(new { total=rows.Count, queued=rows.Count(x=>x.Status=="Queued"), active=rows.Count(x=>x.Status is "Checking" or "Downloading" or "Downloading HLS" or "Uploading"), completed=rows.Count(x=>x.Status=="Completed"), failed=rows.Count(x=>x.Status is "Failed" or "Interrupted"), cancelled=rows.Count(x=>x.Status=="Cancelled"), storedBytes=bytes, concurrency=2 });
+}).RequireAuthorization();
+app.MapDelete("/api/downloads/history", (HttpContext ctx) =>
+{
+    var owner=UserKey(ctx); foreach(var row in downloads.Values.Where(x=>x.OwnerUserId==owner && (x.Status is "Failed" or "Cancelled" or "Interrupted")).ToList()) downloads.TryRemove(row.Id,out _); PersistDownloads(); return Results.NoContent();
 }).RequireAuthorization();
 
 app.MapGet("/api/downloads/device/{token}", async (string token, string? title, HttpContext ctx) =>
@@ -3236,6 +3258,8 @@ app.MapGet("/api/downloads/device/{token}", async (string token, string? title, 
 app.MapDelete("/api/downloads/{id}", async (string id) =>
 {
     if (!downloads.TryRemove(id, out var job)) return Results.NotFound();
+    if (downloadCancellations.TryRemove(id, out var activeCts)) { try { activeCts.Cancel(); activeCts.Dispose(); } catch { } }
+    PersistDownloads();
     if (job.StorageType?.Equals("rclone", StringComparison.OrdinalIgnoreCase) == true && job.Status == "Completed")
     {
         try
@@ -4156,18 +4180,16 @@ app.MapDelete("/api/profile-state/{profileId}/{mediaId}", (string profileId,stri
 app.MapPost("/api/downloads/{id}/cancel", (string id) =>
 {
     if(!downloads.TryGetValue(id,out var job))return Results.NotFound();
-    if(job.Status is "Completed" or "Failed")return Results.BadRequest("Download is not active.");
-    downloads[id]=job with {Status="Cancelled",Error="Cancelled by user"};
-    return Results.Ok(downloads[id].Safe());
+    if(job.Status is "Completed" or "Failed" or "Cancelled")return Results.BadRequest("Download is not active.");
+    if(downloadCancellations.TryGetValue(id,out var cts)) cts.Cancel();
+    var cancelled=job with {Status="Cancelled",Error="Cancelled by user"}; PutDownload(cancelled); return Results.Ok(cancelled.Safe());
 }).RequireAuthorization();
 app.MapPost("/api/downloads/{id}/retry", (string id) =>
 {
     if(!downloads.TryGetValue(id,out var job))return Results.NotFound();
-    if(job.Status is not ("Failed" or "Cancelled"))return Results.BadRequest("Only failed/cancelled downloads can be retried.");
-    var retry=job with {Status="Queued",Progress=0,Error=null,Created=DateTimeOffset.UtcNow};
-    downloads[id]=retry;_ = Task.Run(()=>RunDownload(retry));return Results.Accepted($"/api/downloads/{id}",retry.Safe());
+    if(job.Status is not ("Failed" or "Cancelled" or "Interrupted"))return Results.BadRequest("Only failed, cancelled or interrupted downloads can be retried.");
+    var retry=job with {Status="Queued",Progress=0,Error=null,Created=DateTimeOffset.UtcNow}; PutDownload(retry); _=Task.Run(()=>RunDownload(retry)); return Results.Accepted($"/api/downloads/{id}",retry.Safe());
 }).RequireAuthorization();
-
 
 
 app.MapGet("/api/platform/status", (HttpContext ctx) =>
@@ -4779,23 +4801,25 @@ async Task StopLiveSession(string sessionId)
 
 async Task RunDownload(DownloadJob job)
 {
+    var cts=new CancellationTokenSource(); downloadCancellations[job.Id]=cts; var token=cts.Token; var slotAcquired=false;
     try
     {
-        downloads[job.Id] = job with { Status = "Checking", Progress = 0 };
+        await downloadSlots.WaitAsync(token); slotAcquired=true;
+        PutDownload(job with { Status = "Checking", Progress = 0 });
         var uri = new Uri(job.SourceUrl);
         var manifest = uri.AbsolutePath.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase);
 
         if (!manifest)
         {
             using var head = new HttpRequestMessage(HttpMethod.Get, uri);
-            using var response = await http.SendAsync(head, HttpCompletionOption.ResponseHeadersRead);
+            using var response = await http.SendAsync(head, HttpCompletionOption.ResponseHeadersRead, token);
             response.EnsureSuccessStatusCode();
             var mediaType = response.Content.Headers.ContentType?.MediaType ?? "";
             manifest = mediaType.Contains("mpegurl", StringComparison.OrdinalIgnoreCase);
 
             if (!manifest)
             {
-                downloads[job.Id] = downloads[job.Id] with { Status = "Downloading" };
+                PutDownload(downloads[job.Id] with { Status = "Downloading" });
                 var total = response.Content.Headers.ContentLength;
                 await using var input = await response.Content.ReadAsStreamAsync();
                 await using var output = File.Create(job.Path);
@@ -4803,25 +4827,22 @@ async Task RunDownload(DownloadJob job)
                 long received = 0;
                 while (true)
                 {
-                    var read = await input.ReadAsync(buffer);
+                    var read = await input.ReadAsync(buffer, token);
                     if (read == 0) break;
-                    await output.WriteAsync(buffer.AsMemory(0, read));
+                    await output.WriteAsync(buffer.AsMemory(0, read), token);
                     received += read;
-                    downloads[job.Id] = downloads[job.Id] with
-                    {
-                        Progress = total > 0 ? Math.Min(99, received * 100.0 / total.Value) : -1
-                    };
+                    PutDownload(downloads[job.Id] with { Progress = total > 0 ? Math.Min(99, received * 100.0 / total.Value) : -1 });
                 }
-                downloads[job.Id] = downloads[job.Id] with { Status = "Completed", Progress = 100 };
+                PutDownload(downloads[job.Id] with { Status = "Completed", Progress = 100 });
                 return;
             }
         }
 
-        var manifestText = await http.GetStringAsync(uri);
+        var manifestText = await http.GetStringAsync(uri, token);
         if (EncryptedHls(manifestText))
             throw new InvalidOperationException("Encrypted/protected HLS download is not supported.");
 
-        downloads[job.Id] = downloads[job.Id] with { Status = "Downloading HLS", Progress = -1 };
+        PutDownload(downloads[job.Id] with { Status = "Downloading HLS", Progress = -1 });
         var ffmpeg = FindExecutable("ffmpeg") ?? throw new InvalidOperationException("ffmpeg is not installed.");
         var outputPath = Path.ChangeExtension(job.Path, ".mp4");
         var psi = new ProcessStartInfo { FileName = ffmpeg, UseShellExecute = false, RedirectStandardError = true };
@@ -4836,15 +4857,24 @@ async Task RunDownload(DownloadJob job)
         psi.ArgumentList.Add(outputPath);
         using var proc = Process.Start(psi) ?? throw new InvalidOperationException("Could not start ffmpeg.");
         var errTask = proc.StandardError.ReadToEndAsync();
-        await proc.WaitForExitAsync();
+        await proc.WaitForExitAsync(token);
         var err = await errTask;
         if (proc.ExitCode != 0)
             throw new InvalidOperationException("ffmpeg failed: " + (err.Length > 800 ? err[^800..] : err));
-        downloads[job.Id] = downloads[job.Id] with { Path = outputPath, Status = "Completed", Progress = 100 };
+        PutDownload(downloads[job.Id] with { Path = outputPath, Status = "Completed", Progress = 100 });
+    }
+    catch (OperationCanceledException)
+    {
+        if(downloads.TryGetValue(job.Id,out var current) && current.Status!="Cancelled") PutDownload(current with {Status="Cancelled",Error="Cancelled by user"});
     }
     catch (Exception ex)
     {
-        downloads[job.Id] = downloads[job.Id] with { Status = "Failed", Error = ex.Message };
+        if(downloads.TryGetValue(job.Id,out var current)) PutDownload(current with { Status = "Failed", Error = ex.Message });
+    }
+    finally
+    {
+        if(slotAcquired) downloadSlots.Release();
+        if(downloadCancellations.TryRemove(job.Id,out var owned)) owned.Dispose();
     }
 }
 
@@ -5484,6 +5514,7 @@ record DownloadJob(string Id, string Title, string SourceUrl, string Path, strin
     {
         Id, Title, Status, Progress, Error, Created, StorageTargetId, StorageTargetName, StorageType, StorageDestination,
         fileName = System.IO.Path.GetFileName(Path),
+        bytes = System.IO.File.Exists(Path) ? new System.IO.FileInfo(Path).Length : 0,
         completed = Status == "Completed"
     };
 }

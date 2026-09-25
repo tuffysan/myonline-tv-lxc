@@ -92,3 +92,6 @@ On a Windows development machine with Git, .NET 10 SDK, Python 3 and GitHub CLI 
 `RELEASE.cmd` runs the local Release build, download-header regressions, Continue Watching tests, multi-user isolation tests, version guard and production gate. Only after those pass does it call the existing publisher to commit/push/tag. It then waits for `.github/workflows/release.yml` and verifies that the final GitHub Release is non-draft/non-prerelease and contains all four mandatory non-empty assets.
 
 Release tags are immutable. The script aborts instead of replacing an existing local or remote version tag.
+
+## Roadmap release line
+After v39.8.5 the planned line is v39.9.0 Downloads 2.0, v39.10.0 Continue Watching 2.0, v39.11.0 IPTV Manager 2.0, v39.12.0 Live TV 2.0, then v40.0.0 MyOnlineTV Experience 2.0. The version guard accepts the next patch, next minor `.0`, or next major `.0.0` only.

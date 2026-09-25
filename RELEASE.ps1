@@ -84,6 +84,7 @@ Assert-Exit "Release build failed."
 Step "[2/7] Download header regression tests"
 & dotnet run --project tests/DownloadHeaders/DownloadHeaders.csproj -c Release
 Assert-Exit "DownloadHeaders tests failed."
+Invoke-Python 'tests/downloads2_source.py'
 
 Step "[3/7] Continue Watching tests"
 Invoke-Python 'tests/continue_api.py'
@@ -124,16 +125,36 @@ while (-not $runId -and (Get-Date) -lt $deadline) {
 if (-not $runId) { throw "Timed out waiting for GitHub Actions run for $tag." }
 Write-Host "GitHub Actions run: $runId"
 
+$actionStarted = Get-Date
+$lastActionLine = ""
 while ((Get-Date) -lt $deadline) {
-  $runRaw = & gh run view $runId --json status,conclusion,url
+  $runRaw = & gh run view $runId --json status,conclusion,url,jobs
   Assert-Exit "Could not inspect GitHub Actions run $runId."
   $run = $runRaw | ConvertFrom-Json
-  Write-Host "GitHub Actions: $($run.status) $($run.conclusion)"
+  $activeJob = @($run.jobs | Where-Object { $_.status -ne 'completed' } | Select-Object -First 1)
+  if (-not $activeJob) { $activeJob = @($run.jobs | Select-Object -Last 1) }
+  $job = if ($activeJob.Count) { $activeJob[0] } else { $null }
+  $activeStep = $null
+  if ($job) {
+    $activeStep = @($job.steps | Where-Object { $_.status -eq 'in_progress' } | Select-Object -First 1)
+    if (-not $activeStep) { $activeStep = @($job.steps | Where-Object { $_.status -eq 'queued' } | Select-Object -First 1) }
+    if (-not $activeStep) { $activeStep = @($job.steps | Select-Object -Last 1) }
+    if ($activeStep.Count) { $activeStep = $activeStep[0] } else { $activeStep = $null }
+  }
+  $elapsed = (Get-Date) - $actionStarted
+  $jobName = if ($job) { [string]$job.name } else { 'Waiting for job' }
+  $stepName = if ($activeStep) { [string]$activeStep.name } else { [string]$run.status }
+  $line = "[{0:mm\:ss}] Job: {1} | Step: {2} | Run: {3}" -f $elapsed,$jobName,$stepName,$run.status
+  if ($line -ne $lastActionLine) { Write-Host $line; $lastActionLine = $line }
   if ($run.status -eq 'completed') {
-    if ($run.conclusion -ne 'success') { throw "GitHub Actions release failed: $($run.url)" }
+    if ($run.conclusion -ne 'success') {
+      Write-Host "GitHub Actions failed. Showing failed log output:"
+      & gh run view $runId --log-failed
+      throw "GitHub Actions release failed: $($run.url)"
+    }
     break
   }
-  Start-Sleep -Seconds 10
+  Start-Sleep -Seconds 5
 }
 if ((Get-Date) -ge $deadline) { throw "Timed out waiting for GitHub Actions release to finish." }
 

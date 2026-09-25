@@ -1,3 +1,13 @@
+# v39.9.0 - Downloads 2.0
+
+- Persistent per-user download queue/history across service restarts.
+- Real cancellation tokens for active downloads and safe retry handling.
+- Batch download API for movie/episode sets with per-item validation.
+- Download Manager summary with queued/active/completed/failed counts and storage usage.
+- Improved download UI with status filters, history controls, progress auto-refresh and clearer errors.
+- Release dashboard now shows the active GitHub Actions job/step instead of repeating `in_progress`, and prints failed logs automatically.
+- Multi-user isolation remains mandatory for all download operations.
+
 ## 39.8.5 (release candidate) — Stabilization
 
 - Stabilization-only follow-up to v39.8.4; no new product feature surface is introduced.
