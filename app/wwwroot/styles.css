@@ -2045,3 +2045,23 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
 .lmGroupCard[data-adult="true"] .adultGroupBadge{font-weight:900}
 /* v39.11.0 IPTV Manager 2.0 */
 .iptvManagerSync{margin-top:16px}.iptvManagerSync .sectionHead{align-items:center}.iptvManagerSync .lmSyncDiag small{display:block;margin-top:4px}.iptvManagerSync .manageList{margin-top:10px}
+
+
+/* v39.19.0 — Experience Migration design-system bridge.
+   Additive classes only: existing selectors remain untouched for v39 compatibility. */
+:root{
+  --mtv-space-xs:4px;--mtv-space-sm:8px;--mtv-space-md:12px;--mtv-space-lg:20px;--mtv-space-xl:32px;
+  --mtv-radius-sm:6px;--mtv-radius-md:10px;--mtv-radius-lg:16px;--mtv-radius-pill:999px;
+  --mtv-motion-fast:120ms;--mtv-motion-normal:200ms;--mtv-motion-slow:320ms;
+}
+.mtv-media-card{min-width:0;transition:transform var(--mtv-motion-fast) ease;}
+.mtv-media-card:focus-visible{outline:2px solid currentColor;outline-offset:3px;}
+.mtv-rail{display:flex;gap:var(--mtv-space-md);overflow-x:auto;scroll-snap-type:x proximity;}
+.mtv-rail>.mtv-media-card{scroll-snap-align:start;}
+.mtv-hero{border-radius:var(--mtv-radius-lg);overflow:hidden;}
+.mtv-navigation{display:flex;gap:var(--mtv-space-sm);align-items:center;}
+.mtv-dialog{border-radius:var(--mtv-radius-lg);max-width:min(92vw,720px);}
+@media (max-width:639px){.mtv-device-mobile.mtv-rail{gap:var(--mtv-space-sm);}}
+@media (min-width:640px) and (max-width:1023px){.mtv-device-tablet.mtv-rail{gap:var(--mtv-space-md);}}
+@media (min-width:1600px){.mtv-device-tv.mtv-media-card:focus-visible{outline-width:4px;outline-offset:6px;}}
+@media (prefers-reduced-motion:reduce){.mtv-media-card{transition:none;}}

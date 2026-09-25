@@ -16,10 +16,12 @@ internal static class Program
     {
         var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
         var appJs = File.ReadAllText(Path.Combine(root,"app/wwwroot/app.js"));
+        var stylesCss = File.ReadAllText(Path.Combine(root,"app/wwwroot/styles.css"));
         var mobileJs = File.ReadAllText(Path.Combine(root,"app/wwwroot/mobile.js"));
         var cwJs = File.ReadAllText(Path.Combine(root,"app/wwwroot/continue-watching.js"));
         var programCs = File.ReadAllText(Path.Combine(root,"app/Program.cs"));
         var updateLocalSh = File.ReadAllText(Path.Combine(root,"scripts/update-local.sh"));
+        var versionGuardPs1 = File.ReadAllText(Path.Combine(root,"scripts/Release-VersionGuard.ps1"));
 
         static void Has(string text,string token,string name){T.Assert(text.Contains(token,StringComparison.Ordinal),name);T.Pass(name);}
 
@@ -58,6 +60,37 @@ internal static class Program
         T.Assert(mobileJs.Contains("collectionSearch") && mobileJs.Contains("Search Continue Watching"),"collection search");T.Pass("collection search");
         T.Assert(mobileJs.Contains("collectionProgressText") && mobileJs.Contains("% watched"),"collection progress");T.Pass("collection progress");
         Has(mobileJs,"openContinueActions(item.id,actions)","collection actions");
+
+        // v39.19.0 RC3 release-version regression coverage.
+        Has(versionGuardPs1,"Sort-Object -Descending","VersionGuard resolves newest published tag");
+        Has(versionGuardPs1,"Version upgrade accepted: $currentVersion -> $Candidate","VersionGuard logs current and candidate versions");
+        var releaseVersionTests = File.ReadAllText(Path.Combine(root,"tests/release_version.Tests.ps1"));
+        T.Assert(releaseVersionTests.Contains("Expect-Accept '39.19.0' @('v39.17.0'"),"PowerShell tests allow 39.17.0 to 39.19.0");T.Pass("PowerShell tests allow 39.17.0 to 39.19.0");
+        T.Assert(releaseVersionTests.Contains("Expect-Reject '39.18.0' @('v39.19.0'"),"PowerShell tests block downgrade");T.Pass("PowerShell tests block downgrade");
+
+        // v39.19.0 RC2 release-version policy: intermediate releases may be skipped.
+        Has(versionGuardPs1,"$candidateVersion -le $currentVersion","VersionGuard blocks same/older versions");
+        Has(versionGuardPs1,"must be newer than current release","VersionGuard monotonic version error");
+        T.Assert(!versionGuardPs1.Contains("must be the next patch, next minor .0, or next major .0.0"),"VersionGuard does not require intermediate releases");T.Pass("VersionGuard does not require intermediate releases");
+
+        // Experience Migration v39.19.0 — additive to all previous coverage.
+        foreach(var x in new[]{"Experience Migration","EXPERIENCE_MIGRATION_VERSION='39.19.0'","experience19Tokens","experience19Device","experience19Class","experience19MediaCard","experience19Hero","experience19Rail","experience19Navigation","experience19Dialog","experience19Capabilities"})
+            Has(appJs,x,"Experience Migration: "+x);
+        foreach(var x in new[]{"--mtv-space-md","--mtv-radius-lg",".mtv-media-card",".mtv-rail",".mtv-hero",".mtv-navigation",".mtv-dialog","prefers-reduced-motion"})
+            Has(stylesCss,x,"Experience Migration CSS: "+x);
+        T.Assert(appJs.Contains("devices:['mobile','tablet','desktop','tv']"),"Experience system covers all target devices");T.Pass("Experience system covers all target devices");
+        T.Assert(appJs.Contains("legacyCompatible:true"),"Experience migration remains legacy compatible");T.Pass("Experience migration remains legacy compatible");
+        T.Assert(stylesCss.Contains(".mtv-media-card:focus-visible"),"Experience components include keyboard/TV focus state");T.Pass("Experience components include keyboard/TV focus state");
+        T.Assert(stylesCss.Contains("@media (prefers-reduced-motion:reduce)"),"Experience system respects reduced motion");T.Pass("Experience system respects reduced motion");
+
+        // Performance & Reliability v39.18.0 — additive to all previous coverage.
+        foreach(var x in new[]{"Performance & Reliability","PERFORMANCE_RELIABILITY_VERSION='39.18.0'","perf18CacheSet","perf18CacheGet","perf18CacheClear","perf18Coalesce","perf18Cached","perf18Chunk","perf18Sample","perf18Diagnostics","perf18Health","perf18MemorySnapshot"})
+            Has(appJs,x,"Performance & Reliability: "+x);
+        T.Assert(appJs.Contains("while(perf18Cache.size>Math.max(10,Number(maxEntries)||250))"),"Performance cache is bounded");T.Pass("Performance cache is bounded");
+        T.Assert(appJs.Contains("if(perf18Inflight.has(k)){perf18Metrics.coalesced++"),"Duplicate inflight requests are coalesced");T.Pass("Duplicate inflight requests are coalesced");
+        T.Assert(appJs.Contains("if(perf18Metrics.samples.length>100)"),"Runtime samples are bounded");T.Pass("Runtime samples are bounded");
+        T.Assert(appJs.Contains("fetcher('/api/health',{cache:'no-store'})"),"Health probe bypasses stale cache");T.Pass("Health probe bypasses stale cache");
+        T.Assert(appJs.Contains("Math.max(25,Math.min(1000,Number(size)||250))"),"Large library chunk size is bounded");T.Pass("Large library chunk size is bounded");
 
         // Downloads 2.1 regression checks — additive to all previous coverage.
         foreach(var x in new[]{"Downloads 2.1","DOWNLOADS_21_VERSION='39.17.0'","downloads21Normalize","downloads21Queue","downloads21CanRetry","downloads21RetryDelay","downloads21Storage","downloads21OfflineLibrary","downloads21SeriesGroups","downloads21CleanupCandidates","downloads21ProfileFilter","downloads21Play"})

@@ -1,3 +1,27 @@
+# v39.19.0 — Experience Migration
+
+- Added the compatibility-first MyOnlineTV design-system bridge ahead of v40.
+- Added shared spacing, radius, typography, motion and breakpoint tokens.
+- Added shared MediaCard, Hero, Rail, Navigation and Dialog view models.
+- Added explicit mobile, tablet, desktop and TV device adaptation.
+- Added additive CSS component classes without replacing existing v39 selectors.
+- Added focus-visible and reduced-motion accessibility behavior.
+- Added permanent .NET regression checks for the design-system bridge.
+- Retained every previous feature, security, updater and multi-user regression gate.
+- Zero-Python build/test/release/deployment remains enforced.
+
+# v39.18.0 — Performance & Reliability
+
+- Added bounded in-memory client caching with TTL and LRU-style eviction.
+- Added duplicate in-flight request coalescing.
+- Added bounded chunking helpers for large IPTV/VOD collections.
+- Added lightweight runtime timing samples and diagnostics.
+- Added health probing with stale-cache bypass.
+- Added optional browser memory snapshots where supported.
+- Added permanent .NET regression checks for cache/request/diagnostic bounds.
+- Retained all previous feature, security, updater and multi-user regression gates.
+- Zero-Python build/test/release/deployment remains enforced.
+
 # v39.17.0 — Downloads 2.1
 
 - Added normalized queue/progress state for downloads.

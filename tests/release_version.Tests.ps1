@@ -1,13 +1,25 @@
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot/../scripts/Release-VersionGuard.ps1"
-Assert-ReleaseVersion '39.9.2' @('v39.9.1','v39.9.0','v39.8.5','v39.8.4','v37.1.0')
-Assert-ReleaseVersion '39.8.6' @('v39.8.5','v37.1.0')
-Assert-ReleaseVersion '40.0.0' @('v39.8.5')
-$bad=@(
- @{Version='39.8.5';Tags=@('v39.8.5')},
- @{Version='39.10.0';Tags=@('v39.8.5')},
- @{Version='40.1.0';Tags=@('v39.8.5')},
- @{Version='39.8.7';Tags=@('v39.8.5')}
-)
-foreach($case in $bad){$failed=$false;try{Assert-ReleaseVersion $case.Version $case.Tags}catch{$failed=$true};if(-not $failed){throw "Expected rejection: $($case.Version)"}}
-Write-Host 'PASS: semantic patch/minor/major progression, anomaly handling, collision and skipped-version guards.'
+
+function Expect-Accept([string]$Candidate,[string[]]$Tags) {
+  Assert-ReleaseVersion $Candidate $Tags
+}
+
+function Expect-Reject([string]$Candidate,[string[]]$Tags) {
+  $failed=$false
+  try { Assert-ReleaseVersion $Candidate $Tags } catch { $failed=$true; Write-Host "Expected rejection: $Candidate" }
+  if(-not $failed){ throw "Expected rejection but VersionGuard accepted: $Candidate" }
+}
+
+# Intermediate releases may be skipped.
+Expect-Accept '39.19.0' @('v39.17.0','v39.8.5','v37.1.0')
+Expect-Accept '39.19.0' @('v39.8.3','v37.1.0')
+Expect-Accept '40.0.0'  @('v39.19.0','v39.17.0')
+Expect-Accept '39.10.0' @('v39.9.2','v39.8.5')
+
+# Same version and downgrades remain blocked.
+Expect-Reject '39.19.0' @('v39.19.0','v39.17.0')
+Expect-Reject '39.18.0' @('v39.19.0','v39.17.0')
+Expect-Reject '39.19.0' @('v40.0.0','v39.19.0')
+
+Write-Host 'PASS: skipped intermediate releases allowed; same/older versions blocked.'

@@ -5222,3 +5222,203 @@ async function downloads21Play(item){
   return playbackEngine({kind:'download',url:d.url||d.localUrl,name:d.title,mediaId:d.id});
 }
 
+
+
+// v39.18.0 — Performance & Reliability
+// Bounded client cache, request coalescing, health sampling and lightweight
+// runtime diagnostics. Existing server-side health/self-healing remains authoritative.
+const PERFORMANCE_RELIABILITY_VERSION='39.18.0';
+
+const perf18Cache=new Map();
+const perf18Inflight=new Map();
+const perf18Metrics={cacheHits:0,cacheMisses:0,coalesced:0,errors:0,lastError:'',samples:[]};
+
+function perf18CacheSet(key,value,{ttlMs=60000,maxEntries=250}={}){
+  const now=Date.now();
+  perf18Cache.set(String(key),{value,expires:now+Math.max(1000,Number(ttlMs)||60000),touched:now});
+  while(perf18Cache.size>Math.max(10,Number(maxEntries)||250)){
+    const oldest=[...perf18Cache.entries()].sort((a,b)=>a[1].touched-b[1].touched)[0];
+    if(!oldest)break;
+    perf18Cache.delete(oldest[0]);
+  }
+  return value;
+}
+
+function perf18CacheGet(key){
+  const k=String(key);
+  const hit=perf18Cache.get(k);
+  if(!hit){perf18Metrics.cacheMisses++;return null;}
+  if(hit.expires<=Date.now()){perf18Cache.delete(k);perf18Metrics.cacheMisses++;return null;}
+  hit.touched=Date.now(); perf18Metrics.cacheHits++; return hit.value;
+}
+
+function perf18CacheClear(prefix=''){
+  const p=String(prefix);
+  let count=0;
+  for(const key of [...perf18Cache.keys()]){
+    if(!p||key.startsWith(p)){perf18Cache.delete(key);count++;}
+  }
+  return count;
+}
+
+async function perf18Coalesce(key,factory){
+  const k=String(key);
+  if(perf18Inflight.has(k)){perf18Metrics.coalesced++;return perf18Inflight.get(k);}
+  const promise=Promise.resolve().then(factory)
+    .catch(error=>{
+      perf18Metrics.errors++;
+      perf18Metrics.lastError=String(error?.message||error);
+      throw error;
+    })
+    .finally(()=>perf18Inflight.delete(k));
+  perf18Inflight.set(k,promise);
+  return promise;
+}
+
+async function perf18Cached(key,factory,{ttlMs=60000,maxEntries=250}={}){
+  const hit=perf18CacheGet(key);
+  if(hit!==null)return hit;
+  return perf18Coalesce(key,async()=>perf18CacheSet(key,await factory(),{ttlMs,maxEntries}));
+}
+
+function perf18Chunk(items,size=250){
+  const n=Math.max(25,Math.min(1000,Number(size)||250));
+  const out=[];
+  for(let i=0;i<(items||[]).length;i+=n)out.push(items.slice(i,i+n));
+  return out;
+}
+
+function perf18Sample(label,startedAt=performance.now()){
+  const durationMs=Math.max(0,performance.now()-startedAt);
+  const sample={label:String(label||'operation'),durationMs,at:new Date().toISOString()};
+  perf18Metrics.samples.push(sample);
+  if(perf18Metrics.samples.length>100)perf18Metrics.samples.splice(0,perf18Metrics.samples.length-100);
+  return sample;
+}
+
+function perf18Diagnostics(){
+  return {
+    cacheEntries:perf18Cache.size,
+    inflight:perf18Inflight.size,
+    cacheHits:perf18Metrics.cacheHits,
+    cacheMisses:perf18Metrics.cacheMisses,
+    coalesced:perf18Metrics.coalesced,
+    errors:perf18Metrics.errors,
+    lastError:perf18Metrics.lastError,
+    recentSamples:perf18Metrics.samples.slice(-20)
+  };
+}
+
+async function perf18Health(fetcher=fetch){
+  const started=performance.now();
+  try{
+    const response=await fetcher('/api/health',{cache:'no-store'});
+    const result={ok:response.ok,status:response.status,latencyMs:Math.round(performance.now()-started)};
+    perf18Sample('health',started);
+    return result;
+  }catch(error){
+    perf18Metrics.errors++; perf18Metrics.lastError=String(error?.message||error);
+    return {ok:false,status:0,latencyMs:Math.round(performance.now()-started),error:perf18Metrics.lastError};
+  }
+}
+
+function perf18MemorySnapshot(){
+  const memory=performance?.memory;
+  return memory?{
+    usedJSHeapSize:Number(memory.usedJSHeapSize||0),
+    totalJSHeapSize:Number(memory.totalJSHeapSize||0),
+    jsHeapSizeLimit:Number(memory.jsHeapSizeLimit||0)
+  }:{supported:false};
+}
+
+
+
+// v39.19.0 — Experience Migration
+// Compatibility-first design-system bridge. Existing pages remain functional while
+// shared tokens/components are introduced ahead of v40.0.0.
+const EXPERIENCE_MIGRATION_VERSION='39.19.0';
+
+const experience19Tokens=Object.freeze({
+  spacing:{xs:4,sm:8,md:12,lg:20,xl:32},
+  radius:{sm:6,md:10,lg:16,pill:999},
+  typography:{caption:12,body:14,title:20,hero:32},
+  motion:{fast:120,normal:200,slow:320},
+  breakpoints:{mobile:640,tablet:1024,tv:1600}
+});
+
+function experience19Device(width=window.innerWidth){
+  const w=Math.max(0,Number(width)||0);
+  if(w>=experience19Tokens.breakpoints.tv)return 'tv';
+  if(w>=experience19Tokens.breakpoints.tablet)return 'desktop';
+  if(w>=experience19Tokens.breakpoints.mobile)return 'tablet';
+  return 'mobile';
+}
+
+function experience19Class(component,variant='default',device=experience19Device()){
+  return `mtv-${String(component||'component')} mtv-${String(component||'component')}--${String(variant||'default')} mtv-device-${device}`;
+}
+
+function experience19MediaCard(item,{variant='poster',device=experience19Device()}={}){
+  return {
+    component:'MediaCard',
+    className:experience19Class('media-card',variant,device),
+    id:String(item?.id||''),
+    title:String(item?.title||item?.name||''),
+    subtitle:String(item?.subtitle||item?.year||item?.group||''),
+    image:String(item?.poster||item?.posterUrl||item?.logo||''),
+    progress:vod3Progress(item),
+    device
+  };
+}
+
+function experience19Hero(item,{device=experience19Device()}={}){
+  return {
+    component:'Hero',
+    className:experience19Class('hero','default',device),
+    title:String(item?.title||item?.name||''),
+    description:String(item?.overview||item?.plot||item?.description||''),
+    backdrop:String(item?.backdrop||item?.backdropUrl||item?.poster||''),
+    device
+  };
+}
+
+function experience19Rail(title,items,{variant='poster',device=experience19Device()}={}){
+  return {
+    component:'Rail',
+    className:experience19Class('rail',variant,device),
+    title:String(title||''),
+    items:(items||[]).map(x=>experience19MediaCard(x,{variant,device})),
+    device
+  };
+}
+
+function experience19Navigation(items,activeId,{device=experience19Device()}={}){
+  return {
+    component:'Navigation',
+    className:experience19Class('navigation','primary',device),
+    items:(items||[]).map(x=>({...x,active:String(x?.id||'')===String(activeId||'')})),
+    device
+  };
+}
+
+function experience19Dialog({title='',body='',actions=[]}={},device=experience19Device()){
+  return {
+    component:'Dialog',
+    className:experience19Class('dialog','modal',device),
+    title:String(title),
+    body:String(body),
+    actions:[...(actions||[])],
+    device
+  };
+}
+
+function experience19Capabilities(){
+  return {
+    components:['MediaCard','Hero','Rail','Navigation','Dialog'],
+    devices:['mobile','tablet','desktop','tv'],
+    playbackEngine3:true,
+    profileIsolation:true,
+    legacyCompatible:true
+  };
+}
+
