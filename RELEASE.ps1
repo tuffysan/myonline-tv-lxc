@@ -101,6 +101,16 @@ if ($dependencyHits) {
 }
 Write-Host 'PASS: distribution tooling has no forbidden runtime dependency.'
 
+$nodeCommand = Get-Command node -ErrorAction SilentlyContinue
+if ($nodeCommand) {
+  Write-Host 'Checking frontend JavaScript syntax with Node.js...'
+  & node --check app/wwwroot/app.js
+  Assert-Exit "Frontend JavaScript syntax validation failed. Fix app/wwwroot/app.js before release."
+  Write-Host 'PASS: frontend JavaScript syntax validation.'
+} else {
+  Write-Host 'SKIP: Node.js is not installed locally. Frontend syntax validation remains mandatory in GitHub Actions.'
+}
+
 Step "[1/7] Restore and Release build"
 & dotnet restore app/MyOnlineTV.Web.csproj
 Assert-Exit "dotnet restore failed."

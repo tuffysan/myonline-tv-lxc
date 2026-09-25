@@ -1,3 +1,10 @@
+# v40.1.2 — Frontend Syntax Fix
+
+- Fixes invalid quoting in Home Experience 3.0 rail action markup that caused GitHub Actions `node --check app/wwwroot/app.js` to fail.
+- Adds Node.js frontend syntax validation to the local RELEASE gate before commit/tag publication.
+- Keeps Home Experience 3.0 and MyOnlineTV Experience 2.0 feature markers at 40.1.0; only the product release advances to 40.1.2.
+- Leaves immutable v40.1.0 and v40.1.1 tags untouched.
+
 # v40.1.1 — Release Gate Fix
 - Corrected the v40.1.x release regression gate after Home Experience 3.0.
 - Preserves Home Experience 3.0 feature version 40.1.0 and all existing application behavior.

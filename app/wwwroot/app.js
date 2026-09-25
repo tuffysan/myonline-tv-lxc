@@ -5454,11 +5454,11 @@ function renderHomeExperience3({unifiedMovies=[],unifiedSeries=[],continueItems=
  <section class=hx3Hero${hero.image?` style="--hx3-hero-image:url('${escAttr(hero.image)}')"`:''}><div class=hx3HeroShade></div><div class=hx3HeroContent><span class=hx3Eyebrow>${esc(hero.eyebrow)}</span><h1>${esc(hero.title)}</h1><p>${esc(hero.subtitle)}</p><div class=hx3HeroActions><button class="btn primaryBtn" onclick='${hero.action}'>${esc(hero.label)}</button><button class=btn onclick="show('guide')">▤ Guide</button></div><div class=hx3Search><input id=homeSearch aria-label="Search MyOnlineTV" placeholder="Search movies, series, channels…"><button class=btn id=homeSearchButton>Search</button></div></div></section>
  <nav class=hx3Quick aria-label="Home shortcuts"><button onclick="show('live')">▣ <span>Live TV</span></button><button onclick="show('guide')">▤ <span>Guide</span></button><button onclick="show('movies')">▶ <span>Movies</span></button><button onclick="show('series')">▦ <span>Series</span></button><button onclick="show('downloads')">↓ <span>Downloads</span></button></nav>
  ${homeExperience3Rail('Continue Watching',continueItems.slice(0,16),'continue','<button class=linkButton onclick="clearContinueWatching()">Clear all</button>')}
- ${homeExperience3Rail('Live Now',live,'live','<button class=linkButton onclick="show(\\'guide\\')">Open Guide</button>')}
+ ${homeExperience3Rail('Live Now',live,'live',`<button class=linkButton onclick="show('guide')">Open Guide</button>`)}
  ${homeExperience3Rail('Favorites',favs,'favorite')}
  ${homeExperience3Rail('Recently Added',recent)}
- ${homeExperience3Rail('Movies',unifiedMovies.slice(0,18),'media','<button class=linkButton onclick="show(\\'movies\\')">See all</button>')}
- ${homeExperience3Rail('Series',unifiedSeries.slice(0,18).map(x=>({...x,kind:"series"})),'media','<button class=linkButton onclick="show(\\'series\\')">See all</button>')}<div id=mediaPlayer></div></main>`;
+ ${homeExperience3Rail('Movies',unifiedMovies.slice(0,18),'media',`<button class=linkButton onclick="show('movies')">See all</button>`)}
+ ${homeExperience3Rail('Series',unifiedSeries.slice(0,18).map(x=>({...x,kind:"series"})),'media',`<button class=linkButton onclick="show('series')">See all</button>`)}<div id=mediaPlayer></div></main>`;
  $('#homeSearchButton').onclick=homeQuickSearch; $('#homeSearch').onkeydown=e=>{if(e.key==='Enter')homeQuickSearch()}; return true;
 }
 function homeExperience3Capabilities(){return {version:HOME_EXPERIENCE_3_VERSION,responsive:true,hero:true,continueWatching:true,favorites:true,liveNow:true,quickNavigation:true,keyboardAndRemote:true,sharedPlayback:true};}
