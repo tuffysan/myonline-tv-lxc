@@ -1,3 +1,13 @@
+# v39.13.1 — Update Backup Hardening
+
+- Excludes transient `live-hls` runtime data from pre-update backups.
+- Keeps only the three newest successful `pre-update-*.tar.gz` backups.
+- Performs retention cleanup only after the new backup succeeds.
+- Leaves downloads and the backup directory excluded from recursive backup data.
+- Adds permanent .NET release regression checks for backup exclusions and retention.
+- Retains Playback Engine 3.0 and all existing regression/security gates.
+- Zero-Python release/distribution policy remains enforced.
+
 # v39.13.0 — Playback Engine 3.0
 
 - Added a common playback request contract across primary media sources.

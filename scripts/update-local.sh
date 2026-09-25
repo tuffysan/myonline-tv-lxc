@@ -57,9 +57,21 @@ echo "[1/8] Creating persistent-data backup..."
 pct exec "$CTID" -- bash -lc "
 set -e
 mkdir -p /var/lib/myonlinetv/backups
-tar --exclude='./backups' --exclude='./downloads' -czf '${BACKUP}' -C /var/lib/myonlinetv .
+# live-hls is transient playback state and changes continuously while Live TV is active.
+# It must never be part of a persistent pre-update backup.
+tar --exclude='./backups' --exclude='./downloads' --exclude='./live-hls' -czf '${BACKUP}' -C /var/lib/myonlinetv .
 printf '%s\n' '${BACKUP}' >/var/lib/myonlinetv/last-pre-update-backup
 chown www-data:www-data '${BACKUP}' /var/lib/myonlinetv/last-pre-update-backup
+
+# Retain only the three newest successful pre-update backups.
+# Cleanup happens only after the new backup has been created successfully.
+find /var/lib/myonlinetv/backups -maxdepth 1 -type f -name 'pre-update-*.tar.gz' -printf '%T@ %p\n' \
+  | sort -nr \
+  | tail -n +4 \
+  | cut -d' ' -f2- \
+  | while IFS= read -r old_backup; do
+      [[ -z \"\$old_backup\" ]] || rm -f -- \"\$old_backup\"
+    done
 "
 
 CURRENT_STEP="2/8 Preparing runtime"

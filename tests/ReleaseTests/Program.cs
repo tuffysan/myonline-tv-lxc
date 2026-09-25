@@ -19,6 +19,7 @@ internal static class Program
         var mobileJs = File.ReadAllText(Path.Combine(root,"app/wwwroot/mobile.js"));
         var cwJs = File.ReadAllText(Path.Combine(root,"app/wwwroot/continue-watching.js"));
         var programCs = File.ReadAllText(Path.Combine(root,"app/Program.cs"));
+        var updateLocalSh = File.ReadAllText(Path.Combine(root,"scripts/update-local.sh"));
 
         static void Has(string text,string token,string name){T.Assert(text.Contains(token,StringComparison.Ordinal),name);T.Pass(name);}
 
@@ -57,6 +58,14 @@ internal static class Program
         T.Assert(mobileJs.Contains("collectionSearch") && mobileJs.Contains("Search Continue Watching"),"collection search");T.Pass("collection search");
         T.Assert(mobileJs.Contains("collectionProgressText") && mobileJs.Contains("% watched"),"collection progress");T.Pass("collection progress");
         Has(mobileJs,"openContinueActions(item.id,actions)","collection actions");
+
+        // v39.13.1 updater backup hardening — additive regression coverage.
+        Has(updateLocalSh,"--exclude='./live-hls'","Updater backup excludes transient live-hls");
+        Has(updateLocalSh,"--exclude='./downloads'","Updater backup excludes downloads");
+        Has(updateLocalSh,"--exclude='./backups'","Updater backup excludes backup directory");
+        Has(updateLocalSh,"tail -n +4","Updater retains only three newest pre-update backups");
+        Has(updateLocalSh,"name 'pre-update-*.tar.gz'","Updater cleanup targets only pre-update backups");
+        T.Assert(updateLocalSh.IndexOf("tar --exclude='./backups'",StringComparison.Ordinal) < updateLocalSh.IndexOf("tail -n +4",StringComparison.Ordinal),"Backup retention cleanup must run after successful backup creation");T.Pass("Backup retention cleanup occurs after backup creation");
 
         // Playback Engine 3.0 regression checks — additive to all existing release coverage.
         foreach(var x in new[]{"Playback Engine 3.0","playbackFromContinue","playbackFromFavourite","playbackFromSearch","kind==='live'","kind==='download'","kind==='server-token'","recoverLivePlayback"})
