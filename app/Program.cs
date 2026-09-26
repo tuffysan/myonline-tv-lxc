@@ -3429,17 +3429,16 @@ app.MapGet("/api/media/subtitles/{token}/{streamIndex:int}.vtt", async (HttpCont
     if (!proxyTokens.TryGetValue(token, out var target) || target.Kind != "media") { ctx.Response.StatusCode = 404; return; }
     var ffmpeg = FindExecutable("ffmpeg"); if (ffmpeg is null) { ctx.Response.StatusCode = 404; return; }
 
-    // v41.2.10 Subtitle A/V Sync: video.currentTime is the single master clock.
-    // Seek close to the playback position for fast startup, but offset FFmpeg output timestamps
-    // back onto the absolute media timeline. The client must never add the seek offset again.
+    // v41.3.0 Unified Media Timeline: preserve the source subtitle timestamps.
+    // Fast input seek is retained, but -copyts keeps subtitle PTS on the same source timeline as A/V.
+    // Do not add an artificial output timestamp offset and do not rewrite the source timeline to zero.
     var startSeconds = Math.Max(0, start ?? 0);
     var psi = new ProcessStartInfo { FileName = ffmpeg, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
     var args = new List<string> { "-hide_banner","-loglevel","error","-rw_timeout","20000000" };
     if (startSeconds > 0.25) { args.Add("-ss"); args.Add(startSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)); }
     args.Add("-i"); args.Add(target.Url);
-    // -output_ts_offset makes every WebVTT cue use the same absolute timeline as video.currentTime.
-    // This avoids the previous client-side +windowStart approximation, which drifted from A/V.
-    if (startSeconds > 0.25) { args.Add("-output_ts_offset"); args.Add(startSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)); }
+    // Preserve original packet timestamps so subtitle cues remain on the source media timeline.
+    args.Add("-copyts");
     args.AddRange(new[] { "-map",$"0:{streamIndex}","-vn","-an","-t","600","-c:s","webvtt","-f","webvtt","pipe:1" });
     foreach (var arg in args) psi.ArgumentList.Add(arg);
     using var process = new Process { StartInfo = psi };
@@ -3450,7 +3449,7 @@ app.MapGet("/api/media/subtitles/{token}/{streamIndex:int}.vtt", async (HttpCont
         ctx.Response.ContentType = "text/vtt; charset=utf-8";
         ctx.Response.Headers.CacheControl = "no-store";
         ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
-        ctx.Response.Headers["X-MyOnlineTV-Subtitle"] = "41.2.10";
+        ctx.Response.Headers["X-MyOnlineTV-Subtitle"] = "41.3.0";
         ctx.Response.Headers["X-MyOnlineTV-Subtitle-Start"] = startSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
         await ctx.Response.StartAsync(ctx.RequestAborted);
         await process.StandardOutput.BaseStream.CopyToAsync(ctx.Response.Body, ctx.RequestAborted);

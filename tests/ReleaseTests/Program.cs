@@ -110,14 +110,12 @@ internal static class Program
         foreach(var x in new[]{"-preset", "\"ultrafast\"", "-analyzeduration", "\"1000000\"", "-probesize", "\"1000000\"", "-hls_time", "\"1\""}) Has(programCs,x,"v41.1.1 server startup: "+x);
         T.Assert(!appJs.Contains(")),VOD_STARTUP_SEGMENTS));\n      if(state.status==='ready')break;\n      if(state.status==='failed')throw new Error(state.error||'FFmpeg could not prepare this channel.')"),"Live TV does not use the VOD startup threshold"); T.Pass("Live TV does not use the VOD startup threshold");
 
-        // v41.2.1 Subtitle Selection — embedded text subtitle streams are discoverable and selectable as WebVTT.
-        foreach(var x in new[]{"SUBTITLE_SELECTION_VERSION='41.2.9'","installSubtitleSelector(video,token)","mediaSubtitles","mediaSubtitleOverlay","parseVtt(text)","credentials:'same-origin'","v=41.2.10"}) Has(appJs,x,"v41.2.8 subtitle client: "+x);
-        foreach(var x in new[]{"codec is not (\"subrip\" or \"srt\" or \"ass\"","\"-f\",\"webvtt\"","text/vtt; charset=utf-8","X-MyOnlineTV-Subtitle","X-MyOnlineTV-Subtitle-Start","StandardOutput.BaseStream.CopyToAsync"}) Has(programCs,x,"v41.2.10 subtitle server: "+x);
-        foreach(var x in new[]{"mediaSubtitleOverlay","overlay.textContent=active","video.addEventListener('timeupdate',()=>{render();ensureWindow()})","video.addEventListener('seeked',()=>{render();if(activeIndex!=='off')load(activeIndex,Number(video.currentTime)||0)})"}) Has(appJs,x,"v41.2.8 subtitle overlay presentation: "+x);
-        foreach(var x in new[]{"-output_ts_offset","X-MyOnlineTV-Subtitle-Start"}) Has(programCs,x,"v41.2.10 subtitle absolute timeline: "+x);
-        foreach(var x in new[]{"const parsed=parseVtt(text);","video.currentTime is the only master clock","load(activeIndex,Number(video.currentTime)||0)"}) Has(appJs,x,"v41.2.10 subtitle A/V master clock: "+x);
-        foreach(var x in new[]{"\"-map\",$\"0:{streamIndex}\"","\"-vn\"","\"-an\"","\"-t\",\"600\"","pipe:1"}) Has(programCs,x,"v41.2.10 subtitle A/V sync extraction: "+x);
-        if(programCs.Contains("\"-copyts\"") || programCs.Contains("\"-start_at_zero\"")) throw new Exception("v41.2.4 subtitles must not rewrite the media timeline with copyts/start_at_zero");
+        // v41.3.0 Unified Media Timeline — subtitles preserve source PTS and render against video.currentTime.
+        foreach(var x in new[]{"SUBTITLE_SELECTION_VERSION='41.3.0'","installSubtitleSelector(video,token)","mediaSubtitles","mediaSubtitleDelay","mediaSubtitleOverlay","parseVtt(text)","credentials:'same-origin'","v=41.3.0"}) Has(appJs,x,"v41.3.0 subtitle client: "+x);
+        foreach(var x in new[]{"\"-copyts\"","\"-f\",\"webvtt\"","text/vtt; charset=utf-8","X-MyOnlineTV-Subtitle","StandardOutput.BaseStream.CopyToAsync"}) Has(programCs,x,"v41.3.0 subtitle server: "+x);
+        foreach(var x in new[]{"mediaSubtitleOverlay","overlay.textContent=active","const now=(Number(video.currentTime)||0)-subtitleDelay","delaySelect.addEventListener('change'","subtitleDelay=Number(delaySelect.value)||0"}) Has(appJs,x,"v41.3.0 subtitle presentation: "+x);
+        T.Assert(!programCs.Contains("-output_ts_offset"),"v41.3.0 removes artificial subtitle output timestamp offset"); T.Pass("v41.3.0 removes artificial subtitle output timestamp offset");
+        T.Assert(!programCs.Contains("-start_at_zero"),"v41.3.0 does not rewrite source timeline to zero"); T.Pass("v41.3.0 does not rewrite source timeline to zero");
 
         // v41.2.6 Home Hero Wide Headline — use available desktop width and keep mobile responsive.
         foreach(var x in new[]{"white-space:nowrap","max-width:none",".mtv-device-desktop .hx3HeroContent","@media(max-width:1180px){.hx3Hero h1{white-space:normal"}) Has(stylesCss,x,"v41.2.6 wide home hero: "+x);

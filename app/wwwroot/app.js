@@ -1275,7 +1275,7 @@ const PLAYBACK_CORE_VERSION='41.1.1';
 const PLAYBACK_STARTUP_FIX_VERSION='41.1.1';
 const INSTANT_VOD_SEEK_VERSION='41.1.2';
 const NATIVE_SMART_SEEK_VERSION='41.2.0';
-const SUBTITLE_SELECTION_VERSION='41.2.9';
+const SUBTITLE_SELECTION_VERSION='41.3.0';
 const SUBTITLE_SYNC_PRESENTATION_VERSION='41.2.7';
 const AUDIO_TRACK_SELECTION_VERSION='41.2.5';
 const LIVE_STARTUP_SEGMENTS=1;
@@ -1533,7 +1533,7 @@ function unifiedPlayerMarkup(name,withStatus=true){
           <button id="mediaMute" class="mediaControlButton" type="button" aria-label="Mute or unmute">🔊</button>
           <input id="mediaVolume" class="mediaVolume" type="range" min="0" max="1" step="0.05" value="1" aria-label="Volume">
           <select id="mediaAudioTracks" class="mediaPlaybackRate mediaAudioTrackSelect" aria-label="Audio language" hidden></select>
-          <select id="mediaSubtitles" class="mediaPlaybackRate mediaSubtitleSelect" aria-label="Subtitles" hidden><option value="off">CC Off</option></select>
+          <select id="mediaSubtitles" class="mediaPlaybackRate mediaSubtitleSelect" aria-label="Subtitles" hidden><option value="off">CC Off</option></select><select id="mediaSubtitleDelay" class="mediaPlaybackRate mediaSubtitleDelay" aria-label="Subtitle sync" hidden><option value="-10">CC -10.0s</option><option value="-5">CC -5.0s</option><option value="-2">CC -2.0s</option><option value="-1">CC -1.0s</option><option value="-0.5">CC -0.5s</option><option value="0" selected>CC Sync 0.0s</option><option value="0.5">CC +0.5s</option><option value="1">CC +1.0s</option><option value="2">CC +2.0s</option><option value="5">CC +5.0s</option><option value="10">CC +10.0s</option></select>
           <select id="mediaPlaybackRate" class="mediaPlaybackRate" aria-label="Playback speed"><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select>
           <button id="mediaFullscreen" class="mediaControlButton" type="button" aria-label="Fullscreen">⛶</button>
         </div>
@@ -1611,25 +1611,25 @@ async function installAudioTrackSelector(video,token,{name='',mediaId=null,poste
 }
 
 async function installSubtitleSelector(video,token){
-  const select=$('#mediaSubtitles'),overlay=$('#mediaSubtitleOverlay');if(!video||!select||!overlay||!token)return;
+  const select=$('#mediaSubtitles'),delaySelect=$('#mediaSubtitleDelay'),overlay=$('#mediaSubtitleOverlay');if(!video||!select||!overlay||!token)return;
   let data=null;try{data=await api('/api/media/subtitles/'+encodeURIComponent(token))}catch{return}
   const tracks=Array.isArray(data?.tracks)?data.tracks:[];if(!tracks.length)return;
   select.innerHTML='<option value="off">CC Off</option>';
   const languageName=code=>{try{return new Intl.DisplayNames([navigator.language||'en'],{type:'language'}).of(code)||code}catch{return code||'Unknown'}};
   const byIndex=new Map();
   for(const t of tracks){const label=t.title||languageName(t.language||'und')||('Subtitle '+t.index);byIndex.set(String(t.index),{...t,label});const o=document.createElement('option');o.value=String(t.index);o.textContent=label;select.appendChild(o)}
-  let cues=[],activeIndex='off',aborter=null,lastText='',loadedFrom=0,loadedTo=0,reloadTimer=0;
+  let cues=[],activeIndex='off',aborter=null,lastText='',loadedFrom=0,loadedTo=0,reloadTimer=0,subtitleDelay=0;
   const parseTime=v=>{const p=String(v).trim().replace(',','.').split(':').map(Number);if(p.some(Number.isNaN))return NaN;return p.length===3?p[0]*3600+p[1]*60+p[2]:p.length===2?p[0]*60+p[1]:p[0]};
   const parseVtt=text=>{const normalized=String(text||'').replace(/^\uFEFF/,'').replace(/\r/g,'');const blocks=normalized.split(/\n{2,}/),out=[];for(const block of blocks){const lines=block.split('\n').map(x=>x.trimEnd()).filter(Boolean);const ti=lines.findIndex(x=>x.includes('-->'));if(ti<0)continue;const m=lines[ti].match(/^\s*([^ ]+)\s+-->\s+([^ ]+)/);if(!m)continue;const a=parseTime(m[1]),b=parseTime(m[2]);if(!Number.isFinite(a)||!Number.isFinite(b)||b<=a)continue;const textLines=lines.slice(ti+1).map(x=>x.replace(/<[^>]+>/g,'').trim()).filter(Boolean);if(textLines.length)out.push({start:a,end:b,text:textLines.join('\n')})}return out.sort((a,b)=>a.start-b.start)};
-  const render=()=>{if(activeIndex==='off'||!cues.length){overlay.hidden=true;overlay.textContent='';lastText='';return}const now=Number(video.currentTime)||0;const active=cues.filter(c=>now>=c.start&&now<c.end).map(c=>c.text).join('\n');if(active!==lastText){overlay.textContent=active;lastText=active}overlay.hidden=!active};
+  const render=()=>{if(activeIndex==='off'||!cues.length){overlay.hidden=true;overlay.textContent='';lastText='';return}const now=(Number(video.currentTime)||0)-subtitleDelay;const active=cues.filter(c=>now>=c.start&&now<c.end).map(c=>c.text).join('\n');if(active!==lastText){overlay.textContent=active;lastText=active}overlay.hidden=!active};
   const load=async(idx,position=Number(video.currentTime)||0)=>{
     const t=byIndex.get(String(idx));if(!t)return;aborter?.abort();aborter=new AbortController();cues=[];lastText='';overlay.hidden=true;
     const st=$('#mediaPlaybackStatus');if(st)st.textContent='Loading subtitles…';
-    // Start slightly before currentTime. Backend returns ABSOLUTE WebVTT timestamps.
-    // Never add windowStart on the client: video.currentTime is the only master clock.
+    // v41.3.0 Unified Media Timeline. Backend preserves source timestamps with -copyts.
+    // video.currentTime is the only playback clock; subtitleDelay is an explicit user correction only.
     const windowStart=Math.max(0,position-8);loadedFrom=windowStart;loadedTo=windowStart+600;
     try{
-      const url=t.url+(t.url.includes('?')?'&':'?')+'v=41.2.10&start='+encodeURIComponent(windowStart.toFixed(3));
+      const url=t.url+(t.url.includes('?')?'&':'?')+'v=41.3.0&start='+encodeURIComponent(windowStart.toFixed(3));
       const r=await fetch(url,{credentials:'same-origin',cache:'no-store',signal:aborter.signal});if(!r.ok)throw new Error('HTTP '+r.status);if(!r.body)throw new Error('Subtitle stream unavailable');
       const reader=r.body.getReader(),decoder=new TextDecoder();let text='',firstCue=false;activeIndex=String(idx);
       while(true){const part=await reader.read();if(part.done)break;text+=decoder.decode(part.value,{stream:true});if(!/^\s*WEBVTT/i.test(text)&&text.length>64)throw new Error('Invalid WebVTT');const parsed=parseVtt(text);if(parsed.length){cues=parsed;if(!firstCue){firstCue=true;if(st){st.textContent=`Subtitles: ${t.label}`;st.className='livePlaybackStatus ready'}}render()}}
@@ -1641,6 +1641,7 @@ async function installSubtitleSelector(video,token){
   video.addEventListener('seeked',()=>{render();if(activeIndex!=='off')load(activeIndex,Number(video.currentTime)||0)});
   video.addEventListener('loadedmetadata',render);
   select.addEventListener('change',()=>{if(select.value==='off'){aborter?.abort();activeIndex='off';cues=[];overlay.hidden=true;overlay.textContent=''}else load(select.value,Number(video.currentTime)||0)});
+  if(delaySelect){delaySelect.value='0';delaySelect.addEventListener('change',()=>{subtitleDelay=Number(delaySelect.value)||0;render()});delaySelect.hidden=false}
   select.hidden=false;
 }
 function installNativeVodSeek(video){
