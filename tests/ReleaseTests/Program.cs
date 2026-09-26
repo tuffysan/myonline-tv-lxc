@@ -83,12 +83,17 @@ internal static class Program
         foreach(var x in new[]{"double? startSeconds","seekStartSeconds","-force_key_frames","aresample=async=1:first_pts=0","+genpts"}) Has(programCs,x,"VOD Seek server: "+x);
         Has(stylesCss,".mediaSeekBar","VOD Seek CSS");
 
+        // v41.0.4 VOD Buffer Pipeline Fix.
+        foreach(var x in new[]{"buffer monitoring is telemetry only","video.dataset.bufferAheadSeconds","const arm=(allowPaused=false)","arm(true)","browser-generated pauses during an underrun","getHls?.()?.startLoad(-1)"}) Has(appJs,x,"v41.0.4 VOD buffer pipeline: "+x);
+        T.Assert(!appJs.Contains("status.textContent=ahead<3?'Buffering · replenishing…':'Playing · building buffer…'"),"v41.0.4 buffer telemetry does not fake playback state"); T.Pass("v41.0.4 buffer telemetry does not fake playback state");
+
         // v40.6.1 Smart VOD Buffering.
         foreach(var x in new[]{"SMART_VOD_BUFFER_VERSION=","VOD_STARTUP_SEGMENTS=1","VOD_SEEK_SEGMENTS=4","VOD_BUFFER_FLOOR_SECONDS=15","VOD_BUFFER_TARGET_SECONDS=60","vodStatusUrl","bufferedAheadSeconds","installVodBufferMonitor","startFragPrefetch:true","maxMaxBufferLength:240"}) Has(appJs,x,"Smart VOD Buffer: "+x);
         foreach(var x in new[]{"int? minSegments","requiredSegments","bufferedSegments = segmentCount","bufferedSeconds = segmentCount * 2","-hls_time", "\"2\""}) Has(programCs,x,"Smart VOD server buffer: "+x);
 
         foreach(var x in new[]{"Only the player UI marks an intentional user pause","video.dataset.userPaused='1';video.pause()","fragLoadingMaxRetry:8","manifestLoadingMaxRetry:6"}) Has(appJs,x,"v41.0.2 VOD recovery: "+x);
         T.Assert(styles.Contains(".dynamicMediaPlayer,#mediaPlayer{grid-column:1 / -1!important") && styles.Contains("width:min(calc(100% - 28px),1120px)!important"),"v41.0.2 contained VOD layout protected");T.Pass("v41.0.2 contained VOD layout protected");
+        foreach(var x in new[]{"v41.0.3: a replacement HLS timeline starts at ~0","hls.once(Hls.Events.MANIFEST_PARSED,onSeekManifest)","video.currentTime=0","dragging only previews the requested time"}) Has(appJs,x,"v41.0.3 VOD seek: "+x);
 
         // v40.6.0 Continuous VOD Playback Engine.
         foreach(var x in new[]{"CONTINUOUS_VOD_ENGINE_VERSION=","const oldSession=activeMediaSession","const replacement=await api('/api/media/start/'","replacementState.status==='ready'","activeMediaSession=replacement.sessionId","oldSession&&oldSession!==replacement.sessionId","Seek failed · continuing current playback"}) Has(appJs,x,"Continuous VOD capability: "+x);
