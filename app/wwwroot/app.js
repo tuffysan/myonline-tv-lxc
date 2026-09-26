@@ -1191,10 +1191,13 @@ function installMediaDurationDisplay(video,totalSeconds){
   let total=Number(totalSeconds)||0;
 
   const refresh=()=>{
-    if(currentEl)currentEl.textContent=formatMediaTime(video.currentTime||0);
+    const absoluteTime=safeMediaPosition(video);
+    if(currentEl)currentEl.textContent=formatMediaTime(absoluteTime);
     // Prefer ffprobe duration. Fall back to browser duration when it becomes finite.
     if(!(total>0) && Number.isFinite(video.duration) && video.duration>0) total=video.duration;
     if(totalEl) totalEl.textContent=total>0?formatMediaTime(total):'--:--';
+    const seek=$('#mediaSeekBar');
+    if(seek&&total>0){seek.max=String(Math.floor(total));if(document.activeElement!==seek)seek.value=String(Math.min(Math.floor(absoluteTime),Math.floor(total)));}
   };
 
   video.addEventListener('timeupdate',refresh);
@@ -1218,10 +1221,11 @@ function ensureMediaPlayerHost(){
 }
 
 // v40.2.1 — Playback Resilience & Resume Fix
-const PLAYBACK_RESILIENCE_VERSION='40.3.0';
-const STREAMING_ENGINE_VERSION='40.3.0';
+const PLAYBACK_RESILIENCE_VERSION='40.4.2';
+const STREAMING_ENGINE_VERSION='40.4.2';
+const VOD_SEEK_ENGINE_VERSION='40.4.2';
 function safeMediaPosition(video){
-  const n=Number(video?.currentTime);return Number.isFinite(n)&&n>0?n:0;
+  const n=Number(video?.currentTime);const offset=Number(video?.dataset?.timelineOffset)||0;return Number.isFinite(n)&&n>=0?n+offset:offset;
 }
 function applyPendingResume(video,seconds){
   const target=Math.max(0,Number(seconds)||0);if(target<=2)return;
@@ -1313,21 +1317,25 @@ async function tryDirectVodPlayback(token,name,mediaId,poster,requestedResume){
   });
 }
 
-async function playServerMedia(token,name,mediaId=null,forceTranscode=false,poster=''){
+async function playServerMedia(token,name,mediaId=null,forceTranscode=false,poster='',startAtSeconds=0){
   if(!forceTranscode)mediaFallbackTried=false;
   destroyPlayer();
   const wrap=ensureMediaPlayerHost();
-  wrap.innerHTML=`<div class="playerCard mediaPlayerCard"><div class=mediaPlayerStage><video id=video class=mediaPlayerVideo controls autoplay playsinline></video></div><div class=mediaTimeBar><span id=mediaCurrentTime>00:00</span><span>/</span><span id=mediaTotalTime>--:--</span></div><div id=mediaPlaybackStatus class=livePlaybackStatus>Preparing video…</div><div class=nowPlaying>${esc(name)}</div></div>`;
+  wrap.innerHTML=`<div class="playerCard mediaPlayerCard"><div class=mediaPlayerStage><video id=video class=mediaPlayerVideo controls autoplay playsinline></video></div><div class=mediaSeekRow><input id=mediaSeekBar class=mediaSeekBar type=range min=0 max=100 value=0 step=1 aria-label="Seek"></div><div class=mediaTimeBar><span id=mediaCurrentTime>00:00</span><span>/</span><span id=mediaTotalTime>--:--</span></div><div id=mediaPlaybackStatus class=livePlaybackStatus>Preparing video…</div><div class=nowPlaying>${esc(name)}</div></div>`;
   wrap.scrollIntoView({behavior:'smooth',block:'start'});
 
-  const initialResume=Math.max(0,Number(pendingResumeSeconds)||0);
+  const initialResume=Math.max(0,Number(startAtSeconds)||Number(pendingResumeSeconds)||0);
   pendingResumeSeconds=0;
-  if(!forceTranscode){
+  if(!forceTranscode&&initialResume<=0){
     try{if(await tryDirectVodPlayback(token,name,mediaId,poster,initialResume))return}catch(e){console.warn('Direct VOD fallback to HLS',e)}
   }
 
   try{
-    const info=await api('/api/media/start/'+encodeURIComponent(token)+(forceTranscode?'?transcode=true':''),{method:'POST'});
+    const seekStart=Math.max(0,Number(initialResume)||0);
+    const qs=new URLSearchParams();
+    if(forceTranscode||seekStart>0)qs.set('transcode','true');
+    if(seekStart>0)qs.set('startSeconds',String(seekStart));
+    const info=await api('/api/media/start/'+encodeURIComponent(token)+(qs.size?'?'+qs.toString():''),{method:'POST'});
     activeMediaSession=info.sessionId;
     activeLiveSession=info.sessionId;
 
@@ -1346,9 +1354,22 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
     const playbackUrl=state.playbackUrl||info.playbackUrl;
     const mediaDurationSeconds=Number(state.durationSeconds||info.durationSeconds)||0;
     installMediaDurationDisplay(video,mediaDurationSeconds);
+    const seekBar=$('#mediaSeekBar');
+    if(seekBar&&mediaDurationSeconds>0){
+      seekBar.max=String(Math.floor(mediaDurationSeconds));
+      seekBar.value=String(Math.floor(initialResume));
+      seekBar.addEventListener('input',()=>{const c=$('#mediaCurrentTime');if(c)c.textContent=formatMediaTime(Number(seekBar.value)||0)});
+      seekBar.addEventListener('change',async()=>{
+        const target=Math.max(0,Math.min(Number(seekBar.value)||0,Math.max(0,mediaDurationSeconds-1)));
+        savePlaybackPosition?.(true);
+        pendingResumeSeconds=target;
+        await playServerMedia(token,name,mediaId,true,poster,target);
+      });
+    }
 
     const requestedResume=initialResume;
-    applyPendingResume(video,requestedResume);
+    video.dataset.timelineOffset=String(Number(info.startSeconds||seekStart||0));
+    if(!(Number(info.startSeconds||seekStart)>0))applyPendingResume(video,requestedResume);
     let savePlaybackPosition=()=>{};
     const installResumeTracking=()=>{
       savePlaybackPosition=installResilientContinueTracking(video,{mediaId,name,poster,durationSeconds:mediaDurationSeconds});
@@ -1413,7 +1434,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
 function playMedia(url,name,mediaId=null){
   destroyPlayer();
   const wrap=ensureMediaPlayerHost();
-  wrap.innerHTML=`<div class="playerCard mediaPlayerCard"><div class=mediaPlayerStage><video id=video class=mediaPlayerVideo controls autoplay playsinline></video></div><div class=mediaTimeBar><span id=mediaCurrentTime>00:00</span><span>/</span><span id=mediaTotalTime>--:--</span></div><div class=nowPlaying>${esc(name)}</div></div>`;
+  wrap.innerHTML=`<div class="playerCard mediaPlayerCard"><div class=mediaPlayerStage><video id=video class=mediaPlayerVideo controls autoplay playsinline></video></div><div class=mediaSeekRow><input id=mediaSeekBar class=mediaSeekBar type=range min=0 max=100 value=0 step=1 aria-label="Seek"></div><div class=mediaTimeBar><span id=mediaCurrentTime>00:00</span><span>/</span><span id=mediaTotalTime>--:--</span></div><div class=nowPlaying>${esc(name)}</div></div>`;
   const video=$('#video');
   installMediaDurationDisplay(video,0);
   const requestedResume=Math.max(0,Number(pendingResumeSeconds)||0);

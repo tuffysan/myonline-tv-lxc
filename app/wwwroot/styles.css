@@ -2101,3 +2101,7 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
 .mediaPlayerCard:fullscreen .mediaPlayerStage{width:100%!important;height:100%!important;aspect-ratio:auto!important;border-radius:0!important}
 .mediaPlayerCard:fullscreen .mediaPlayerStage>.mediaPlayerVideo{width:100%!important;height:100%!important;object-fit:contain!important}
 @media(max-width:719px){.mediaPlayerCard .mediaPlayerStage{border-radius:0}}
+
+/* v40.4.2 VOD Seek Engine */
+.mediaSeekRow{display:flex;align-items:center;padding:10px 14px 0}
+.mediaSeekBar{width:100%;min-width:0;cursor:pointer;accent-color:currentColor}

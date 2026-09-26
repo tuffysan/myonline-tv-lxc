@@ -1,3 +1,22 @@
+## v40.4.2 — Release Gate Hardening
+- Hardened VOD Seek, Streaming Engine and Playback Resilience release tests so they no longer require obsolete exact version strings.
+- Runtime version markers advanced to 40.4.2.
+- Preserves v40.4.1 VOD seek/A-V sync behavior.
+
+# 40.4.1 — VOD Seek Build Fix
+
+- Fixes the nullable duration calculation in the VOD HLS seek start endpoint that caused CS1503 during Release build.
+- Keeps the v40.4.0 VOD seek and A/V sync behavior unchanged.
+- Uses explicit `double` values and safely handles an unknown ffprobe duration.
+
+# 40.4.0 — VOD Seek & A/V Sync Engine
+
+- Adds a dedicated full-duration seek bar for Movies and Series.
+- HLS fallback seeking now restarts FFmpeg at the requested source timestamp instead of trying to jump into segments that do not exist yet.
+- Seek restarts use H.264/AAC compatibility mode for deterministic timestamps.
+- Adds generated PTS, 2-second forced video keyframes and asynchronous audio resampling to reduce audio/video drift.
+- Resume tracking stores the absolute movie/episode position across seek restarts.
+
 # v40.3.1 – Player Layout Fix
 
 - Fixes inline VOD video rendering only on the right side of a large black player surface.

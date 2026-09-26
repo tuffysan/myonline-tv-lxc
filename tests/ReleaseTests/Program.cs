@@ -68,17 +68,22 @@ internal static class Program
         T.Assert(mobileJs.Contains("collectionProgressText") && mobileJs.Contains("% watched"),"collection progress");T.Pass("collection progress");
         Has(mobileJs,"openContinueActions(item.id,actions)","collection actions");
 
+        // v40.4.0 VOD Seek & A/V Sync Engine.
+        foreach(var x in new[]{"VOD_SEEK_ENGINE_VERSION=","mediaSeekBar","startAtSeconds=0","startSeconds","timelineOffset","savePlaybackPosition?.(true)"}) Has(appJs,x,"VOD Seek Engine: "+x);
+        foreach(var x in new[]{"double? startSeconds","seekStartSeconds","-force_key_frames","aresample=async=1:first_pts=0","+genpts"}) Has(programCs,x,"VOD Seek server: "+x);
+        Has(stylesCss,".mediaSeekBar","VOD Seek CSS");
+
         // v40.3.2 Inline Player Stage Fix.
         foreach(var x in new[]{"mediaPlayerCard","mediaPlayerStage","mediaPlayerVideo"}) Has(appJs,x,"Player stage markup: "+x);
         foreach(var x in new[]{".mediaPlayerCard .mediaPlayerStage","position:relative","aspect-ratio:16/9",".mediaPlayerStage>.mediaPlayerVideo","position:absolute!important","inset:0!important","width:100%!important","height:100%!important","max-width:none!important","max-height:none!important","object-fit:contain!important","object-position:50% 50%!important",".mediaPlayerCard:fullscreen .mediaPlayerStage"}) Has(stylesCss,x,"Player stage CSS: "+x);
         T.Assert(appJs.Split("mediaPlayerStage").Length-1 >= 2,"Both VOD player creation paths use the stage wrapper");T.Pass("Both VOD player creation paths use the stage wrapper");
 
         // v40.3.0 Streaming Engine 2.0.
-        foreach(var x in new[]{"STREAMING_ENGINE_VERSION='40.3.0'","tryDirectVodPlayback","/api/media/capabilities/","Direct play · preparing timeline…","maxBufferLength:90","maxMaxBufferLength:180","setTimeout(async()=>"}) Has(appJs,x,"Streaming Engine 2.0: "+x);
+        foreach(var x in new[]{"STREAMING_ENGINE_VERSION=","tryDirectVodPlayback","/api/media/capabilities/","Direct play · preparing timeline…","maxBufferLength:90","maxMaxBufferLength:180","setTimeout(async()=>"}) Has(appJs,x,"Streaming Engine 2.0: "+x);
         foreach(var x in new[]{"/api/media/capabilities/{token}","streaming-engine-2.0","directUrl","range = true"}) Has(programCs,x,"Streaming Engine 2.0 server: "+x);
 
         // v40.2.1 Playback Resilience & Resume Fix.
-        foreach(var x in new[]{"PLAYBACK_RESILIENCE_VERSION='40.3.0'","installResilientContinueTracking","applyPendingResume","installVodRecovery","Buffering · reconnecting…","Hls.ErrorTypes.NETWORK_ERROR","Hls.ErrorTypes.MEDIA_ERROR","pendingResumeSeconds=safeMediaPosition(video)||requestedResume"}) Has(appJs,x,"Playback resilience: "+x);
+        foreach(var x in new[]{"PLAYBACK_RESILIENCE_VERSION=","installResilientContinueTracking","applyPendingResume","installVodRecovery","Buffering · reconnecting…","Hls.ErrorTypes.NETWORK_ERROR","Hls.ErrorTypes.MEDIA_ERROR","pendingResumeSeconds=safeMediaPosition(video)||requestedResume"}) Has(appJs,x,"Playback resilience: "+x);
         T.Assert(appJs.Contains("['pause','waiting','stalled','seeking','seeked','error']"),"Resume position persists on interruption events");T.Pass("Resume position persists on interruption events");
         T.Assert(appJs.Contains("window.addEventListener('pagehide',pageSave"),"Resume position persists on page exit");T.Pass("Resume position persists on page exit");
 

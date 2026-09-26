@@ -3384,7 +3384,7 @@ app.MapGet("/api/media/capabilities/{token}", (string token) =>
 // Browser-compatible Movies / Series playback.
 // Raw provider files can be MKV/TS/HEVC/AC3 and are not reliably playable by HTML5 video.
 // Convert/remux them server-side to HLS, with an optional H.264/AAC compatibility transcode.
-app.MapPost("/api/media/start/{token}", async (string token, bool? transcode) =>
+app.MapPost("/api/media/start/{token}", async (string token, bool? transcode, double? startSeconds) =>
 {
     if (!proxyTokens.TryGetValue(token, out var target) || target.Kind != "media")
         return Results.BadRequest("The media playback token has expired. Reload Movies/Series and try again.");
@@ -3398,6 +3398,7 @@ app.MapPost("/api/media/start/{token}", async (string token, bool? transcode) =>
         return Results.Problem("FFmpeg is not installed in the MyOnline TV container.", statusCode: 503);
 
     var durationSeconds = await ProbeDurationSeconds(sourceUrl);
+    var seekStartSeconds = Math.Max(0d, Math.Min(startSeconds ?? 0d, Math.Max(0d, (durationSeconds ?? 0d) - 1d)));
 
     foreach (var existing in liveSessions.Where(x => x.Value.OwnerUserId == CurrentUserKey()).Select(x => x.Key).ToArray())
         await StopLiveSession(existing);
@@ -3420,18 +3421,20 @@ app.MapPost("/api/media/start/{token}", async (string token, bool? transcode) =>
     var args = new List<string>
     {
         "-hide_banner", "-loglevel", "warning", "-nostdin",
-        "-rw_timeout", "20000000",
-        "-i", sourceUrl,
-        "-map", "0:v:0?", "-map", "0:a:0?"
+        "-rw_timeout", "20000000"
     };
+
+    if (seekStartSeconds > 0)
+        args.AddRange(new[] { "-ss", seekStartSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) });
+    args.AddRange(new[] { "-i", sourceUrl, "-map", "0:v:0?", "-map", "0:a:0?", "-fflags", "+genpts" });
 
     if (transcode == true)
     {
         args.AddRange(new[]
         {
             "-c:v", "libx264", "-preset", "veryfast",
-            "-pix_fmt", "yuv420p",
-            "-c:a", "aac", "-b:a", "160k"
+            "-pix_fmt", "yuv420p", "-force_key_frames", "expr:gte(t,n_forced*2)",
+            "-c:a", "aac", "-b:a", "160k", "-af", "aresample=async=1:first_pts=0"
         });
     }
     else
@@ -3494,7 +3497,8 @@ app.MapPost("/api/media/start/{token}", async (string token, bool? transcode) =>
         playbackUrl = $"/api/live/hls/{sessionId}/index.m3u8",
         mode = transcode == true ? "hls-transcode" : "hls-remux",
         sourceHost = sourceUri.Host,
-        durationSeconds
+        durationSeconds,
+        startSeconds = seekStartSeconds
     });
 }).RequireAuthorization();
 
