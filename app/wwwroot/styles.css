@@ -2174,3 +2174,25 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
 .unifiedVideoPlayer.isFullscreen.controlsAutoHidden{cursor:none}
 .unifiedVideoPlayer:fullscreen.controlsVisible,
 .unifiedVideoPlayer.isFullscreen.controlsVisible{cursor:default}
+
+/* v41.0.8 — VOD Player Layout Root Fix
+   Playback is mounted directly under <main>, outside Home/collection grids.
+   This prevents launcher layouts from positioning the player in a side column. */
+main > .mediaPlaybackSurface{
+  display:block!important;
+  width:100%!important;
+  min-width:0!important;
+  padding:18px 28px 28px!important;
+  margin:0!important;
+}
+main > .mediaPlaybackSurface > .unifiedVideoPlayer{
+  display:block!important;
+  width:min(1120px,100%)!important;
+  max-width:1120px!important;
+  margin:0 auto!important;
+}
+html.mediaPlaybackActive #content{display:none!important}
+@media(max-width:719px){
+  main > .mediaPlaybackSurface{padding:0!important}
+  main > .mediaPlaybackSurface > .unifiedVideoPlayer{width:100%!important;max-width:none!important;margin:0!important}
+}

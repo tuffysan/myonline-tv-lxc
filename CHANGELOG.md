@@ -1,3 +1,9 @@
+## v41.0.8 — VOD Player Layout Root Fix
+- Mount VOD player directly under main instead of inside Home/collection layout.
+- Hide launcher content while VOD playback is active.
+- Center desktop player at max 1120 px; keep mobile full-width.
+- Add regression protection for the root playback surface.
+
 ## v41.0.7 – Continue Watching Release Gate Fix
 - Updated the contained VOD layout regression test to validate the v41.0.6 centered player contract.
 - No runtime playback behavior changed.

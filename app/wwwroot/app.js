@@ -362,6 +362,8 @@ async function refreshMediaLibraryNav(){
 async function show(v){
   if(!viewAllowed(v)){v='home'}
   currentView=v;destroyPlayer();
+  document.documentElement.classList.remove('mediaPlaybackActive');
+  document.querySelector('main > #mediaPlayer.mediaPlaybackSurface')?.remove();
   renderMobileNavigation();
   const moreSheet=$('#mobileMoreSheet');if(moreSheet){moreSheet.classList.add('hidden');moreSheet.setAttribute('aria-hidden','true');document.body.classList.remove('mobileSheetOpen')}
   title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'Recordings',platform:'Platform','profile-sync':'Profile Sync',diagnostics:'Diagnostics',appliance:'Appliance',notifications:'Notifications',rooms:'Rooms',library:'Library',search:'Search',sources:'My Sources',system:'System',completion:'Feature Completion',update:'System Update',admin:'Admin'})[v]||v;
@@ -1243,16 +1245,19 @@ function installMediaDurationDisplay(video,totalSeconds){
 }
 
 function ensureMediaPlayerHost(){
-  let wrap=$('#playerWrap')||$('#mediaPlayer');
-  if(wrap){wrap.classList.add('dynamicMediaPlayer');return wrap;}
-  // Home surfaces (notably the desktop v36+ layout) historically rendered
-  // Continue Watching/Favourites without a player host. A click then resolved
-  // a valid token but playServerMedia returned silently. Always provide a
-  // profile-local playback surface before starting media.
-  wrap=document.createElement('div');
-  wrap.id='mediaPlayer';
-  wrap.className='dynamicMediaPlayer';
-  content.appendChild(wrap);
+  // v41.0.8: media playback is a first-class main surface, not another item in
+  // whatever Home/collection grid happened to launch it.  Older builds reused
+  // #playerWrap/#mediaPlayer inside those layouts, which allowed parent grid
+  // columns to push VOD to the far right of the viewport.
+  let wrap=$('#mediaPlayer');
+  if(!wrap){
+    wrap=document.createElement('div');
+    wrap.id='mediaPlayer';
+  }
+  wrap.classList.add('dynamicMediaPlayer','mediaPlaybackSurface');
+  const main=document.querySelector('#app > main')||document.querySelector('main');
+  if(main && wrap.parentElement!==main) main.insertBefore(wrap,content);
+  document.documentElement.classList.add('mediaPlaybackActive');
   return wrap;
 }
 

@@ -92,7 +92,7 @@ internal static class Program
         foreach(var x in new[]{"int? minSegments","requiredSegments","bufferedSegments = segmentCount","bufferedSeconds = segmentCount * 2","-hls_time", "\"2\""}) Has(programCs,x,"Smart VOD server buffer: "+x);
 
         foreach(var x in new[]{"Only the player UI marks an intentional user pause","video.dataset.userPaused='1';video.pause()","fragLoadingMaxRetry:8","manifestLoadingMaxRetry:6"}) Has(appJs,x,"v41.0.2 VOD recovery: "+x);
-        T.Assert(styles.Contains(".dynamicMediaPlayer,#mediaPlayer,#playerWrap.dynamicMediaPlayer{grid-column:1 / -1!important") && styles.Contains("#playerWrap.dynamicMediaPlayer .unifiedVideoPlayer{width:min(calc(100% - 28px),1120px)!important") && appJs.Contains("wrap.classList.add('dynamicMediaPlayer')"),"v41.0.7 contained VOD layout protected");T.Pass("v41.0.7 contained VOD layout protected");
+        T.Assert(appJs.Contains("main.insertBefore(wrap,content)") && appJs.Contains("mediaPlaybackSurface") && styles.Contains("main > .mediaPlaybackSurface") && styles.Contains("html.mediaPlaybackActive #content{display:none!important}") && styles.Contains("width:min(1120px,100%)!important"),"v41.0.8 VOD player root layout protected");T.Pass("v41.0.8 VOD player root layout protected");
         foreach(var x in new[]{"v41.0.3: a replacement HLS timeline starts at ~0","hls.once(Hls.Events.MANIFEST_PARSED,onSeekManifest)","video.currentTime=0","dragging only previews the requested time"}) Has(appJs,x,"v41.0.3 VOD seek: "+x);
 
         // v40.6.0 Continuous VOD Playback Engine.
@@ -266,7 +266,7 @@ internal static class Program
         T.Assert(appJs.Contains("Adult group(s) stay inactive") || appJs.Contains("Adult (18+) groups are protected"),"IPTV Manager 2.0 Adult bulk protection");T.Pass("IPTV Manager 2.0 Adult bulk protection");
 
         // v41.0.6 — Continue Watching UX regression guard.
-        Has(appJs,"wrap.classList.add('dynamicMediaPlayer')","Continue Watching: reused player host gets centering class");
+        T.Assert(appJs.Contains("wrap.classList.add('dynamicMediaPlayer','mediaPlaybackSurface')") && appJs.Contains("main.insertBefore(wrap,content)"),"Continue Watching: player host is promoted to root playback surface");T.Pass("Continue Watching: player host is promoted to root playback surface");
         Has(appJs,"mediaResumeCard","Continue Watching: centered resume card markup");
         Has(appJs,"Continue watching</strong>","Continue Watching: explicit dialog heading");
         Has(stylesCss,".unifiedVideoPlayer .mediaResumeChoice{position:absolute;z-index:8;inset:0;display:grid;place-items:center","Continue Watching: overlay fills and centers in player stage");
