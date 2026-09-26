@@ -1275,8 +1275,8 @@ const PLAYBACK_CORE_VERSION='41.1.1';
 const PLAYBACK_STARTUP_FIX_VERSION='41.1.1';
 const INSTANT_VOD_SEEK_VERSION='41.1.2';
 const NATIVE_SMART_SEEK_VERSION='41.2.0';
-const SUBTITLE_SELECTION_VERSION='41.2.4';
-const SUBTITLE_SYNC_PRESENTATION_VERSION='41.2.4';
+const SUBTITLE_SELECTION_VERSION='41.2.7';
+const SUBTITLE_SYNC_PRESENTATION_VERSION='41.2.7';
 const AUDIO_TRACK_SELECTION_VERSION='41.2.5';
 const LIVE_STARTUP_SEGMENTS=1;
 const VOD_STARTUP_SEGMENTS=2;
@@ -1615,12 +1615,22 @@ async function installSubtitleSelector(video,token){
   const tracks=Array.isArray(data?.tracks)?data.tracks:[];if(!tracks.length)return;
   select.innerHTML='<option value="off">CC Off</option>';
   const languageName=code=>{try{return new Intl.DisplayNames([navigator.language||'en'],{type:'language'}).of(code)||code}catch{return code||'Unknown'}};
-  tracks.forEach((t,i)=>{const tr=document.createElement('track');tr.kind='subtitles';tr.srclang=t.language||'und';tr.label=t.title||languageName(t.language||'und')||('Subtitle '+(i+1));tr.src=t.url;tr.dataset.subtitleIndex=String(i);video.appendChild(tr);const o=document.createElement('option');o.value=String(i);o.textContent=tr.label;select.appendChild(o)});
+  for(const t of tracks){
+    const tr=document.createElement('track');tr.kind='subtitles';tr.srclang=t.language||'und';tr.label=t.title||languageName(t.language||'und')||('Subtitle '+t.index);tr.src=t.url+(t.url.includes('?')?'&':'?')+'v=41.2.7';tr.dataset.subtitleStream=String(t.index);video.appendChild(tr);
+    const o=document.createElement('option');o.value=String(t.index);o.textContent=tr.label;select.appendChild(o);
+  }
   const disable=()=>{for(const t of video.textTracks)t.mode='disabled'};
-  const positionCues=track=>{if(!track?.cues)return;for(const cue of track.cues){try{cue.snapToLines=false;cue.line=76;cue.position=50;cue.align='center';cue.size=82}catch{}}};
-  const activate=i=>{disable();const el=video.querySelector(`track[data-subtitle-index=\"${i}\"]`);if(!el)return;const apply=()=>{if(el.track){el.track.mode='showing';positionCues(el.track);setTimeout(()=>positionCues(el.track),150)}};if(el.readyState===2)apply();else{el.addEventListener('load',apply,{once:true});if(el.readyState===3){const src=el.src;el.src='';el.src=src+(src.includes('?')?'&':'?')+'retry='+Date.now()}}};
+  const positionCues=track=>{if(!track?.cues)return;for(const cue of track.cues){try{cue.snapToLines=false;cue.line=78;cue.position=50;cue.align='center';cue.size=86}catch{}}};
+  const activate=streamIndex=>{
+    disable();
+    const el=video.querySelector(`track[data-subtitle-stream="${streamIndex}"]`);if(!el)return;
+    const apply=()=>{if(!el.track)return;el.track.mode='showing';positionCues(el.track);setTimeout(()=>positionCues(el.track),100);setTimeout(()=>positionCues(el.track),750)};
+    el.addEventListener('load',apply,{once:true});
+    el.addEventListener('error',()=>{const st=$('#mediaPlaybackStatus');if(st)st.textContent='Subtitle track could not be loaded';},{once:true});
+    if(el.readyState===2)apply(); else if(el.readyState===3){const base=el.src.replace(/([?&])retry=\d+/,'$1');el.src=base+(base.includes('?')?'&':'?')+'retry='+Date.now()}
+  };
   video.addEventListener('seeked',()=>{const active=[...video.textTracks].find(t=>t.mode==='showing');if(active)positionCues(active)});
-  select.addEventListener('change',()=>{if(select.value==='off')disable();else{const i=Number(select.value);if(Number.isInteger(i))activate(i)}});
+  select.addEventListener('change',()=>{if(select.value==='off')disable();else activate(select.value)});
   select.hidden=false;
 }
 

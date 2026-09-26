@@ -2022,3 +2022,8 @@ Release candidate only: native-client/target-LXC validation and review of functi
 - Added embedded audio-language discovery and selection for Movies and Series.
 - Audio selector appears only for media with multiple audio streams.
 - Switching language preserves playback position and explicitly maps the selected FFmpeg audio stream.
+
+## 41.2.6
+- Home hero headline uses the available desktop width instead of wrapping into a tall narrow block.
+- Keeps responsive wrapping below 1180px for laptop/tablet/mobile layouts.
+- Playback, subtitles, audio-language selection and Live TV pipelines are unchanged.

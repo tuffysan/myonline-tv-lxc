@@ -111,11 +111,14 @@ internal static class Program
         T.Assert(!appJs.Contains(")),VOD_STARTUP_SEGMENTS));\n      if(state.status==='ready')break;\n      if(state.status==='failed')throw new Error(state.error||'FFmpeg could not prepare this channel.')"),"Live TV does not use the VOD startup threshold"); T.Pass("Live TV does not use the VOD startup threshold");
 
         // v41.2.1 Subtitle Selection — embedded text subtitle streams are discoverable and selectable as WebVTT.
-        foreach(var x in new[]{"SUBTITLE_SELECTION_VERSION='41.2.4'","installSubtitleSelector(video,token)","mediaSubtitles","el.track.mode='showing'","/api/media/subtitles/"}) Has(appJs + programCs,x,"v41.2.1 subtitles: "+x);
-        foreach(var x in new[]{"codec is not (\"subrip\" or \"srt\" or \"ass\"","\"-f\",\"webvtt\"","text/vtt; charset=utf-8"}) Has(programCs,x,"v41.2.1 subtitle server: "+x);
-        foreach(var x in new[]{"SUBTITLE_SYNC_PRESENTATION_VERSION='41.2.4'","cue.line=76","cue.position=50","cue.align='center'"}) Has(appJs,x,"v41.2.3 subtitle presentation: "+x);
-        foreach(var x in new[]{"\"-fflags\"","\"+genpts\"","\"-fix_sub_duration\"","\"-vn\"","\"-an\""}) Has(programCs,x,"v41.2.4 subtitle timeline: "+x);
+        foreach(var x in new[]{"SUBTITLE_SELECTION_VERSION='41.2.7'","installSubtitleSelector(video,token)","mediaSubtitles","el.track.mode='showing'","data-subtitle-stream","v=41.2.7"}) Has(appJs,x,"v41.2.7 subtitle client: "+x);
+        foreach(var x in new[]{"codec is not (\"subrip\" or \"srt\" or \"ass\"","\"-f\",\"webvtt\"","text/vtt; charset=utf-8","StartsWith(\"WEBVTT\"","ContentLength = bytes.LongLength","X-MyOnlineTV-Subtitle"}) Has(programCs,x,"v41.2.7 subtitle server: "+x);
+        foreach(var x in new[]{"SUBTITLE_SYNC_PRESENTATION_VERSION='41.2.7'","cue.line=78","cue.position=50","cue.align='center'"}) Has(appJs,x,"v41.2.3 subtitle presentation: "+x);
+        foreach(var x in new[]{"\"-map\",$\"0:{streamIndex}\"","\"-vn\"","\"-an\"","File.ReadAllBytesAsync(vttPath"}) Has(programCs,x,"v41.2.7 subtitle extraction: "+x);
         if(programCs.Contains("\"-copyts\"") || programCs.Contains("\"-start_at_zero\"")) throw new Exception("v41.2.4 subtitles must not rewrite the media timeline with copyts/start_at_zero");
+
+        // v41.2.6 Home Hero Wide Headline — use available desktop width and keep mobile responsive.
+        foreach(var x in new[]{"white-space:nowrap","max-width:none",".mtv-device-desktop .hx3HeroContent","@media(max-width:1180px){.hx3Hero h1{white-space:normal"}) Has(stylesCss,x,"v41.2.6 wide home hero: "+x);
 
         // v41.2.5 Audio Language Selection — multiple embedded audio tracks are discoverable and selectable.
         foreach(var x in new[]{"AUDIO_TRACK_SELECTION_VERSION='41.2.5'","mediaAudioTracks","installAudioTrackSelector","/api/media/audio-tracks/","audioStreamIndex"}) Has(appJs + programCs,x,"v41.2.5 audio tracks: "+x);
