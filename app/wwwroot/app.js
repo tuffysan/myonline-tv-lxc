@@ -1232,6 +1232,7 @@ const VOD_SEEK_SEGMENTS=4;
 
 // v40.9.0 — Adaptive Buffer Engine
 const ADAPTIVE_BUFFER_VERSION='40.9.0';
+const PLAYER_EXPERIENCE_VERSION='40.10.0';
 const ADAPTIVE_BUFFER_MIN_SECONDS=30;
 const ADAPTIVE_BUFFER_DEFAULT_SECONDS=120;
 const ADAPTIVE_BUFFER_MAX_SECONDS=240;
@@ -1446,9 +1447,14 @@ function unifiedPlayerMarkup(name,withStatus=true){
         <div class="mediaSeekRow"><input id="mediaSeekBar" class="mediaSeekBar" type="range" min="0" max="100" value="0" step="1" aria-label="Seek"></div>
         <div class="mediaControlRow">
           <button id="mediaPlayPause" class="mediaControlButton" type="button" aria-label="Play or pause">▶</button>
+          <button id="mediaBack10" class="mediaControlButton mediaSkipButton" type="button" aria-label="Back 10 seconds">↶<small>10</small></button>
+          <button id="mediaForward10" class="mediaControlButton mediaSkipButton" type="button" aria-label="Forward 10 seconds">↷<small>10</small></button>
           <span id="mediaCurrentTime">00:00</span><span class="mediaTimeSeparator">/</span><span id="mediaTotalTime">--:--</span>
           <div class="mediaControlSpacer"></div>
           <span class="mediaNowPlaying">${esc(name)}</span>
+          <button id="mediaMute" class="mediaControlButton" type="button" aria-label="Mute or unmute">🔊</button>
+          <input id="mediaVolume" class="mediaVolume" type="range" min="0" max="1" step="0.05" value="1" aria-label="Volume">
+          <select id="mediaPlaybackRate" class="mediaPlaybackRate" aria-label="Playback speed"><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select>
           <button id="mediaFullscreen" class="mediaControlButton" type="button" aria-label="Fullscreen">⛶</button>
         </div>
         ${withStatus?'<div id="mediaPlaybackStatus" class="livePlaybackStatus mediaOverlayStatus">Preparing video…</div>':''}
@@ -1465,6 +1471,8 @@ function installUnifiedPlayerChrome(video){
   const play=card.querySelector('#mediaPlayPause');
   const center=card.querySelector('#mediaCenterPlay');
   const fullscreen=card.querySelector('#mediaFullscreen');
+  const back10=card.querySelector('#mediaBack10'),forward10=card.querySelector('#mediaForward10');
+  const mute=card.querySelector('#mediaMute'),volume=card.querySelector('#mediaVolume'),rate=card.querySelector('#mediaPlaybackRate');
   let hideTimer=null;
   const sync=()=>{const icon=video.paused?'▶':'❚❚';if(play)play.textContent=icon;if(center)center.textContent=icon;card.classList.toggle('isPaused',video.paused)};
   const show=()=>{card.classList.add('controlsVisible');clearTimeout(hideTimer);if(!video.paused)hideTimer=setTimeout(()=>card.classList.remove('controlsVisible'),2600)};
@@ -1473,13 +1481,21 @@ function installUnifiedPlayerChrome(video){
   play?.addEventListener('click',e=>{e.stopPropagation();toggle();show()});
   center?.addEventListener('click',e=>{e.stopPropagation();toggle();show()});
   fullscreen?.addEventListener('click',e=>{e.stopPropagation();toggleFullscreen();show()});
+  const skip=seconds=>{video.currentTime=Math.max(0,Math.min(Number.isFinite(video.duration)?video.duration:Infinity,video.currentTime+seconds));show()};
+  back10?.addEventListener('click',e=>{e.stopPropagation();skip(-10)});
+  forward10?.addEventListener('click',e=>{e.stopPropagation();skip(10)});
+  const syncVolume=()=>{if(volume)volume.value=String(video.muted?0:video.volume);if(mute)mute.textContent=(video.muted||video.volume===0)?'🔇':video.volume<.5?'🔉':'🔊'};
+  mute?.addEventListener('click',e=>{e.stopPropagation();video.muted=!video.muted;syncVolume();show()});
+  volume?.addEventListener('input',e=>{e.stopPropagation();video.volume=Math.max(0,Math.min(1,Number(volume.value)||0));video.muted=video.volume===0;syncVolume();show()});
+  rate?.addEventListener('change',e=>{e.stopPropagation();video.playbackRate=Number(rate.value)||1;show()});
+  video.addEventListener('volumechange',syncVolume);video.addEventListener('ratechange',()=>{if(rate)rate.value=String(video.playbackRate)});
   stage?.addEventListener('click',e=>{if(e.target===stage||e.target===video){toggle();show()}});
   stage?.addEventListener('dblclick',e=>{if(e.target===stage||e.target===video){e.preventDefault();toggleFullscreen()}});
   for(const ev of ['mousemove','pointermove','pointerdown','touchstart'])stage?.addEventListener(ev,show,{passive:true});
   card.addEventListener('keydown',e=>{if(e.key===' '||e.key==='k'){e.preventDefault();toggle();show()}else if(e.key==='f'){e.preventDefault();toggleFullscreen()}else if(e.key==='ArrowRight'){e.preventDefault();video.currentTime=Math.min((video.duration||Infinity),video.currentTime+10);show()}else if(e.key==='ArrowLeft'){e.preventDefault();video.currentTime=Math.max(0,video.currentTime-10);show()}});
   video.addEventListener('play',()=>{sync();show()});video.addEventListener('pause',()=>{sync();show()});video.addEventListener('ended',sync);
   document.addEventListener('fullscreenchange',()=>{card.classList.toggle('isFullscreen',document.fullscreenElement===card);show()});
-  sync();show();
+  syncVolume();sync();show();
 }
 
 async function tryDirectVodPlayback(token,name,mediaId,poster,requestedResume){

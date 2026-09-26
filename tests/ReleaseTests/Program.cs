@@ -94,6 +94,11 @@ internal static class Program
         foreach(var x in new[]{"STREAMING_ENGINE_VERSION=","tryDirectVodPlayback","/api/media/capabilities/","Direct play · preparing timeline…","maxBufferLength:","maxMaxBufferLength:","setTimeout(async()=>"}) Has(appJs,x,"Streaming Engine 2.0: "+x);
         foreach(var x in new[]{"/api/media/capabilities/{token}","streaming-engine-2.0","directUrl","range = true"}) Has(programCs,x,"Streaming Engine 2.0 server: "+x);
 
+        // v40.10.0 Player Experience.
+        foreach(var x in new[]{"PLAYER_EXPERIENCE_VERSION=","mediaBack10","mediaForward10","mediaMute","mediaVolume","mediaPlaybackRate","video.playbackRate","syncVolume","skip(-10)","skip(10)"}) Has(appJs,x,"Player Experience: "+x);
+        foreach(var x in new[]{".mediaSkipButton",".mediaVolume",".mediaPlaybackRate"}) Has(stylesCss,x,"Player Experience CSS: "+x);
+        T.Assert(stylesCss.Contains("width:min(100%,1120px)!important") && stylesCss.Contains("max-width:1120px!important"),"Player Experience preserves contained desktop player");T.Pass("Player Experience preserves contained desktop player");
+
         // v40.9.0 Adaptive Buffer Engine.
         foreach(var x in new[]{"ADAPTIVE_BUFFER_VERSION=","ADAPTIVE_BUFFER_MIN_SECONDS=30","ADAPTIVE_BUFFER_DEFAULT_SECONDS=120","ADAPTIVE_BUFFER_MAX_SECONDS=240","installAdaptiveVodBuffer","Hls.Events.FRAG_LOADED","throughputMbps","segmentMbps","low-buffer-or-stalls","limited-bandwidth","high-bandwidth","myOnlineTvAdaptiveBufferDiagnostics"}) Has(appJs,x,"Adaptive Buffer: "+x);
         T.Assert(appJs.Contains("hls.config.maxBufferLength=target") && appJs.Contains("hls.config.maxMaxBufferLength=max"),"Adaptive Buffer changes HLS targets at runtime");T.Pass("Adaptive Buffer changes HLS targets at runtime");

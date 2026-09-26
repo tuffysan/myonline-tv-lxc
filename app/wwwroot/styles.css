@@ -2137,3 +2137,12 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
 
 /* v40.6.1 Smart VOD Buffering */
 .unifiedVideoPlayer .mediaSeekBar{--buffered-percent:0%;background:linear-gradient(to right,currentColor 0 var(--buffered-percent),rgba(255,255,255,.28) var(--buffered-percent) 100%)}
+
+
+/* v40.10.0 — Player Experience. Polished controls without changing contained-player geometry. */
+.unifiedVideoPlayer .mediaSkipButton{position:relative;font-size:1rem}.unifiedVideoPlayer .mediaSkipButton small{font-size:.58rem;line-height:1;margin-left:-2px}
+.unifiedVideoPlayer .mediaVolume{width:88px;min-width:56px;accent-color:currentColor;cursor:pointer}
+.unifiedVideoPlayer .mediaPlaybackRate{height:34px;padding:0 8px;border:1px solid rgba(255,255,255,.24);border-radius:8px;background:rgba(0,0,0,.46);color:#fff;font:inherit;font-size:.78rem;cursor:pointer}
+.unifiedVideoPlayer .mediaPlaybackRate:focus-visible,.unifiedVideoPlayer .mediaVolume:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+.unifiedVideoPlayer.isBuffering .mediaOverlayStatus,.unifiedVideoPlayer.isSeeking .mediaOverlayStatus,.unifiedVideoPlayer.isRecovering .mediaOverlayStatus{display:block;backdrop-filter:blur(6px)}
+@media(max-width:719px){.unifiedVideoPlayer .mediaVolume{display:none}.unifiedVideoPlayer .mediaPlaybackRate{max-width:58px;padding:0 4px}.unifiedVideoPlayer .mediaControlRow{gap:5px}.unifiedVideoPlayer .mediaSkipButton{display:none}}

@@ -1,3 +1,9 @@
+# v40.10.0 — Player Experience
+
+- Polished unified VOD player controls with ±10s, volume/mute and playback speed.
+- Preserves contained-player layout and v40.9.0 playback stack.
+- Added Player Experience release-gate coverage.
+
 ## v40.9.0 – Adaptive Buffer Engine
 - Dynamically tunes VOD HLS buffer targets from 30–240 seconds.
 - Samples real segment throughput and estimated media bitrate.
