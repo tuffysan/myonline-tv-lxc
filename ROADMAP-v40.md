@@ -20,3 +20,6 @@ A shared design system and interaction model across desktop, mobile, tablet and 
 - Existing functionality must not regress when moving between roadmap releases.
 - `RELEASE.cmd` is the canonical release entry point.
 - GitHub Actions builds the immutable release artifacts.
+
+## v41.0.0 — Playback & UX Quality Release
+Integrated quality gate and acceptance matrix for VOD, seeking, buffering, player UX, Movies/Series continuity and Live TV reliability. New feature work resumes only after this baseline is stable.

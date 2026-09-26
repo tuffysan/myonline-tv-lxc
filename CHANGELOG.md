@@ -1,3 +1,9 @@
+## v41.0.0 — Playback & UX Quality Release
+- Adds an integrated quality gate across the complete v40 playback stack.
+- Protects VOD reliability, Instant Seek, Adaptive Buffer, contained player UX, Movies/Series continuity and Live TV recovery together.
+- Adds a real-media acceptance matrix for endurance, seeking, recovery and device UX.
+- No deliberate playback-policy rollback from v40.12.0.
+
 ## v40.12.0 — Live TV Reliability
 - Dedicated Live TV watchdog, reconnect and stall recovery.
 - Live-edge latency controls and safer rapid channel switching.

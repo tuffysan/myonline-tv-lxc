@@ -32,6 +32,16 @@ internal static class Program
 
         static void Has(string text,string token,string name){T.Assert(text.Contains(token,StringComparison.Ordinal),name);T.Pass(name);}
 
+        // v41.0.0 Playback & UX Quality Release — integrated quality gate.
+        Has(appJs,"PLAYBACK_UX_QUALITY_VERSION='41.0.0'","v41 quality release marker");
+        foreach(var x in new[]{"PLAYBACK_RELIABILITY_VERSION=","INSTANT_SEEK_VERSION=","ADAPTIVE_BUFFER_VERSION=","PLAYER_EXPERIENCE_VERSION=","MOVIES_SERIES_UX_VERSION=","LIVE_TV_RELIABILITY_VERSION="}) Has(appJs,x,"v41 integrated playback stack: "+x);
+        T.Assert(appJs.Contains("installPlaybackReliability(video") && appJs.Contains("installAdaptiveVodBuffer(video,hls)"),"v41 VOD reliability and adaptive buffering are both installed"); T.Pass("v41 VOD reliability and adaptive buffering are both installed");
+        T.Assert(appJs.Contains("requestInstantSeek") && !appJs.Contains("seekBar.disabled=true"),"v41 seek remains interactive and cancellable"); T.Pass("v41 seek remains interactive and cancellable");
+        T.Assert(stylesCss.Contains("width:min(100%,1120px)!important") && stylesCss.Contains("max-width:1120px!important"),"v41 contained player layout protected"); T.Pass("v41 contained player layout protected");
+        T.Assert(appJs.Contains("NEXT_EPISODE_COUNTDOWN_SECONDS=10") && appJs.Contains("installResumeStartOverChoice"),"v41 Movies & Series continuity protected"); T.Pass("v41 Movies & Series continuity protected");
+        T.Assert(appJs.Contains("installLiveReliability") && appJs.Contains("++livePlaybackGeneration;stopLiveReliability()"),"v41 Live TV recovery and stale-channel guard protected"); T.Pass("v41 Live TV recovery and stale-channel guard protected");
+        T.Assert(programCs.Contains("\"-hls_list_size\", \"12\"") && programCs.Contains("independent_segments"),"v41 server HLS reliability policy protected"); T.Pass("v41 server HLS reliability policy protected");
+
         // Downloads 2.0 source-regression checks
         foreach(var x in new[]{"/api/downloads/summary","/api/downloads/history","downloadCancellations","downloads-state.json","SemaphoreSlim(2, 2)","Status = \"Interrupted\""}) Has(programCs,x,"Downloads 2.0: "+x);
         foreach(var x in new[]{"DOWNLOADS 2.0","downloadSeriesBatch","Clear failed/cancelled history","setTimeout"}) Has(appJs,x,"Downloads UI: "+x);
