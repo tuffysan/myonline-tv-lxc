@@ -3424,47 +3424,37 @@ app.MapGet("/api/media/subtitles/{token}", async (string token) =>
     } catch { try { if (!process.HasExited) process.Kill(entireProcessTree:true); } catch {} return Results.Ok(new { tracks = Array.Empty<object>() }); }
 }).RequireAuthorization();
 
-app.MapGet("/api/media/subtitles/{token}/{streamIndex:int}.vtt", async (HttpContext ctx, string token, int streamIndex) =>
+app.MapGet("/api/media/subtitles/{token}/{streamIndex:int}.vtt", async (HttpContext ctx, string token, int streamIndex, double? start) =>
 {
     if (!proxyTokens.TryGetValue(token, out var target) || target.Kind != "media") { ctx.Response.StatusCode = 404; return; }
     var ffmpeg = FindExecutable("ffmpeg"); if (ffmpeg is null) { ctx.Response.StatusCode = 404; return; }
 
-    // v41.2.7 Subtitle Pipeline Fix: extract the selected embedded text stream to a complete,
-    // validated WebVTT resource before returning it. HTML <track> loading is much more reliable
-    // with a finite VTT response (Content-Length + WEBVTT header) than with an open FFmpeg pipe.
-    var cacheDir = Path.Combine(Path.GetTempPath(), "myonlinetv-subtitles");
-    Directory.CreateDirectory(cacheDir);
-    var safeToken = new string(token.Where(char.IsLetterOrDigit).Take(48).ToArray());
-    var vttPath = Path.Combine(cacheDir, $"{safeToken}-{streamIndex}.vtt");
+    // v41.2.9 Subtitle Fast-Start: do not wait for FFmpeg to scan/extract the complete VOD.
+    // Seek close to the current playback position, stream a bounded WebVTT window immediately,
+    // and let the overlay renderer offset the window cues back onto the absolute media timeline.
+    var startSeconds = Math.Max(0, start ?? 0);
+    var psi = new ProcessStartInfo { FileName = ffmpeg, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
+    var args = new List<string> { "-hide_banner","-loglevel","error","-rw_timeout","20000000" };
+    if (startSeconds > 0.25) { args.Add("-ss"); args.Add(startSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)); }
+    args.AddRange(new[] { "-i",target.Url,"-map",$"0:{streamIndex}","-vn","-an","-t","900","-c:s","webvtt","-f","webvtt","pipe:1" });
+    foreach (var arg in args) psi.ArgumentList.Add(arg);
+    using var process = new Process { StartInfo = psi };
     try {
-        var needsBuild = !File.Exists(vttPath) || new FileInfo(vttPath).Length < 8 || File.GetLastWriteTimeUtc(vttPath) < DateTime.UtcNow.AddHours(-6);
-        if (needsBuild) {
-            var tmpPath = vttPath + ".tmp-" + Guid.NewGuid().ToString("N");
-            var psi = new ProcessStartInfo { FileName = ffmpeg, UseShellExecute = false, RedirectStandardOutput = false, RedirectStandardError = true, CreateNoWindow = true };
-            foreach (var arg in new[] { "-y","-v","error","-rw_timeout","20000000","-i",target.Url,"-map",$"0:{streamIndex}","-vn","-an","-c:s","webvtt","-f","webvtt",tmpPath }) psi.ArgumentList.Add(arg);
-            using var process = new Process { StartInfo = psi };
-            if (!process.Start()) { ctx.Response.StatusCode = 502; return; }
-            var stderrTask = process.StandardError.ReadToEndAsync();
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted);
-            cts.CancelAfter(TimeSpan.FromSeconds(90));
-            await process.WaitForExitAsync(cts.Token);
-            var stderr = await stderrTask;
-            if (process.ExitCode != 0 || !File.Exists(tmpPath)) { try { File.Delete(tmpPath); } catch {} ctx.Response.StatusCode = 502; await ctx.Response.WriteAsync("Subtitle extraction failed"); return; }
-            var probe = await File.ReadAllTextAsync(tmpPath, ctx.RequestAborted);
-            if (!probe.TrimStart().StartsWith("WEBVTT", StringComparison.Ordinal)) { try { File.Delete(tmpPath); } catch {} ctx.Response.StatusCode = 502; await ctx.Response.WriteAsync("Invalid WebVTT output"); return; }
-            File.Move(tmpPath, vttPath, true);
-        }
-        var bytes = await File.ReadAllBytesAsync(vttPath, ctx.RequestAborted);
+        if (!process.Start()) { ctx.Response.StatusCode = 502; return; }
+        _ = Task.Run(async () => { try { await process.StandardError.ReadToEndAsync(); } catch {} });
         ctx.Response.StatusCode = 200;
         ctx.Response.ContentType = "text/vtt; charset=utf-8";
-        ctx.Response.ContentLength = bytes.LongLength;
-        ctx.Response.Headers.CacheControl = "private, max-age=21600";
+        ctx.Response.Headers.CacheControl = "no-store";
         ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
-        ctx.Response.Headers["X-MyOnlineTV-Subtitle"] = "41.2.8";
-        await ctx.Response.Body.WriteAsync(bytes, ctx.RequestAborted);
+        ctx.Response.Headers["X-MyOnlineTV-Subtitle"] = "41.2.9";
+        ctx.Response.Headers["X-MyOnlineTV-Subtitle-Start"] = startSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+        await ctx.Response.StartAsync(ctx.RequestAborted);
+        await process.StandardOutput.BaseStream.CopyToAsync(ctx.Response.Body, ctx.RequestAborted);
+        await ctx.Response.Body.FlushAsync(ctx.RequestAborted);
+        if (!process.HasExited) await process.WaitForExitAsync(ctx.RequestAborted);
     }
-    catch (OperationCanceledException) { if (!ctx.Response.HasStarted) ctx.Response.StatusCode = 504; }
-    catch { if (!ctx.Response.HasStarted) ctx.Response.StatusCode = 502; }
+    catch (OperationCanceledException) { try { if (!process.HasExited) process.Kill(entireProcessTree:true); } catch {} }
+    catch { try { if (!process.HasExited) process.Kill(entireProcessTree:true); } catch {} if (!ctx.Response.HasStarted) ctx.Response.StatusCode = 502; }
 }).RequireAuthorization();
 
 // v40.3.0 - Streaming Engine 2.0. Prefer native browser byte-range playback for

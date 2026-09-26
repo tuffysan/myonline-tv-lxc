@@ -111,10 +111,10 @@ internal static class Program
         T.Assert(!appJs.Contains(")),VOD_STARTUP_SEGMENTS));\n      if(state.status==='ready')break;\n      if(state.status==='failed')throw new Error(state.error||'FFmpeg could not prepare this channel.')"),"Live TV does not use the VOD startup threshold"); T.Pass("Live TV does not use the VOD startup threshold");
 
         // v41.2.1 Subtitle Selection — embedded text subtitle streams are discoverable and selectable as WebVTT.
-        foreach(var x in new[]{"SUBTITLE_SELECTION_VERSION='41.2.8'","installSubtitleSelector(video,token)","mediaSubtitles","mediaSubtitleOverlay","parseVtt(text)","credentials:'same-origin'","v=41.2.8"}) Has(appJs,x,"v41.2.8 subtitle client: "+x);
-        foreach(var x in new[]{"codec is not (\"subrip\" or \"srt\" or \"ass\"","\"-f\",\"webvtt\"","text/vtt; charset=utf-8","StartsWith(\"WEBVTT\"","ContentLength = bytes.LongLength","X-MyOnlineTV-Subtitle"}) Has(programCs,x,"v41.2.8 subtitle server: "+x);
+        foreach(var x in new[]{"SUBTITLE_SELECTION_VERSION='41.2.9'","installSubtitleSelector(video,token)","mediaSubtitles","mediaSubtitleOverlay","parseVtt(text)","credentials:'same-origin'","v=41.2.9"}) Has(appJs,x,"v41.2.8 subtitle client: "+x);
+        foreach(var x in new[]{"codec is not (\"subrip\" or \"srt\" or \"ass\"","\"-f\",\"webvtt\"","text/vtt; charset=utf-8","X-MyOnlineTV-Subtitle","X-MyOnlineTV-Subtitle-Start","StandardOutput.BaseStream.CopyToAsync"}) Has(programCs,x,"v41.2.9 subtitle server: "+x);
         foreach(var x in new[]{"mediaSubtitleOverlay","overlay.textContent=active","video.addEventListener('timeupdate',render)","video.addEventListener('seeked',render)"}) Has(appJs,x,"v41.2.8 subtitle overlay presentation: "+x);
-        foreach(var x in new[]{"\"-map\",$\"0:{streamIndex}\"","\"-vn\"","\"-an\"","File.ReadAllBytesAsync(vttPath"}) Has(programCs,x,"v41.2.7 subtitle extraction: "+x);
+        foreach(var x in new[]{"\"-map\",$\"0:{streamIndex}\"","\"-vn\"","\"-an\"","\"-t\",\"900\"","pipe:1"}) Has(programCs,x,"v41.2.9 subtitle fast-start extraction: "+x);
         if(programCs.Contains("\"-copyts\"") || programCs.Contains("\"-start_at_zero\"")) throw new Exception("v41.2.4 subtitles must not rewrite the media timeline with copyts/start_at_zero");
 
         // v41.2.6 Home Hero Wide Headline — use available desktop width and keep mobile responsive.

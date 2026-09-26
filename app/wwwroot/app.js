@@ -1275,7 +1275,7 @@ const PLAYBACK_CORE_VERSION='41.1.1';
 const PLAYBACK_STARTUP_FIX_VERSION='41.1.1';
 const INSTANT_VOD_SEEK_VERSION='41.1.2';
 const NATIVE_SMART_SEEK_VERSION='41.2.0';
-const SUBTITLE_SELECTION_VERSION='41.2.8';
+const SUBTITLE_SELECTION_VERSION='41.2.9';
 const SUBTITLE_SYNC_PRESENTATION_VERSION='41.2.7';
 const AUDIO_TRACK_SELECTION_VERSION='41.2.5';
 const LIVE_STARTUP_SEGMENTS=1;
@@ -1639,12 +1639,25 @@ async function installSubtitleSelector(video,token){
     aborter?.abort();aborter=new AbortController();cues=[];lastText='';overlay.hidden=true;
     const st=$('#mediaPlaybackStatus');if(st)st.textContent='Loading subtitles…';
     try{
-      const url=t.url+(t.url.includes('?')?'&':'?')+'v=41.2.8';
+      const windowStart=Math.max(0,(Number(video.currentTime)||0)-5);
+      const url=t.url+(t.url.includes('?')?'&':'?')+'v=41.2.9&start='+encodeURIComponent(windowStart.toFixed(3));
       const r=await fetch(url,{credentials:'same-origin',cache:'no-store',signal:aborter.signal});
       if(!r.ok)throw new Error('HTTP '+r.status);
-      const text=await r.text();if(!/^\s*WEBVTT/i.test(text))throw new Error('Invalid WebVTT');
-      cues=parseVtt(text);if(!cues.length)throw new Error('No subtitle cues');
-      activeIndex=String(idx);render();if(st){st.textContent=`Subtitles: ${t.label}`;st.className='livePlaybackStatus ready'}
+      if(!r.body)throw new Error('Subtitle stream unavailable');
+      const reader=r.body.getReader(),decoder=new TextDecoder();let text='',firstCue=false;
+      activeIndex=String(idx);
+      while(true){
+        const part=await reader.read();if(part.done)break;
+        text+=decoder.decode(part.value,{stream:true});
+        if(!/^\s*WEBVTT/i.test(text)&&text.length>64)throw new Error('Invalid WebVTT');
+        const parsed=parseVtt(text).map(c=>({start:c.start+windowStart,end:c.end+windowStart,text:c.text}));
+        if(parsed.length){cues=parsed;if(!firstCue){firstCue=true;if(st){st.textContent=`Subtitles: ${t.label}`;st.className='livePlaybackStatus ready'}}render()}
+      }
+      text+=decoder.decode();
+      const parsed=parseVtt(text).map(c=>({start:c.start+windowStart,end:c.end+windowStart,text:c.text}));
+      if(parsed.length)cues=parsed;
+      if(!cues.length)throw new Error('No subtitle cues in this playback window');
+      render();
     }catch(e){if(e?.name==='AbortError')return;activeIndex='off';cues=[];overlay.hidden=true;if(st){st.textContent='Subtitle load failed: '+(e?.message||'unknown error');st.className='livePlaybackStatus error'}}
   };
   video.addEventListener('timeupdate',render);video.addEventListener('seeked',render);video.addEventListener('loadedmetadata',render);
