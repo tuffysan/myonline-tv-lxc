@@ -105,7 +105,9 @@ internal static class Program
 
         // v40.3.2 Inline Player Stage Fix.
         foreach(var x in new[]{"unifiedPlayerMarkup","unifiedVideoPlayer","mediaPlayerStage","mediaPlayerVideo","mediaPlayerChrome","mediaFullscreen","mediaPlayPause","installUnifiedPlayerChrome"}) Has(appJs,x,"Unified player markup/behavior: "+x);
+        foreach(var x in new[]{"controlsAutoHidden","setTimeout(hide,3000)","card.classList.remove('controlsAutoHidden')"}) Has(appJs,x,"Fullscreen auto-hide behavior: "+x);
         foreach(var x in new[]{".unifiedVideoPlayer",".unifiedVideoPlayer .mediaPlayerChrome",".unifiedVideoPlayer .mediaPlayerVideo","aspect-ratio:16/9","position:absolute!important","inset:0!important","width:100%!important","height:100%!important","object-fit:contain!important",".unifiedVideoPlayer:fullscreen",".unifiedVideoPlayer.isPaused .mediaCenterPlay"}) Has(stylesCss,x,"Unified player CSS: "+x);
+        foreach(var x in new[]{".unifiedVideoPlayer:fullscreen.controlsAutoHidden .mediaPlayerChrome","cursor:none"}) Has(stylesCss,x,"Fullscreen auto-hide CSS: "+x);
         T.Assert(appJs.Split("unifiedPlayerMarkup(name").Length-1 >= 2,"Both VOD player creation paths use unified player");T.Pass("Both VOD player creation paths use unified player");
 
         // v40.3.0 Streaming Engine 2.0.

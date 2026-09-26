@@ -1,3 +1,7 @@
+## v41.0.5 — Fullscreen Controls Auto-Hide Fix
+- Fixed fullscreen controls remaining permanently visible due to player focus.
+- Added 3-second inactivity auto-hide and fullscreen cursor hiding.
+
 ## v41.0.4 – VOD Buffer Pipeline Fix
 
 - Fixes browser-generated VOD pauses becoming unrecoverable during buffer underruns.

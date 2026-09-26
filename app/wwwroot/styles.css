@@ -2159,3 +2159,16 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
 .dynamicMediaPlayer,#mediaPlayer{grid-column:1 / -1!important;min-width:0!important;width:100%!important;justify-self:stretch!important}
 .dynamicMediaPlayer .unifiedVideoPlayer{width:min(calc(100% - 28px),1120px)!important;max-width:1120px!important;margin:14px auto!important}
 @media(max-width:719px){.dynamicMediaPlayer .unifiedVideoPlayer{width:100%!important;margin:8px 0!important}}
+
+
+/* v41.0.5 — Fullscreen Controls Auto-Hide Fix.
+   In fullscreen, focus remains inside the player after clicking the fullscreen button.
+   Do not let :focus-within pin the chrome open forever; controlsVisible/paused own visibility. */
+.unifiedVideoPlayer:fullscreen.controlsAutoHidden .mediaPlayerChrome,
+.unifiedVideoPlayer.isFullscreen.controlsAutoHidden .mediaPlayerChrome{opacity:0!important;transform:translateY(8px)!important;pointer-events:none!important}
+.unifiedVideoPlayer:fullscreen.controlsAutoHidden .mediaPlayerGradient,
+.unifiedVideoPlayer.isFullscreen.controlsAutoHidden .mediaPlayerGradient{opacity:0!important}
+.unifiedVideoPlayer:fullscreen.controlsAutoHidden,
+.unifiedVideoPlayer.isFullscreen.controlsAutoHidden{cursor:none}
+.unifiedVideoPlayer:fullscreen.controlsVisible,
+.unifiedVideoPlayer.isFullscreen.controlsVisible{cursor:default}

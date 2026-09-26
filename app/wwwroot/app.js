@@ -1533,7 +1533,17 @@ function installUnifiedPlayerChrome(video){
   const mute=card.querySelector('#mediaMute'),volume=card.querySelector('#mediaVolume'),rate=card.querySelector('#mediaPlaybackRate');
   let hideTimer=null;
   const sync=()=>{const icon=video.paused?'▶':'❚❚';if(play)play.textContent=icon;if(center)center.textContent=icon;card.classList.toggle('isPaused',video.paused)};
-  const show=()=>{card.classList.add('controlsVisible');clearTimeout(hideTimer);if(!video.paused)hideTimer=setTimeout(()=>card.classList.remove('controlsVisible'),2600)};
+  const hide=()=>{
+    if(video.paused)return;
+    card.classList.remove('controlsVisible');
+    card.classList.add('controlsAutoHidden');
+  };
+  const show=()=>{
+    card.classList.add('controlsVisible');
+    card.classList.remove('controlsAutoHidden');
+    clearTimeout(hideTimer);
+    if(!video.paused)hideTimer=setTimeout(hide,3000);
+  };
   const toggle=()=>{if(video.paused){video.dataset.userPaused='0';video.play().catch(()=>{})}else{video.dataset.userPaused='1';video.pause()}};
   const toggleFullscreen=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await card.requestFullscreen()}catch{}};
   play?.addEventListener('click',e=>{e.stopPropagation();toggle();show()});
@@ -1552,7 +1562,12 @@ function installUnifiedPlayerChrome(video){
   for(const ev of ['mousemove','pointermove','pointerdown','touchstart'])stage?.addEventListener(ev,show,{passive:true});
   card.addEventListener('keydown',e=>{if(e.key===' '||e.key==='k'){e.preventDefault();toggle();show()}else if(e.key==='f'){e.preventDefault();toggleFullscreen()}else if(e.key==='ArrowRight'){e.preventDefault();video.currentTime=Math.min((video.duration||Infinity),video.currentTime+10);show()}else if(e.key==='ArrowLeft'){e.preventDefault();video.currentTime=Math.max(0,video.currentTime-10);show()}});
   video.addEventListener('play',()=>{sync();show()});video.addEventListener('pause',()=>{sync();show()});video.addEventListener('ended',sync);
-  document.addEventListener('fullscreenchange',()=>{card.classList.toggle('isFullscreen',document.fullscreenElement===card);show()});
+  document.addEventListener('fullscreenchange',()=>{
+    const active=document.fullscreenElement===card;
+    card.classList.toggle('isFullscreen',active);
+    card.classList.remove('controlsAutoHidden');
+    show();
+  });
   syncVolume();sync();show();
 }
 
