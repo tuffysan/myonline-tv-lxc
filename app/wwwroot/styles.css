@@ -2219,3 +2219,14 @@ main > .mediaPlaybackSurface > .unifiedVideoPlayer.isFullscreen .mediaPlayerStag
 .unifiedVideoPlayer .mediaSubtitleSelect{max-width:150px}
 .unifiedVideoPlayer video::cue{background:rgba(0,0,0,.72);color:#fff;font-size:1em}
 @media(max-width:719px){.unifiedVideoPlayer .mediaSubtitleSelect{max-width:82px}}
+
+
+/* v41.2.3 Subtitle Sync & Presentation Fix */
+.unifiedVideoPlayer video::cue{
+  background:rgba(0,0,0,.78);
+  color:#fff;
+  font-size:clamp(16px,2.1vw,25px);
+  line-height:1.25;
+  text-shadow:0 1px 3px #000,0 0 2px #000;
+}
+@media(max-width:719px){.unifiedVideoPlayer video::cue{font-size:clamp(15px,4.3vw,21px)}}

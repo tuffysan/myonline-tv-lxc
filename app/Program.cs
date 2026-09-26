@@ -3402,7 +3402,7 @@ app.MapGet("/api/media/subtitles/{token}/{streamIndex:int}.vtt", async (HttpCont
     // subtitle stream and waited for FFmpeg to finish the whole VOD before returning it.
     // For remote VOD that meant the browser got no cues (and commonly hit the 20 s timeout).
     var psi = new ProcessStartInfo { FileName = ffmpeg, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
-    foreach (var arg in new[] { "-v","error","-rw_timeout","15000000","-i",target.Url,"-map",$"0:{streamIndex}","-c:s","webvtt","-f","webvtt","pipe:1" }) psi.ArgumentList.Add(arg);
+    foreach (var arg in new[] { "-v","error","-rw_timeout","15000000","-copyts","-start_at_zero","-i",target.Url,"-map",$"0:{streamIndex}","-fix_sub_duration","-c:s","webvtt","-f","webvtt","pipe:1" }) psi.ArgumentList.Add(arg);
     using var process = new Process { StartInfo = psi };
     try {
         if (!process.Start()) { ctx.Response.StatusCode = 404; return; }
