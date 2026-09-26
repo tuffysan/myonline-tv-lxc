@@ -1221,9 +1221,10 @@ function ensureMediaPlayerHost(){
 }
 
 // v40.2.1 — Playback Resilience & Resume Fix
-const PLAYBACK_RESILIENCE_VERSION='40.4.2';
-const STREAMING_ENGINE_VERSION='40.4.2';
-const VOD_SEEK_ENGINE_VERSION='40.4.2';
+const PLAYBACK_RESILIENCE_VERSION='40.5.0';
+const STREAMING_ENGINE_VERSION='40.5.0';
+const VOD_SEEK_ENGINE_VERSION='40.5.0';
+const UNIFIED_VIDEO_PLAYER_VERSION='40.5.0';
 function safeMediaPosition(video){
   const n=Number(video?.currentTime);const offset=Number(video?.dataset?.timelineOffset)||0;return Number.isFinite(n)&&n>=0?n+offset:offset;
 }
@@ -1297,6 +1298,53 @@ function installVodRecovery(video,getHls,savePosition){
   video.addEventListener('canplay',()=>{if(bufferedEnd()>safeMediaPosition(video)+2)clear()});
 }
 
+
+function unifiedPlayerMarkup(name,withStatus=true){
+  return `<div class="playerCard mediaPlayerCard unifiedVideoPlayer" tabindex="0">
+    <div class="mediaPlayerStage">
+      <video id="video" class="mediaPlayerVideo" autoplay playsinline></video>
+      <div class="mediaPlayerGradient" aria-hidden="true"></div>
+      <button class="mediaCenterPlay" id="mediaCenterPlay" type="button" aria-label="Play or pause">▶</button>
+      <div class="mediaPlayerChrome">
+        <div class="mediaSeekRow"><input id="mediaSeekBar" class="mediaSeekBar" type="range" min="0" max="100" value="0" step="1" aria-label="Seek"></div>
+        <div class="mediaControlRow">
+          <button id="mediaPlayPause" class="mediaControlButton" type="button" aria-label="Play or pause">▶</button>
+          <span id="mediaCurrentTime">00:00</span><span class="mediaTimeSeparator">/</span><span id="mediaTotalTime">--:--</span>
+          <div class="mediaControlSpacer"></div>
+          <span class="mediaNowPlaying">${esc(name)}</span>
+          <button id="mediaFullscreen" class="mediaControlButton" type="button" aria-label="Fullscreen">⛶</button>
+        </div>
+        ${withStatus?'<div id="mediaPlaybackStatus" class="livePlaybackStatus mediaOverlayStatus">Preparing video…</div>':''}
+      </div>
+    </div>
+  </div>`;
+}
+
+function installUnifiedPlayerChrome(video){
+  const card=video?.closest('.unifiedVideoPlayer');
+  if(!video||!card||card.dataset.chromeInstalled==='1')return;
+  card.dataset.chromeInstalled='1';
+  const stage=card.querySelector('.mediaPlayerStage');
+  const play=card.querySelector('#mediaPlayPause');
+  const center=card.querySelector('#mediaCenterPlay');
+  const fullscreen=card.querySelector('#mediaFullscreen');
+  let hideTimer=null;
+  const sync=()=>{const icon=video.paused?'▶':'❚❚';if(play)play.textContent=icon;if(center)center.textContent=icon;card.classList.toggle('isPaused',video.paused)};
+  const show=()=>{card.classList.add('controlsVisible');clearTimeout(hideTimer);if(!video.paused)hideTimer=setTimeout(()=>card.classList.remove('controlsVisible'),2600)};
+  const toggle=()=>video.paused?video.play().catch(()=>{}):video.pause();
+  const toggleFullscreen=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await card.requestFullscreen()}catch{}};
+  play?.addEventListener('click',e=>{e.stopPropagation();toggle();show()});
+  center?.addEventListener('click',e=>{e.stopPropagation();toggle();show()});
+  fullscreen?.addEventListener('click',e=>{e.stopPropagation();toggleFullscreen();show()});
+  stage?.addEventListener('click',e=>{if(e.target===stage||e.target===video){toggle();show()}});
+  stage?.addEventListener('dblclick',e=>{if(e.target===stage||e.target===video){e.preventDefault();toggleFullscreen()}});
+  for(const ev of ['mousemove','pointermove','pointerdown','touchstart'])stage?.addEventListener(ev,show,{passive:true});
+  card.addEventListener('keydown',e=>{if(e.key===' '||e.key==='k'){e.preventDefault();toggle();show()}else if(e.key==='f'){e.preventDefault();toggleFullscreen()}else if(e.key==='ArrowRight'){e.preventDefault();video.currentTime=Math.min((video.duration||Infinity),video.currentTime+10);show()}else if(e.key==='ArrowLeft'){e.preventDefault();video.currentTime=Math.max(0,video.currentTime-10);show()}});
+  video.addEventListener('play',()=>{sync();show()});video.addEventListener('pause',()=>{sync();show()});video.addEventListener('ended',sync);
+  document.addEventListener('fullscreenchange',()=>{card.classList.toggle('isFullscreen',document.fullscreenElement===card);show()});
+  sync();show();
+}
+
 async function tryDirectVodPlayback(token,name,mediaId,poster,requestedResume){
   let caps=null;try{caps=await api('/api/media/capabilities/'+encodeURIComponent(token))}catch{return false}
   if(!caps?.direct||!caps?.directUrl)return false;
@@ -1321,7 +1369,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
   if(!forceTranscode)mediaFallbackTried=false;
   destroyPlayer();
   const wrap=ensureMediaPlayerHost();
-  wrap.innerHTML=`<div class="playerCard mediaPlayerCard"><div class=mediaPlayerStage><video id=video class=mediaPlayerVideo controls autoplay playsinline></video></div><div class=mediaSeekRow><input id=mediaSeekBar class=mediaSeekBar type=range min=0 max=100 value=0 step=1 aria-label="Seek"></div><div class=mediaTimeBar><span id=mediaCurrentTime>00:00</span><span>/</span><span id=mediaTotalTime>--:--</span></div><div id=mediaPlaybackStatus class=livePlaybackStatus>Preparing video…</div><div class=nowPlaying>${esc(name)}</div></div>`;
+  wrap.innerHTML=unifiedPlayerMarkup(name,true);
   wrap.scrollIntoView({behavior:'smooth',block:'start'});
 
   const initialResume=Math.max(0,Number(startAtSeconds)||Number(pendingResumeSeconds)||0);
@@ -1351,6 +1399,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
 
     const video=$('#video');
     if(!video)return;
+    installUnifiedPlayerChrome(video);
     const playbackUrl=state.playbackUrl||info.playbackUrl;
     const mediaDurationSeconds=Number(state.durationSeconds||info.durationSeconds)||0;
     installMediaDurationDisplay(video,mediaDurationSeconds);
@@ -1434,8 +1483,9 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
 function playMedia(url,name,mediaId=null){
   destroyPlayer();
   const wrap=ensureMediaPlayerHost();
-  wrap.innerHTML=`<div class="playerCard mediaPlayerCard"><div class=mediaPlayerStage><video id=video class=mediaPlayerVideo controls autoplay playsinline></video></div><div class=mediaSeekRow><input id=mediaSeekBar class=mediaSeekBar type=range min=0 max=100 value=0 step=1 aria-label="Seek"></div><div class=mediaTimeBar><span id=mediaCurrentTime>00:00</span><span>/</span><span id=mediaTotalTime>--:--</span></div><div class=nowPlaying>${esc(name)}</div></div>`;
+  wrap.innerHTML=unifiedPlayerMarkup(name,false);
   const video=$('#video');
+  installUnifiedPlayerChrome(video);
   installMediaDurationDisplay(video,0);
   const requestedResume=Math.max(0,Number(pendingResumeSeconds)||0);
   pendingResumeSeconds=0;

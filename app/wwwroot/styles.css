@@ -2105,3 +2105,23 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
 /* v40.4.2 VOD Seek Engine */
 .mediaSeekRow{display:flex;align-items:center;padding:10px 14px 0}
 .mediaSeekBar{width:100%;min-width:0;cursor:pointer;accent-color:currentColor}
+
+/* v40.5.0 — Unified Video Player. One stage, overlay controls, identical inline/fullscreen UX. */
+.unifiedVideoPlayer{position:relative;width:100%;padding:0!important;overflow:hidden;background:#000;border-radius:12px;box-shadow:0 12px 42px rgba(0,0,0,.28)}
+.unifiedVideoPlayer .mediaPlayerStage{position:relative;width:100%;aspect-ratio:16/9;min-height:0;overflow:hidden;background:#000;border-radius:inherit}
+.unifiedVideoPlayer .mediaPlayerVideo{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;margin:0!important;object-fit:contain!important;object-position:center!important;background:#000}
+.unifiedVideoPlayer .mediaPlayerGradient{position:absolute;inset:auto 0 0;height:38%;pointer-events:none;background:linear-gradient(transparent,rgba(0,0,0,.82));opacity:0;transition:opacity .18s ease}
+.unifiedVideoPlayer .mediaPlayerChrome{position:absolute;z-index:4;left:0;right:0;bottom:0;padding:0 18px 14px;opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .18s ease,transform .18s ease}
+.unifiedVideoPlayer.controlsVisible .mediaPlayerChrome,.unifiedVideoPlayer.isPaused .mediaPlayerChrome,.unifiedVideoPlayer:focus-within .mediaPlayerChrome{opacity:1;transform:none;pointer-events:auto}
+.unifiedVideoPlayer.controlsVisible .mediaPlayerGradient,.unifiedVideoPlayer.isPaused .mediaPlayerGradient,.unifiedVideoPlayer:focus-within .mediaPlayerGradient{opacity:1}
+.unifiedVideoPlayer .mediaSeekRow{display:flex;align-items:center;padding:0;margin:0 0 8px}
+.unifiedVideoPlayer .mediaSeekBar{width:100%;height:18px;margin:0;cursor:pointer;accent-color:currentColor}
+.unifiedVideoPlayer .mediaControlRow{display:flex;align-items:center;gap:9px;min-width:0;color:#fff;text-shadow:0 1px 3px #000;font-size:.9rem;font-weight:700}
+.unifiedVideoPlayer .mediaControlButton{display:grid;place-items:center;width:38px;height:38px;padding:0;border:0;border-radius:999px;background:rgba(0,0,0,.42);color:#fff;font:inherit;font-size:1.1rem;cursor:pointer}
+.unifiedVideoPlayer .mediaControlButton:hover,.unifiedVideoPlayer .mediaControlButton:focus-visible{background:rgba(255,255,255,.18);outline:2px solid currentColor;outline-offset:2px}
+.unifiedVideoPlayer .mediaControlSpacer{flex:1}.unifiedVideoPlayer .mediaNowPlaying{max-width:min(48vw,700px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.unifiedVideoPlayer .mediaTimeSeparator{opacity:.65}
+.unifiedVideoPlayer .mediaOverlayStatus{position:absolute;left:18px;bottom:58px;margin:0;padding:5px 8px;border-radius:7px;background:rgba(0,0,0,.55);color:#fff;font-size:.78rem;pointer-events:none}
+.unifiedVideoPlayer .mediaCenterPlay{position:absolute;z-index:3;left:50%;top:50%;translate:-50% -50%;display:grid;place-items:center;width:64px;height:64px;border:0;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;font-size:1.6rem;opacity:0;pointer-events:none;transition:opacity .15s ease}
+.unifiedVideoPlayer.isPaused .mediaCenterPlay{opacity:1;pointer-events:auto}
+.unifiedVideoPlayer:fullscreen,.unifiedVideoPlayer.isFullscreen{width:100vw!important;height:100vh!important;border-radius:0!important;background:#000}.unifiedVideoPlayer:fullscreen .mediaPlayerStage,.unifiedVideoPlayer.isFullscreen .mediaPlayerStage{width:100%;height:100%;aspect-ratio:auto;border-radius:0}.unifiedVideoPlayer:fullscreen .mediaPlayerChrome{padding:0 28px 22px}
+@media(max-width:719px){.unifiedVideoPlayer{border-radius:0}.unifiedVideoPlayer .mediaPlayerChrome{padding:0 10px 8px}.unifiedVideoPlayer .mediaNowPlaying{display:none}.unifiedVideoPlayer .mediaOverlayStatus{left:10px;bottom:50px}.unifiedVideoPlayer .mediaControlButton{width:34px;height:34px}}

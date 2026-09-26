@@ -5,6 +5,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>VikingIptv</AssemblyName>
     <RootNamespace>VikingIptv</RootNamespace>
-    <Version>40.4.2</Version>
+    <Version>40.5.0</Version>
   </PropertyGroup>
 </Project>

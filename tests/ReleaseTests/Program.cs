@@ -74,9 +74,9 @@ internal static class Program
         Has(stylesCss,".mediaSeekBar","VOD Seek CSS");
 
         // v40.3.2 Inline Player Stage Fix.
-        foreach(var x in new[]{"mediaPlayerCard","mediaPlayerStage","mediaPlayerVideo"}) Has(appJs,x,"Player stage markup: "+x);
-        foreach(var x in new[]{".mediaPlayerCard .mediaPlayerStage","position:relative","aspect-ratio:16/9",".mediaPlayerStage>.mediaPlayerVideo","position:absolute!important","inset:0!important","width:100%!important","height:100%!important","max-width:none!important","max-height:none!important","object-fit:contain!important","object-position:50% 50%!important",".mediaPlayerCard:fullscreen .mediaPlayerStage"}) Has(stylesCss,x,"Player stage CSS: "+x);
-        T.Assert(appJs.Split("mediaPlayerStage").Length-1 >= 2,"Both VOD player creation paths use the stage wrapper");T.Pass("Both VOD player creation paths use the stage wrapper");
+        foreach(var x in new[]{"unifiedPlayerMarkup","unifiedVideoPlayer","mediaPlayerStage","mediaPlayerVideo","mediaPlayerChrome","mediaFullscreen","mediaPlayPause","installUnifiedPlayerChrome"}) Has(appJs,x,"Unified player markup/behavior: "+x);
+        foreach(var x in new[]{".unifiedVideoPlayer",".unifiedVideoPlayer .mediaPlayerChrome",".unifiedVideoPlayer .mediaPlayerVideo","aspect-ratio:16/9","position:absolute!important","inset:0!important","width:100%!important","height:100%!important","object-fit:contain!important",".unifiedVideoPlayer:fullscreen",".unifiedVideoPlayer.isPaused .mediaCenterPlay"}) Has(stylesCss,x,"Unified player CSS: "+x);
+        T.Assert(appJs.Split("unifiedPlayerMarkup(name").Length-1 >= 2,"Both VOD player creation paths use unified player");T.Pass("Both VOD player creation paths use unified player");
 
         // v40.3.0 Streaming Engine 2.0.
         foreach(var x in new[]{"STREAMING_ENGINE_VERSION=","tryDirectVodPlayback","/api/media/capabilities/","Direct play · preparing timeline…","maxBufferLength:90","maxMaxBufferLength:180","setTimeout(async()=>"}) Has(appJs,x,"Streaming Engine 2.0: "+x);
