@@ -111,10 +111,12 @@ internal static class Program
         T.Assert(!appJs.Contains(")),VOD_STARTUP_SEGMENTS));\n      if(state.status==='ready')break;\n      if(state.status==='failed')throw new Error(state.error||'FFmpeg could not prepare this channel.')"),"Live TV does not use the VOD startup threshold"); T.Pass("Live TV does not use the VOD startup threshold");
 
         // v41.2.1 Subtitle Selection — embedded text subtitle streams are discoverable and selectable as WebVTT.
-        foreach(var x in new[]{"SUBTITLE_SELECTION_VERSION='41.2.9'","installSubtitleSelector(video,token)","mediaSubtitles","mediaSubtitleOverlay","parseVtt(text)","credentials:'same-origin'","v=41.2.9"}) Has(appJs,x,"v41.2.8 subtitle client: "+x);
-        foreach(var x in new[]{"codec is not (\"subrip\" or \"srt\" or \"ass\"","\"-f\",\"webvtt\"","text/vtt; charset=utf-8","X-MyOnlineTV-Subtitle","X-MyOnlineTV-Subtitle-Start","StandardOutput.BaseStream.CopyToAsync"}) Has(programCs,x,"v41.2.9 subtitle server: "+x);
-        foreach(var x in new[]{"mediaSubtitleOverlay","overlay.textContent=active","video.addEventListener('timeupdate',render)","video.addEventListener('seeked',render)"}) Has(appJs,x,"v41.2.8 subtitle overlay presentation: "+x);
-        foreach(var x in new[]{"\"-map\",$\"0:{streamIndex}\"","\"-vn\"","\"-an\"","\"-t\",\"900\"","pipe:1"}) Has(programCs,x,"v41.2.9 subtitle fast-start extraction: "+x);
+        foreach(var x in new[]{"SUBTITLE_SELECTION_VERSION='41.2.9'","installSubtitleSelector(video,token)","mediaSubtitles","mediaSubtitleOverlay","parseVtt(text)","credentials:'same-origin'","v=41.2.10"}) Has(appJs,x,"v41.2.8 subtitle client: "+x);
+        foreach(var x in new[]{"codec is not (\"subrip\" or \"srt\" or \"ass\"","\"-f\",\"webvtt\"","text/vtt; charset=utf-8","X-MyOnlineTV-Subtitle","X-MyOnlineTV-Subtitle-Start","StandardOutput.BaseStream.CopyToAsync"}) Has(programCs,x,"v41.2.10 subtitle server: "+x);
+        foreach(var x in new[]{"mediaSubtitleOverlay","overlay.textContent=active","video.addEventListener('timeupdate',()=>{render();ensureWindow()})","video.addEventListener('seeked',()=>{render();if(activeIndex!=='off')load(activeIndex,Number(video.currentTime)||0)})"}) Has(appJs,x,"v41.2.8 subtitle overlay presentation: "+x);
+        foreach(var x in new[]{"-output_ts_offset","X-MyOnlineTV-Subtitle-Start"}) Has(programCs,x,"v41.2.10 subtitle absolute timeline: "+x);
+        foreach(var x in new[]{"const parsed=parseVtt(text);","video.currentTime is the only master clock","load(activeIndex,Number(video.currentTime)||0)"}) Has(appJs,x,"v41.2.10 subtitle A/V master clock: "+x);
+        foreach(var x in new[]{"\"-map\",$\"0:{streamIndex}\"","\"-vn\"","\"-an\"","\"-t\",\"600\"","pipe:1"}) Has(programCs,x,"v41.2.10 subtitle A/V sync extraction: "+x);
         if(programCs.Contains("\"-copyts\"") || programCs.Contains("\"-start_at_zero\"")) throw new Exception("v41.2.4 subtitles must not rewrite the media timeline with copyts/start_at_zero");
 
         // v41.2.6 Home Hero Wide Headline — use available desktop width and keep mobile responsive.
@@ -247,12 +249,12 @@ internal static class Program
         T.Assert(appJs.Contains("vod3GroupEpisodes(episodes).flatMap"),"Movies & Series 3.0 next episode navigation");T.Pass("Movies & Series 3.0 next episode navigation");
 
         // v39.13.1 updater backup hardening — additive regression coverage.
-        Has(updateLocalSh,"--exclude='./live-hls'","Updater backup excludes transient live-hls");
-        Has(updateLocalSh,"--exclude='./downloads'","Updater backup excludes downloads");
-        Has(updateLocalSh,"--exclude='./backups'","Updater backup excludes backup directory");
+        Has(updateLocalSh,"--exclude=\"./live-hls\"","Updater backup excludes transient live-hls");
+        Has(updateLocalSh,"--exclude=\"./downloads\"","Updater backup excludes downloads");
+        Has(updateLocalSh,"--exclude=\"./backups\"","Updater backup excludes backup directory");
         Has(updateLocalSh,"tail -n +4","Updater retains only three newest pre-update backups");
-        Has(updateLocalSh,"name 'pre-update-*.tar.gz'","Updater cleanup targets only pre-update backups");
-        T.Assert(updateLocalSh.IndexOf("tar --exclude='./backups'",StringComparison.Ordinal) < updateLocalSh.IndexOf("tail -n +4",StringComparison.Ordinal),"Backup retention cleanup must run after successful backup creation");T.Pass("Backup retention cleanup occurs after backup creation");
+        Has(updateLocalSh,"name \"pre-update-*.tar.gz\"","Updater cleanup targets only pre-update backups");
+        T.Assert(updateLocalSh.IndexOf("tar --exclude=\"./backups\"",StringComparison.Ordinal) < updateLocalSh.IndexOf("tail -n +4",StringComparison.Ordinal),"Backup retention cleanup must run after successful backup creation");T.Pass("Backup retention cleanup occurs after backup creation");
 
         // Playback Engine 3.0 regression checks — additive to all existing release coverage.
         foreach(var x in new[]{"Playback Engine 3.0","playbackFromContinue","playbackFromFavourite","playbackFromSearch","kind==='live'","kind==='download'","kind==='server-token'","recoverLivePlayback"})

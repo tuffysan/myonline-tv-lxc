@@ -54,25 +54,81 @@ BACKUP="/var/lib/myonlinetv/backups/pre-update-${CURRENT_VERSION}-to-${TARGET_VE
 
 CURRENT_STEP="1/8 Creating persistent-data backup"
 echo "[1/8] Creating persistent-data backup..."
-pct exec "$CTID" -- bash -lc "
-set -e
-mkdir -p /var/lib/myonlinetv/backups
-# live-hls is transient playback state and changes continuously while Live TV is active.
-# It must never be part of a persistent pre-update backup.
-tar --exclude='./backups' --exclude='./downloads' --exclude='./live-hls' -czf '${BACKUP}' -C /var/lib/myonlinetv .
-printf '%s\n' '${BACKUP}' >/var/lib/myonlinetv/last-pre-update-backup
-chown www-data:www-data '${BACKUP}' /var/lib/myonlinetv/last-pre-update-backup
+pct exec "$CTID" -- env BACKUP="${BACKUP}" bash -lc '
+set -Eeuo pipefail
+backup_dir=/var/lib/myonlinetv/backups
+mkdir -p "$backup_dir"
+echo "  - Backup disk-space preflight..."
 
-# Retain only the three newest successful pre-update backups.
-# Cleanup happens only after the new backup has been created successfully.
-find /var/lib/myonlinetv/backups -maxdepth 1 -type f -name 'pre-update-*.tar.gz' -printf '%T@ %p\n' \
-  | sort -nr \
-  | tail -n +4 \
-  | cut -d' ' -f2- \
-  | while IFS= read -r old_backup; do
-      [[ -z \"\$old_backup\" ]] || rm -f -- \"\$old_backup\"
-    done
-"
+# Remove debris from interrupted attempts. Valid backups never use .partial.
+find "$backup_dir" -maxdepth 1 -type f -name "pre-update-*.tar.gz.partial" -delete
+
+# Older updaters wrote directly to the final name. Remove broken gzip files.
+while IFS= read -r candidate; do
+  if ! gzip -t "$candidate" >/dev/null 2>&1; then
+    echo "  - Removing incomplete backup: $(basename "$candidate")"
+    rm -f -- "$candidate"
+  fi
+done < <(find "$backup_dir" -maxdepth 1 -type f -name "pre-update-*.tar.gz" -print)
+
+# Make room before backup creation. Keep the two newest valid restore points;
+# the new successful backup becomes the third retained backup.
+mapfile -t existing < <(find "$backup_dir" -maxdepth 1 -type f -name "pre-update-*.tar.gz" -printf "%T@ %p\n" | sort -nr | cut -d" " -f2-)
+if (( ${#existing[@]} > 2 )); then
+  for ((i=2; i<${#existing[@]}; i++)); do
+    echo "  - Pruning old backup before update: $(basename "${existing[$i]}")"
+    rm -f -- "${existing[$i]}"
+  done
+fi
+
+free_bytes=$(df -PB1 /var/lib/myonlinetv | awk "NR==2 {print \$4}")
+latest_size=0
+latest=$(find "$backup_dir" -maxdepth 1 -type f -name "pre-update-*.tar.gz" -printf "%T@ %p\n" | sort -nr | head -1 | cut -d" " -f2- || true)
+if [[ -n "$latest" && -f "$latest" ]]; then latest_size=$(stat -c %s "$latest"); fi
+if (( latest_size > 0 )); then
+  required_bytes=$(( latest_size * 135 / 100 + 134217728 ))
+else
+  source_kib=$(du -sk --exclude=backups --exclude=downloads --exclude=live-hls /var/lib/myonlinetv | awk "{print \$1}")
+  required_bytes=$(( source_kib * 1024 + 134217728 ))
+fi
+
+# If necessary, prune the second retained backup too, but never delete the
+# newest known-good restore point automatically.
+if (( free_bytes < required_bytes )); then
+  second=$(find "$backup_dir" -maxdepth 1 -type f -name "pre-update-*.tar.gz" -printf "%T@ %p\n" | sort -nr | sed -n "2p" | cut -d" " -f2- || true)
+  if [[ -n "$second" ]]; then
+    echo "  - Low disk space; pruning older retained backup: $(basename "$second")"
+    rm -f -- "$second"
+    free_bytes=$(df -PB1 /var/lib/myonlinetv | awk "NR==2 {print \$4}")
+  fi
+fi
+if (( free_bytes < required_bytes )); then
+  echo "ERROR: Not enough free space for a safe pre-update backup." >&2
+  echo "       Free: $((free_bytes/1024/1024)) MiB; estimated required: $((required_bytes/1024/1024)) MiB." >&2
+  echo "       Newest valid backup preserved. Free space or expand CT storage, then retry." >&2
+  exit 28
+fi
+
+partial="${BACKUP}.partial"
+rm -f -- "$partial"
+cleanup_partial() { rm -f -- "$partial"; }
+trap cleanup_partial ERR INT TERM
+
+tar --exclude="./backups" --exclude="./downloads" --exclude="./live-hls" -czf "$partial" -C /var/lib/myonlinetv .
+gzip -t "$partial"
+mv -f -- "$partial" "$BACKUP"
+trap - ERR INT TERM
+printf "%s\n" "$BACKUP" >/var/lib/myonlinetv/last-pre-update-backup
+chown www-data:www-data "$BACKUP" /var/lib/myonlinetv/last-pre-update-backup
+
+# Final retention: newest three successful backups.
+find "$backup_dir" -maxdepth 1 -type f -name "pre-update-*.tar.gz" -printf "%T@ %p\n" \
+  | sort -nr | tail -n +4 | cut -d" " -f2- \
+  | while IFS= read -r old_backup; do [[ -z "$old_backup" ]] || rm -f -- "$old_backup"; done
+
+echo "  - Backup verified: $BACKUP"
+df -h /var/lib/myonlinetv | tail -1
+'
 
 CURRENT_STEP="2/8 Preparing runtime"
 echo "[2/8] Preparing runtime..."

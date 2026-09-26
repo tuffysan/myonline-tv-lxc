@@ -1617,51 +1617,30 @@ async function installSubtitleSelector(video,token){
   select.innerHTML='<option value="off">CC Off</option>';
   const languageName=code=>{try{return new Intl.DisplayNames([navigator.language||'en'],{type:'language'}).of(code)||code}catch{return code||'Unknown'}};
   const byIndex=new Map();
-  for(const t of tracks){
-    const label=t.title||languageName(t.language||'und')||('Subtitle '+t.index);
-    byIndex.set(String(t.index),{...t,label});
-    const o=document.createElement('option');o.value=String(t.index);o.textContent=label;select.appendChild(o);
-  }
-  let cues=[],activeIndex='off',aborter=null,lastText='';
+  for(const t of tracks){const label=t.title||languageName(t.language||'und')||('Subtitle '+t.index);byIndex.set(String(t.index),{...t,label});const o=document.createElement('option');o.value=String(t.index);o.textContent=label;select.appendChild(o)}
+  let cues=[],activeIndex='off',aborter=null,lastText='',loadedFrom=0,loadedTo=0,reloadTimer=0;
   const parseTime=v=>{const p=String(v).trim().replace(',','.').split(':').map(Number);if(p.some(Number.isNaN))return NaN;return p.length===3?p[0]*3600+p[1]*60+p[2]:p.length===2?p[0]*60+p[1]:p[0]};
-  const parseVtt=text=>{
-    const normalized=String(text||'').replace(/^\uFEFF/,'').replace(/\r/g,'');
-    const blocks=normalized.split(/\n{2,}/),out=[];
-    for(const block of blocks){const lines=block.split('\n').map(x=>x.trimEnd()).filter(Boolean);const ti=lines.findIndex(x=>x.includes('-->'));if(ti<0)continue;const m=lines[ti].match(/^\s*([^ ]+)\s+-->\s+([^ ]+)/);if(!m)continue;const a=parseTime(m[1]),b=parseTime(m[2]);if(!Number.isFinite(a)||!Number.isFinite(b)||b<=a)continue;const textLines=lines.slice(ti+1).map(x=>x.replace(/<[^>]+>/g,'').trim()).filter(Boolean);if(textLines.length)out.push({start:a,end:b,text:textLines.join('\n')})}return out.sort((a,b)=>a.start-b.start)
-  };
-  const render=()=>{
-    if(activeIndex==='off'||!cues.length){overlay.hidden=true;overlay.textContent='';lastText='';return}
-    const now=Number(video.currentTime)||0;const active=cues.filter(c=>now>=c.start&&now<c.end).map(c=>c.text).join('\n');
-    if(active!==lastText){overlay.textContent=active;lastText=active}overlay.hidden=!active;
-  };
-  const load=async idx=>{
-    const t=byIndex.get(String(idx));if(!t)return;
-    aborter?.abort();aborter=new AbortController();cues=[];lastText='';overlay.hidden=true;
+  const parseVtt=text=>{const normalized=String(text||'').replace(/^\uFEFF/,'').replace(/\r/g,'');const blocks=normalized.split(/\n{2,}/),out=[];for(const block of blocks){const lines=block.split('\n').map(x=>x.trimEnd()).filter(Boolean);const ti=lines.findIndex(x=>x.includes('-->'));if(ti<0)continue;const m=lines[ti].match(/^\s*([^ ]+)\s+-->\s+([^ ]+)/);if(!m)continue;const a=parseTime(m[1]),b=parseTime(m[2]);if(!Number.isFinite(a)||!Number.isFinite(b)||b<=a)continue;const textLines=lines.slice(ti+1).map(x=>x.replace(/<[^>]+>/g,'').trim()).filter(Boolean);if(textLines.length)out.push({start:a,end:b,text:textLines.join('\n')})}return out.sort((a,b)=>a.start-b.start)};
+  const render=()=>{if(activeIndex==='off'||!cues.length){overlay.hidden=true;overlay.textContent='';lastText='';return}const now=Number(video.currentTime)||0;const active=cues.filter(c=>now>=c.start&&now<c.end).map(c=>c.text).join('\n');if(active!==lastText){overlay.textContent=active;lastText=active}overlay.hidden=!active};
+  const load=async(idx,position=Number(video.currentTime)||0)=>{
+    const t=byIndex.get(String(idx));if(!t)return;aborter?.abort();aborter=new AbortController();cues=[];lastText='';overlay.hidden=true;
     const st=$('#mediaPlaybackStatus');if(st)st.textContent='Loading subtitles…';
+    // Start slightly before currentTime. Backend returns ABSOLUTE WebVTT timestamps.
+    // Never add windowStart on the client: video.currentTime is the only master clock.
+    const windowStart=Math.max(0,position-8);loadedFrom=windowStart;loadedTo=windowStart+600;
     try{
-      const windowStart=Math.max(0,(Number(video.currentTime)||0)-5);
-      const url=t.url+(t.url.includes('?')?'&':'?')+'v=41.2.9&start='+encodeURIComponent(windowStart.toFixed(3));
-      const r=await fetch(url,{credentials:'same-origin',cache:'no-store',signal:aborter.signal});
-      if(!r.ok)throw new Error('HTTP '+r.status);
-      if(!r.body)throw new Error('Subtitle stream unavailable');
-      const reader=r.body.getReader(),decoder=new TextDecoder();let text='',firstCue=false;
-      activeIndex=String(idx);
-      while(true){
-        const part=await reader.read();if(part.done)break;
-        text+=decoder.decode(part.value,{stream:true});
-        if(!/^\s*WEBVTT/i.test(text)&&text.length>64)throw new Error('Invalid WebVTT');
-        const parsed=parseVtt(text).map(c=>({start:c.start+windowStart,end:c.end+windowStart,text:c.text}));
-        if(parsed.length){cues=parsed;if(!firstCue){firstCue=true;if(st){st.textContent=`Subtitles: ${t.label}`;st.className='livePlaybackStatus ready'}}render()}
-      }
-      text+=decoder.decode();
-      const parsed=parseVtt(text).map(c=>({start:c.start+windowStart,end:c.end+windowStart,text:c.text}));
-      if(parsed.length)cues=parsed;
-      if(!cues.length)throw new Error('No subtitle cues in this playback window');
-      render();
+      const url=t.url+(t.url.includes('?')?'&':'?')+'v=41.2.10&start='+encodeURIComponent(windowStart.toFixed(3));
+      const r=await fetch(url,{credentials:'same-origin',cache:'no-store',signal:aborter.signal});if(!r.ok)throw new Error('HTTP '+r.status);if(!r.body)throw new Error('Subtitle stream unavailable');
+      const reader=r.body.getReader(),decoder=new TextDecoder();let text='',firstCue=false;activeIndex=String(idx);
+      while(true){const part=await reader.read();if(part.done)break;text+=decoder.decode(part.value,{stream:true});if(!/^\s*WEBVTT/i.test(text)&&text.length>64)throw new Error('Invalid WebVTT');const parsed=parseVtt(text);if(parsed.length){cues=parsed;if(!firstCue){firstCue=true;if(st){st.textContent=`Subtitles: ${t.label}`;st.className='livePlaybackStatus ready'}}render()}}
+      text+=decoder.decode();const parsed=parseVtt(text);if(parsed.length)cues=parsed;if(!cues.length)throw new Error('No subtitle cues in this playback window');render();
     }catch(e){if(e?.name==='AbortError')return;activeIndex='off';cues=[];overlay.hidden=true;if(st){st.textContent='Subtitle load failed: '+(e?.message||'unknown error');st.className='livePlaybackStatus error'}}
   };
-  video.addEventListener('timeupdate',render);video.addEventListener('seeked',render);video.addEventListener('loadedmetadata',render);
-  select.addEventListener('change',()=>{if(select.value==='off'){aborter?.abort();activeIndex='off';cues=[];overlay.hidden=true;overlay.textContent=''}else load(select.value)});
+  const ensureWindow=()=>{if(activeIndex==='off')return;const now=Number(video.currentTime)||0;if(now<loadedFrom-1||now>loadedTo-45){clearTimeout(reloadTimer);reloadTimer=setTimeout(()=>load(activeIndex,now),80)}};
+  video.addEventListener('timeupdate',()=>{render();ensureWindow()});
+  video.addEventListener('seeked',()=>{render();if(activeIndex!=='off')load(activeIndex,Number(video.currentTime)||0)});
+  video.addEventListener('loadedmetadata',render);
+  select.addEventListener('change',()=>{if(select.value==='off'){aborter?.abort();activeIndex='off';cues=[];overlay.hidden=true;overlay.textContent=''}else load(select.value,Number(video.currentTime)||0)});
   select.hidden=false;
 }
 function installNativeVodSeek(video){
