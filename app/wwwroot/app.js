@@ -1233,6 +1233,9 @@ const VOD_SEEK_SEGMENTS=4;
 // v40.9.0 — Adaptive Buffer Engine
 const ADAPTIVE_BUFFER_VERSION='40.9.0';
 const PLAYER_EXPERIENCE_VERSION='40.10.0';
+// v40.11.0 — Movies & Series UX
+const MOVIES_SERIES_UX_VERSION='40.11.0';
+const NEXT_EPISODE_COUNTDOWN_SECONDS=10;
 const ADAPTIVE_BUFFER_MIN_SECONDS=30;
 const ADAPTIVE_BUFFER_DEFAULT_SECONDS=120;
 const ADAPTIVE_BUFFER_MAX_SECONDS=240;
@@ -1440,6 +1443,7 @@ function installVodRecovery(video,getHls,savePosition){
 function unifiedPlayerMarkup(name,withStatus=true){
   return `<div class="playerCard mediaPlayerCard unifiedVideoPlayer" tabindex="0">
     <div class="mediaPlayerStage">
+      <div id="mediaResumeChoice" class="mediaResumeChoice" hidden></div>
       <video id="video" class="mediaPlayerVideo" autoplay playsinline></video>
       <div class="mediaPlayerGradient" aria-hidden="true"></div>
       <button class="mediaCenterPlay" id="mediaCenterPlay" type="button" aria-label="Play or pause">▶</button>
@@ -1519,6 +1523,16 @@ async function tryDirectVodPlayback(token,name,mediaId,poster,requestedResume){
   });
 }
 
+function installResumeStartOverChoice({token,name,mediaId,poster,resumeSeconds}){
+  const host=$('#mediaResumeChoice');
+  const seconds=Math.floor(Number(resumeSeconds)||0);
+  if(!host||seconds<30)return;
+  host.hidden=false;
+  host.innerHTML=`<span>Resume from <b>${formatMediaTime(seconds)}</b>?</span><button class="btn primaryBtn" id=resumePlaybackChoice>Resume</button><button class=btn id=startOverPlaybackChoice>Start over</button>`;
+  $('#resumePlaybackChoice').onclick=()=>{host.hidden=true};
+  $('#startOverPlaybackChoice').onclick=async()=>{host.hidden=true;pendingResumeSeconds=0;await playServerMedia(token,name,mediaId,false,poster,0)};
+}
+
 async function playServerMedia(token,name,mediaId=null,forceTranscode=false,poster='',startAtSeconds=0){
   if(!forceTranscode)mediaFallbackTried=false;
   destroyPlayer();
@@ -1528,6 +1542,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
 
   const initialResume=Math.max(0,Number(startAtSeconds)||Number(pendingResumeSeconds)||0);
   pendingResumeSeconds=0;
+  installResumeStartOverChoice({token,name,mediaId,poster,resumeSeconds:initialResume});
   if(!forceTranscode&&initialResume<=0){
     try{if(await tryDirectVodPlayback(token,name,mediaId,poster,initialResume))return}catch(e){console.warn('Direct VOD fallback to HLS',e)}
   }
@@ -1636,15 +1651,19 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
       nextIptvEpisode=null;
       const card=video.closest('.playerCard');
       if(!card||(!unified&&!iptv))return;
+      card.querySelector('.nextEpisodeBar')?.remove();
       const bar=document.createElement('div');
-      bar.className='nextEpisodeBar';
+      bar.className='nextEpisodeBar nextEpisodeCountdown';
       const title=unified?.name||iptv?.title||'Next episode';
-      bar.innerHTML=`<span>Up next: <b>${esc(title)}</b></span><button class=btn id=playNextMedia>Play next episode</button>`;
-      card.appendChild(bar);
-      $('#playNextMedia').onclick=()=>{
+      let remaining=NEXT_EPISODE_COUNTDOWN_SECONDS,cancelled=false,timer=null;
+      const playNext=()=>{
+        if(cancelled)return;cancelled=true;if(timer)clearInterval(timer);
         if(unified)return playUnifiedItem(unified);
         if(iptv)return playEpisode(iptv.id,iptv.extension,iptv.title,iptv.mediaId,iptv.poster,iptv.seriesId,iptv.seriesName,iptv.season,iptv.episode);
       };
+      const render=()=>{bar.innerHTML=`<span><small>UP NEXT</small><b>${esc(title)}</b><em>Playing in ${remaining}s</em></span><div><button class="btn primaryBtn" id=playNextMedia>Play now</button><button class=btn id=cancelNextMedia>Cancel</button></div>`;$('#playNextMedia').onclick=playNext;$('#cancelNextMedia').onclick=()=>{cancelled=true;if(timer)clearInterval(timer);bar.remove()}};
+      render();card.appendChild(bar);
+      timer=setInterval(()=>{if(cancelled||!bar.isConnected){clearInterval(timer);return}remaining--;if(remaining<=0){playNext();return}render()},1000);
     });
 
     if(window.Hls&&Hls.isSupported()){

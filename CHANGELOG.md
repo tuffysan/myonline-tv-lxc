@@ -1,3 +1,11 @@
+# v40.11.0 — Movies & Series UX
+
+- Resume/Start Over choice is surfaced in the player for meaningful saved positions.
+- Series playback now presents a 10-second Up Next countdown with Play now and Cancel.
+- Watched state is committed before episode autoplay.
+- Existing contained player, Instant Seek, Playback Reliability and Adaptive Buffer behavior is preserved.
+- Skip Intro/Credits is intentionally not guessed; it requires trustworthy chapter/marker metadata and remains a future capability.
+
 # v40.10.0 — Player Experience
 
 - Polished unified VOD player controls with ±10s, volume/mute and playback speed.

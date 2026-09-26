@@ -3,7 +3,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>40.10.0</Version>
+    <Version>40.11.0</Version>
     <AssemblyVersion>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/../VERSION').Trim()).0</AssemblyVersion>
     <FileVersion>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/../VERSION').Trim()).0</FileVersion>
     <InformationalVersion>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/../VERSION').Trim())</InformationalVersion>

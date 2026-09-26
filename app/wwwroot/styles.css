@@ -2146,3 +2146,10 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
 .unifiedVideoPlayer .mediaPlaybackRate:focus-visible,.unifiedVideoPlayer .mediaVolume:focus-visible{outline:2px solid currentColor;outline-offset:2px}
 .unifiedVideoPlayer.isBuffering .mediaOverlayStatus,.unifiedVideoPlayer.isSeeking .mediaOverlayStatus,.unifiedVideoPlayer.isRecovering .mediaOverlayStatus{display:block;backdrop-filter:blur(6px)}
 @media(max-width:719px){.unifiedVideoPlayer .mediaVolume{display:none}.unifiedVideoPlayer .mediaPlaybackRate{max-width:58px;padding:0 4px}.unifiedVideoPlayer .mediaControlRow{gap:5px}.unifiedVideoPlayer .mediaSkipButton{display:none}}
+
+
+/* v40.11.0 — Movies & Series UX */
+.unifiedVideoPlayer .mediaResumeChoice{position:absolute;z-index:8;left:50%;top:18%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid rgba(255,255,255,.22);border-radius:12px;background:rgba(8,10,14,.86);backdrop-filter:blur(10px);color:#fff;box-shadow:0 12px 34px rgba(0,0,0,.35)}
+.unifiedVideoPlayer .mediaResumeChoice[hidden]{display:none!important}.unifiedVideoPlayer .mediaResumeChoice span{white-space:nowrap}.unifiedVideoPlayer .mediaResumeChoice .btn{margin:0}
+.nextEpisodeBar.nextEpisodeCountdown{gap:18px}.nextEpisodeCountdown>span{display:grid;gap:2px}.nextEpisodeCountdown small{letter-spacing:.12em;opacity:.7}.nextEpisodeCountdown em{font-style:normal;opacity:.75;font-size:.85rem}.nextEpisodeCountdown>div{display:flex;gap:8px}
+@media(max-width:719px){.unifiedVideoPlayer .mediaResumeChoice{top:10%;width:calc(100% - 24px);box-sizing:border-box;flex-wrap:wrap;justify-content:center}.unifiedVideoPlayer .mediaResumeChoice span{width:100%;text-align:center}.nextEpisodeCountdown>div{width:100%}.nextEpisodeCountdown>div .btn{flex:1}}

@@ -94,6 +94,11 @@ internal static class Program
         foreach(var x in new[]{"STREAMING_ENGINE_VERSION=","tryDirectVodPlayback","/api/media/capabilities/","Direct play · preparing timeline…","maxBufferLength:","maxMaxBufferLength:","setTimeout(async()=>"}) Has(appJs,x,"Streaming Engine 2.0: "+x);
         foreach(var x in new[]{"/api/media/capabilities/{token}","streaming-engine-2.0","directUrl","range = true"}) Has(programCs,x,"Streaming Engine 2.0 server: "+x);
 
+        // v40.11.0 Movies & Series UX.
+        foreach(var x in new[]{"MOVIES_SERIES_UX_VERSION=","NEXT_EPISODE_COUNTDOWN_SECONDS=10","mediaResumeChoice","installResumeStartOverChoice","Resume from","Start over","nextEpisodeCountdown","Playing in ${remaining}s","cancelNextMedia"}) Has(appJs,x,"Movies & Series UX: "+x);
+        foreach(var x in new[]{".mediaResumeChoice",".nextEpisodeCountdown"}) Has(stylesCss,x,"Movies & Series UX CSS: "+x);
+        T.Assert(appJs.Contains("if(mediaId)markMediaWatched(mediaId,true)") && appJs.Contains("NEXT_EPISODE_COUNTDOWN_SECONDS"),"Movies & Series UX preserves watched state before autoplay");T.Pass("Movies & Series UX preserves watched state before autoplay");
+
         // v40.10.0 Player Experience.
         foreach(var x in new[]{"PLAYER_EXPERIENCE_VERSION=","mediaBack10","mediaForward10","mediaMute","mediaVolume","mediaPlaybackRate","video.playbackRate","syncVolume","skip(-10)","skip(10)"}) Has(appJs,x,"Player Experience: "+x);
         foreach(var x in new[]{".mediaSkipButton",".mediaVolume",".mediaPlaybackRate"}) Has(stylesCss,x,"Player Experience CSS: "+x);
