@@ -1,3 +1,9 @@
+## v41.0.9 — VOD Seek Root Fix
+- Fixes VOD seeking against replacement HLS sessions by keeping one absolute episode/movie timeline in the UI.
+- Preserves the real VOD duration across HLS handovers so the player no longer shows values such as `11:52 / 0:02`.
+- Seek bar, ±10 second controls and keyboard seeking now target absolute media positions.
+- Keeps the v41.0.8 root player layout and existing playback/buffer/fullscreen behavior.
+
 ## v41.0.8 — VOD Player Layout Root Fix
 - Mount VOD player directly under main instead of inside Home/collection layout.
 - Hide launcher content while VOD playback is active.

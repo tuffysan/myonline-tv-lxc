@@ -1554,7 +1554,7 @@ function installUnifiedPlayerChrome(video){
   play?.addEventListener('click',e=>{e.stopPropagation();toggle();show()});
   center?.addEventListener('click',e=>{e.stopPropagation();toggle();show()});
   fullscreen?.addEventListener('click',e=>{e.stopPropagation();toggleFullscreen();show()});
-  const skip=seconds=>{video.currentTime=Math.max(0,Math.min(Number.isFinite(video.duration)?video.duration:Infinity,video.currentTime+seconds));show()};
+  const skip=seconds=>{const absoluteTarget=safeMediaPosition(video)+seconds;if(typeof video._myOnlineTvSeekAbsolute==='function')video._myOnlineTvSeekAbsolute(absoluteTarget);else video.currentTime=Math.max(0,Math.min(Number.isFinite(video.duration)?video.duration:Infinity,video.currentTime+seconds));show()};
   back10?.addEventListener('click',e=>{e.stopPropagation();skip(-10)});
   forward10?.addEventListener('click',e=>{e.stopPropagation();skip(10)});
   const syncVolume=()=>{if(volume)volume.value=String(video.muted?0:video.volume);if(mute)mute.textContent=(video.muted||video.volume===0)?'🔇':video.volume<.5?'🔉':'🔊'};
@@ -1565,7 +1565,7 @@ function installUnifiedPlayerChrome(video){
   stage?.addEventListener('click',e=>{if(e.target===stage||e.target===video){toggle();show()}});
   stage?.addEventListener('dblclick',e=>{if(e.target===stage||e.target===video){e.preventDefault();toggleFullscreen()}});
   for(const ev of ['mousemove','pointermove','pointerdown','touchstart'])stage?.addEventListener(ev,show,{passive:true});
-  card.addEventListener('keydown',e=>{if(e.key===' '||e.key==='k'){e.preventDefault();toggle();show()}else if(e.key==='f'){e.preventDefault();toggleFullscreen()}else if(e.key==='ArrowRight'){e.preventDefault();video.currentTime=Math.min((video.duration||Infinity),video.currentTime+10);show()}else if(e.key==='ArrowLeft'){e.preventDefault();video.currentTime=Math.max(0,video.currentTime-10);show()}});
+  card.addEventListener('keydown',e=>{if(e.key===' '||e.key==='k'){e.preventDefault();toggle();show()}else if(e.key==='f'){e.preventDefault();toggleFullscreen()}else if(e.key==='ArrowRight'){e.preventDefault();skip(10)}else if(e.key==='ArrowLeft'){e.preventDefault();skip(-10)}});
   video.addEventListener('play',()=>{sync();show()});video.addEventListener('pause',()=>{sync();show()});video.addEventListener('ended',sync);
   document.addEventListener('fullscreenchange',()=>{
     const active=document.fullscreenElement===card;
@@ -1597,17 +1597,17 @@ async function tryDirectVodPlayback(token,name,mediaId,poster,requestedResume){
   });
 }
 
-function installResumeStartOverChoice({token,name,mediaId,poster,resumeSeconds}){
+function installResumeStartOverChoice({token,name,mediaId,poster,resumeSeconds,durationSeconds=0}){
   const host=$('#mediaResumeChoice');
   const seconds=Math.floor(Number(resumeSeconds)||0);
   if(!host||seconds<30)return;
   host.hidden=false;
   host.innerHTML=`<div class="mediaResumeCard" role="dialog" aria-modal="true" aria-label="Continue watching"><strong>Continue watching</strong><span>Resume from <b>${formatMediaTime(seconds)}</b></span><div class="mediaResumeActions"><button class="btn primaryBtn" id=resumePlaybackChoice>Resume</button><button class=btn id=startOverPlaybackChoice>Start over</button></div></div>`;
   $('#resumePlaybackChoice').onclick=()=>{host.hidden=true};
-  $('#startOverPlaybackChoice').onclick=async()=>{host.hidden=true;pendingResumeSeconds=0;await playServerMedia(token,name,mediaId,false,poster,0)};
+  $('#startOverPlaybackChoice').onclick=async()=>{host.hidden=true;pendingResumeSeconds=0;await playServerMedia(token,name,mediaId,false,poster,0,durationSeconds)};
 }
 
-async function playServerMedia(token,name,mediaId=null,forceTranscode=false,poster='',startAtSeconds=0){
+async function playServerMedia(token,name,mediaId=null,forceTranscode=false,poster='',startAtSeconds=0,knownDurationSeconds=0){
   if(!forceTranscode)mediaFallbackTried=false;
   destroyPlayer();
   const wrap=ensureMediaPlayerHost();
@@ -1616,7 +1616,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
 
   const initialResume=Math.max(0,Number(startAtSeconds)||Number(pendingResumeSeconds)||0);
   pendingResumeSeconds=0;
-  installResumeStartOverChoice({token,name,mediaId,poster,resumeSeconds:initialResume});
+  installResumeStartOverChoice({token,name,mediaId,poster,resumeSeconds:initialResume,durationSeconds:knownDurationSeconds});
   if(!forceTranscode&&initialResume<=0){
     try{if(await tryDirectVodPlayback(token,name,mediaId,poster,initialResume))return}catch(e){console.warn('Direct VOD fallback to HLS',e)}
   }
@@ -1644,7 +1644,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
     if(!video)return;
     installUnifiedPlayerChrome(video);
     const playbackUrl=state.playbackUrl||info.playbackUrl;
-    const mediaDurationSeconds=Number(state.durationSeconds||info.durationSeconds)||0;
+    const mediaDurationSeconds=Math.max(0,Number(knownDurationSeconds)||0,Number(state.durationSeconds)||0,Number(info.durationSeconds)||0);
     installMediaDurationDisplay(video,mediaDurationSeconds);
     video.dataset.mediaDuration=String(mediaDurationSeconds||0);
     installVodBufferMonitor(video);
@@ -1717,6 +1717,8 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
           }
         },SEEK_DEBOUNCE_MS);
       };
+      // v41.0.8 seek root fix: all player controls use the absolute VOD timeline.
+      video._myOnlineTvSeekAbsolute=requestInstantSeek;
       // v41.0.3: dragging only previews the requested time. Commit one seek when
       // the user releases/changes the slider so FFmpeg is not restarted repeatedly.
       seekBar.addEventListener('input',()=>{const target=Number(seekBar.value)||0,c=$('#mediaCurrentTime');if(c)c.textContent=formatMediaTime(target)});
@@ -3742,7 +3744,7 @@ async function resumeContinueItem(item){
       currentProvider=parts[1];
       const movieId=parts.slice(2).join(':');
       const t=await api(`/api/vod/${currentProvider}/${encodeURIComponent(movieId)}/token`,{method:'POST'});
-      return playServerMedia(t.playToken,item.title||'Movie',id,false,item.poster||'');
+      return playServerMedia(t.playToken,item.title||'Movie',id,false,item.poster||'',0,Number(item.durationSeconds)||0);
     }
   }
 
@@ -3753,7 +3755,7 @@ async function resumeContinueItem(item){
       const ext=parts.pop()||'mp4';
       const episodeId=parts.slice(2).join(':');
       const t=await api(`/api/series/${currentProvider}/episode/${encodeURIComponent(episodeId)}/token?ext=${encodeURIComponent(ext)}`,{method:'POST'});
-      return playServerMedia(t.playToken,item.title||'Episode',id,false,item.poster||'');
+      return playServerMedia(t.playToken,item.title||'Episode',id,false,item.poster||'',0,Number(item.durationSeconds)||0);
     }
   }
 
@@ -3762,7 +3764,7 @@ async function resumeContinueItem(item){
     const movieId=id.substring('movie:'.length);
     if(currentProvider&&movieId){
       const t=await api(`/api/vod/${currentProvider}/${encodeURIComponent(movieId)}/token`,{method:'POST'});
-      return playServerMedia(t.playToken,item.title||'Movie',id,false,item.poster||'');
+      return playServerMedia(t.playToken,item.title||'Movie',id,false,item.poster||'',0,Number(item.durationSeconds)||0);
     }
   }
 

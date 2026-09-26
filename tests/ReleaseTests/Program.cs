@@ -143,6 +143,10 @@ internal static class Program
         T.Assert(appJs.Contains("hls.config.maxBufferLength=target") && appJs.Contains("hls.config.maxMaxBufferLength=max"),"Adaptive Buffer changes HLS targets at runtime");T.Pass("Adaptive Buffer changes HLS targets at runtime");
         T.Assert(appJs.Contains("installAdaptiveVodBuffer(video,hls)"),"Adaptive Buffer installed on VOD HLS path");T.Pass("Adaptive Buffer installed on VOD HLS path");
 
+        // v41.0.8 absolute VOD timeline seek correction.
+        foreach(var x in new[]{"knownDurationSeconds=0","Math.max(0,Number(knownDurationSeconds)||0","video._myOnlineTvSeekAbsolute=requestInstantSeek","safeMediaPosition(video)+seconds","Number(item.durationSeconds)||0"}) Has(appJs,x,"v41.0.8 absolute VOD seek: "+x);
+        T.Assert(appJs.Contains("else if(e.key==='ArrowRight'){e.preventDefault();skip(10)}") && appJs.Contains("else if(e.key==='ArrowLeft'){e.preventDefault();skip(-10)}"),"v41.0.8 keyboard seek uses absolute timeline");T.Pass("v41.0.8 keyboard seek uses absolute timeline");
+
         // v40.8.0 Instant Seek.
         foreach(var x in new[]{"INSTANT_SEEK_VERSION=","SEEK_DEBOUNCE_MS=220","vodSeekGeneration","requestInstantSeek","generation!==vodSeekGeneration","video.buffered.start(i)","Keep the current frame/session visible until ready","SEEK_READY_TIMEOUT_MS"}) Has(appJs,x,"Instant Seek: "+x);
         T.Assert(!appJs.Contains("seekBar.disabled=true"),"Instant Seek never locks the timeline during background seek");T.Pass("Instant Seek keeps timeline interactive");
