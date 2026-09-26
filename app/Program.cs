@@ -3446,7 +3446,7 @@ app.MapGet("/api/media/subtitles/{token}/{streamIndex:int}.vtt", async (HttpCont
             if (!process.Start()) { ctx.Response.StatusCode = 502; return; }
             var stderrTask = process.StandardError.ReadToEndAsync();
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted);
-            cts.CancelAfter(TimeSpan.FromSeconds(30));
+            cts.CancelAfter(TimeSpan.FromSeconds(90));
             await process.WaitForExitAsync(cts.Token);
             var stderr = await stderrTask;
             if (process.ExitCode != 0 || !File.Exists(tmpPath)) { try { File.Delete(tmpPath); } catch {} ctx.Response.StatusCode = 502; await ctx.Response.WriteAsync("Subtitle extraction failed"); return; }
@@ -3460,7 +3460,7 @@ app.MapGet("/api/media/subtitles/{token}/{streamIndex:int}.vtt", async (HttpCont
         ctx.Response.ContentLength = bytes.LongLength;
         ctx.Response.Headers.CacheControl = "private, max-age=21600";
         ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
-        ctx.Response.Headers["X-MyOnlineTV-Subtitle"] = "41.2.7";
+        ctx.Response.Headers["X-MyOnlineTV-Subtitle"] = "41.2.8";
         await ctx.Response.Body.WriteAsync(bytes, ctx.RequestAborted);
     }
     catch (OperationCanceledException) { if (!ctx.Response.HasStarted) ctx.Response.StatusCode = 504; }

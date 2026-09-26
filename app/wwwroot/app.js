@@ -1275,7 +1275,7 @@ const PLAYBACK_CORE_VERSION='41.1.1';
 const PLAYBACK_STARTUP_FIX_VERSION='41.1.1';
 const INSTANT_VOD_SEEK_VERSION='41.1.2';
 const NATIVE_SMART_SEEK_VERSION='41.2.0';
-const SUBTITLE_SELECTION_VERSION='41.2.7';
+const SUBTITLE_SELECTION_VERSION='41.2.8';
 const SUBTITLE_SYNC_PRESENTATION_VERSION='41.2.7';
 const AUDIO_TRACK_SELECTION_VERSION='41.2.5';
 const LIVE_STARTUP_SEGMENTS=1;
@@ -1519,6 +1519,7 @@ function unifiedPlayerMarkup(name,withStatus=true){
       <div id="mediaResumeChoice" class="mediaResumeChoice" hidden></div>
       <video id="video" class="mediaPlayerVideo" autoplay playsinline></video>
       <div class="mediaPlayerGradient" aria-hidden="true"></div>
+      <div id="mediaSubtitleOverlay" class="mediaSubtitleOverlay" aria-live="off" hidden></div>
       <button class="mediaCenterPlay" id="mediaCenterPlay" type="button" aria-label="Play or pause">▶</button>
       <div class="mediaPlayerChrome">
         <div class="mediaSeekRow"><input id="mediaSeekBar" class="mediaSeekBar" type="range" min="0" max="100" value="0" step="1" aria-label="Seek"></div>
@@ -1610,30 +1611,46 @@ async function installAudioTrackSelector(video,token,{name='',mediaId=null,poste
 }
 
 async function installSubtitleSelector(video,token){
-  const select=$('#mediaSubtitles');if(!video||!select||!token)return;
+  const select=$('#mediaSubtitles'),overlay=$('#mediaSubtitleOverlay');if(!video||!select||!overlay||!token)return;
   let data=null;try{data=await api('/api/media/subtitles/'+encodeURIComponent(token))}catch{return}
   const tracks=Array.isArray(data?.tracks)?data.tracks:[];if(!tracks.length)return;
   select.innerHTML='<option value="off">CC Off</option>';
   const languageName=code=>{try{return new Intl.DisplayNames([navigator.language||'en'],{type:'language'}).of(code)||code}catch{return code||'Unknown'}};
+  const byIndex=new Map();
   for(const t of tracks){
-    const tr=document.createElement('track');tr.kind='subtitles';tr.srclang=t.language||'und';tr.label=t.title||languageName(t.language||'und')||('Subtitle '+t.index);tr.src=t.url+(t.url.includes('?')?'&':'?')+'v=41.2.7';tr.dataset.subtitleStream=String(t.index);video.appendChild(tr);
-    const o=document.createElement('option');o.value=String(t.index);o.textContent=tr.label;select.appendChild(o);
+    const label=t.title||languageName(t.language||'und')||('Subtitle '+t.index);
+    byIndex.set(String(t.index),{...t,label});
+    const o=document.createElement('option');o.value=String(t.index);o.textContent=label;select.appendChild(o);
   }
-  const disable=()=>{for(const t of video.textTracks)t.mode='disabled'};
-  const positionCues=track=>{if(!track?.cues)return;for(const cue of track.cues){try{cue.snapToLines=false;cue.line=78;cue.position=50;cue.align='center';cue.size=86}catch{}}};
-  const activate=streamIndex=>{
-    disable();
-    const el=video.querySelector(`track[data-subtitle-stream="${streamIndex}"]`);if(!el)return;
-    const apply=()=>{if(!el.track)return;el.track.mode='showing';positionCues(el.track);setTimeout(()=>positionCues(el.track),100);setTimeout(()=>positionCues(el.track),750)};
-    el.addEventListener('load',apply,{once:true});
-    el.addEventListener('error',()=>{const st=$('#mediaPlaybackStatus');if(st)st.textContent='Subtitle track could not be loaded';},{once:true});
-    if(el.readyState===2)apply(); else if(el.readyState===3){const base=el.src.replace(/([?&])retry=\d+/,'$1');el.src=base+(base.includes('?')?'&':'?')+'retry='+Date.now()}
+  let cues=[],activeIndex='off',aborter=null,lastText='';
+  const parseTime=v=>{const p=String(v).trim().replace(',','.').split(':').map(Number);if(p.some(Number.isNaN))return NaN;return p.length===3?p[0]*3600+p[1]*60+p[2]:p.length===2?p[0]*60+p[1]:p[0]};
+  const parseVtt=text=>{
+    const normalized=String(text||'').replace(/^\uFEFF/,'').replace(/\r/g,'');
+    const blocks=normalized.split(/\n{2,}/),out=[];
+    for(const block of blocks){const lines=block.split('\n').map(x=>x.trimEnd()).filter(Boolean);const ti=lines.findIndex(x=>x.includes('-->'));if(ti<0)continue;const m=lines[ti].match(/^\s*([^ ]+)\s+-->\s+([^ ]+)/);if(!m)continue;const a=parseTime(m[1]),b=parseTime(m[2]);if(!Number.isFinite(a)||!Number.isFinite(b)||b<=a)continue;const textLines=lines.slice(ti+1).map(x=>x.replace(/<[^>]+>/g,'').trim()).filter(Boolean);if(textLines.length)out.push({start:a,end:b,text:textLines.join('\n')})}return out.sort((a,b)=>a.start-b.start)
   };
-  video.addEventListener('seeked',()=>{const active=[...video.textTracks].find(t=>t.mode==='showing');if(active)positionCues(active)});
-  select.addEventListener('change',()=>{if(select.value==='off')disable();else activate(select.value)});
+  const render=()=>{
+    if(activeIndex==='off'||!cues.length){overlay.hidden=true;overlay.textContent='';lastText='';return}
+    const now=Number(video.currentTime)||0;const active=cues.filter(c=>now>=c.start&&now<c.end).map(c=>c.text).join('\n');
+    if(active!==lastText){overlay.textContent=active;lastText=active}overlay.hidden=!active;
+  };
+  const load=async idx=>{
+    const t=byIndex.get(String(idx));if(!t)return;
+    aborter?.abort();aborter=new AbortController();cues=[];lastText='';overlay.hidden=true;
+    const st=$('#mediaPlaybackStatus');if(st)st.textContent='Loading subtitles…';
+    try{
+      const url=t.url+(t.url.includes('?')?'&':'?')+'v=41.2.8';
+      const r=await fetch(url,{credentials:'same-origin',cache:'no-store',signal:aborter.signal});
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      const text=await r.text();if(!/^\s*WEBVTT/i.test(text))throw new Error('Invalid WebVTT');
+      cues=parseVtt(text);if(!cues.length)throw new Error('No subtitle cues');
+      activeIndex=String(idx);render();if(st){st.textContent=`Subtitles: ${t.label}`;st.className='livePlaybackStatus ready'}
+    }catch(e){if(e?.name==='AbortError')return;activeIndex='off';cues=[];overlay.hidden=true;if(st){st.textContent='Subtitle load failed: '+(e?.message||'unknown error');st.className='livePlaybackStatus error'}}
+  };
+  video.addEventListener('timeupdate',render);video.addEventListener('seeked',render);video.addEventListener('loadedmetadata',render);
+  select.addEventListener('change',()=>{if(select.value==='off'){aborter?.abort();activeIndex='off';cues=[];overlay.hidden=true;overlay.textContent=''}else load(select.value)});
   select.hidden=false;
 }
-
 function installNativeVodSeek(video){
   const seekBar=$('#mediaSeekBar');
   if(!video||!seekBar)return;
