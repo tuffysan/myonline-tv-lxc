@@ -1273,11 +1273,14 @@ const SMART_VOD_BUFFER_VERSION='40.9.0';
 const VOD_STREAMING_PIPELINE_VERSION='41.0.13';
 const PLAYBACK_CORE_VERSION='41.1.1';
 const PLAYBACK_STARTUP_FIX_VERSION='41.1.1';
+const INSTANT_VOD_SEEK_VERSION='41.1.2';
+const NATIVE_SMART_SEEK_VERSION='41.2.0';
+const SUBTITLE_SELECTION_VERSION='41.2.1';
 const LIVE_STARTUP_SEGMENTS=1;
 const VOD_STARTUP_SEGMENTS=2;
 const VOD_BUFFER_FLOOR_SECONDS=15;
 const VOD_BUFFER_TARGET_SECONDS=60;
-const VOD_SEEK_SEGMENTS=3;
+const VOD_SEEK_SEGMENTS=1;
 
 // v40.9.0 — Adaptive Buffer Engine
 const ADAPTIVE_BUFFER_VERSION='40.9.0';
@@ -1337,7 +1340,7 @@ function installAdaptiveVodBuffer(video,hls){
 // v40.8.0 — Instant Seek
 const INSTANT_SEEK_VERSION='41.0.10';
 const SEEK_DEBOUNCE_MS=80;
-const SEEK_READY_TIMEOUT_MS=15000;
+const SEEK_READY_TIMEOUT_MS=7000;
 let vodSeekGeneration=0;
 
 // v40.7.0 — Playback Reliability
@@ -1526,6 +1529,7 @@ function unifiedPlayerMarkup(name,withStatus=true){
           <span class="mediaNowPlaying">${esc(name)}</span>
           <button id="mediaMute" class="mediaControlButton" type="button" aria-label="Mute or unmute">🔊</button>
           <input id="mediaVolume" class="mediaVolume" type="range" min="0" max="1" step="0.05" value="1" aria-label="Volume">
+          <select id="mediaSubtitles" class="mediaPlaybackRate mediaSubtitleSelect" aria-label="Subtitles" hidden><option value="off">CC Off</option></select>
           <select id="mediaPlaybackRate" class="mediaPlaybackRate" aria-label="Playback speed"><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select>
           <button id="mediaFullscreen" class="mediaControlButton" type="button" aria-label="Fullscreen">⛶</button>
         </div>
@@ -1585,13 +1589,52 @@ function installUnifiedPlayerChrome(video){
   syncVolume();sync();show();
 }
 
+
+async function installSubtitleSelector(video,token){
+  const select=$('#mediaSubtitles');if(!video||!select||!token)return;
+  let data=null;try{data=await api('/api/media/subtitles/'+encodeURIComponent(token))}catch{return}
+  const tracks=Array.isArray(data?.tracks)?data.tracks:[];if(!tracks.length)return;
+  select.innerHTML='<option value="off">CC Off</option>';
+  const languageName=code=>{try{return new Intl.DisplayNames([navigator.language||'en'],{type:'language'}).of(code)||code}catch{return code||'Unknown'}};
+  tracks.forEach((t,i)=>{const tr=document.createElement('track');tr.kind='subtitles';tr.srclang=t.language||'und';tr.label=t.title||languageName(t.language||'und')||('Subtitle '+(i+1));tr.src=t.url;video.appendChild(tr);const o=document.createElement('option');o.value=String(i);o.textContent=tr.label;select.appendChild(o)});
+  const disable=()=>{for(const t of video.textTracks)t.mode='disabled'};
+  select.addEventListener('change',()=>{disable();if(select.value!=='off'){const i=Number(select.value);if(Number.isInteger(i)&&video.textTracks[i])video.textTracks[i].mode='showing'}});
+  select.hidden=false;
+}
+
+function installNativeVodSeek(video){
+  const seekBar=$('#mediaSeekBar');
+  if(!video||!seekBar)return;
+  let previewing=false;
+  const duration=()=>Number.isFinite(video.duration)&&video.duration>0?video.duration:Number(video.dataset.mediaDuration)||0;
+  const commit=(value)=>{
+    const d=duration();if(!(d>0))return;
+    const target=Math.max(0,Math.min(Number(value)||0,Math.max(0,d-.05)));
+    const st=$('#mediaPlaybackStatus');
+    // v41.2.0: native HTML5 seek. Keep the same media resource attached so the browser
+    // issues a byte Range request (206) instead of creating/restarting an FFmpeg/HLS session.
+    video.dataset.nativeSeekTarget=String(target);
+    try{ if(typeof video.fastSeek==='function') video.fastSeek(target); else video.currentTime=target; }
+    catch{ video.currentTime=target; }
+    if(st){st.textContent='Seeking…';st.className='livePlaybackStatus'}
+  };
+  video._myOnlineTvSeekAbsolute=commit;
+  seekBar.addEventListener('input',()=>{previewing=true;const target=Number(seekBar.value)||0,c=$('#mediaCurrentTime');if(c)c.textContent=formatMediaTime(target)});
+  seekBar.addEventListener('change',()=>{previewing=false;commit(seekBar.value)});
+  const ready=()=>{const st=$('#mediaPlaybackStatus');if(st){st.textContent='Playing · native seek';st.className='livePlaybackStatus ready'};delete video.dataset.nativeSeekTarget;video.play().catch(()=>{})};
+  video.addEventListener('seeked',ready);
+  video.addEventListener('playing',()=>{if(video.dataset.nativeSeekTarget)ready()});
+  const sync=()=>{const d=duration();if(d>0){seekBar.max=String(Math.floor(d));if(!previewing&&document.activeElement!==seekBar)seekBar.value=String(Math.min(Math.floor(video.currentTime||0),Math.floor(d)))}};
+  video.addEventListener('loadedmetadata',sync);video.addEventListener('durationchange',sync);video.addEventListener('timeupdate',sync);sync();
+}
+
 async function tryDirectVodPlayback(token,name,mediaId,poster,requestedResume){
   let caps=null;try{caps=await api('/api/media/capabilities/'+encodeURIComponent(token))}catch{return false}
   if(!caps?.direct||!caps?.directUrl)return false;
   const video=$('#video');if(!video)return false;
   const st=$('#mediaPlaybackStatus');if(st)st.textContent='Direct play · preparing timeline…';
   video.preload='auto';video.src=caps.directUrl;
-  installMediaDurationDisplay(video,0);installVodBufferMonitor(video);applyPendingResume(video,requestedResume);
+  installMediaDurationDisplay(video,Number(caps.durationSeconds)||0);video.dataset.mediaDuration=String(Number(caps.durationSeconds)||0);installVodBufferMonitor(video);installNativeVodSeek(video);applyPendingResume(video,requestedResume);
   const save=installResilientContinueTracking(video,{mediaId,name,url:caps.directUrl,poster});
   installVodRecovery(video,()=>null,save);
   installPlaybackReliability(video,()=>null,save);
@@ -1623,6 +1666,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
   destroyPlayer();
   const wrap=ensureMediaPlayerHost();
   wrap.innerHTML=unifiedPlayerMarkup(name,true);
+  installSubtitleSelector($('#video'),token);
   wrap.scrollIntoView({behavior:'smooth',block:'start'});
 
   const initialResume=Math.max(0,Number(startAtSeconds)||Number(pendingResumeSeconds)||0);
@@ -1699,7 +1743,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
               replacementState=await api(vodStatusUrl(replacement.statusUrl||('/api/live/status/'+encodeURIComponent(replacement.sessionId)),VOD_SEEK_SEGMENTS));
               if(replacementState.status==='ready')break;
               if(replacementState.status==='failed')throw new Error(replacementState.error||'Seek stream failed.');
-              await new Promise(r=>setTimeout(r,75));
+              await new Promise(r=>setTimeout(r,50));
             }
             if(generation!==vodSeekGeneration){fetch('/api/live/session/'+encodeURIComponent(replacement.sessionId),{method:'DELETE',keepalive:true}).catch(()=>{});return}
             if(!replacementState||replacementState.status!=='ready')throw new Error('Seek timed out.');
@@ -1709,11 +1753,15 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
             // v41.0.3: a replacement HLS timeline starts at ~0 even though its absolute VOD
             // position is target. Reset the media playhead after the new manifest is parsed;
             // keeping the old relative currentTime can leave the player outside the new seekable range.
+            const finishSeekUi=()=>{if(generation!==vodSeekGeneration)return;if(st){st.textContent='Playing';st.className='livePlaybackStatus ready'}};
+            video.addEventListener('playing',finishSeekUi,{once:true});
+            const seekUiFailsafe=setTimeout(()=>{if(generation===vodSeekGeneration&&st&&st.textContent==='Seeking…'){st.textContent=video.paused?'Buffering…':'Playing';st.className='livePlaybackStatus ready'}},5000);
+            video.addEventListener('playing',()=>clearTimeout(seekUiFailsafe),{once:true});
             if(hls){
               hls.stopLoad();
               const onSeekManifest=()=>{
                 try{video.currentTime=0}catch{}
-                hls.startLoad(-1);
+                hls.startLoad(0);
                 video.play().catch(()=>{});
               };
               hls.once(Hls.Events.MANIFEST_PARSED,onSeekManifest);
@@ -1723,7 +1771,6 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
               video.addEventListener('loadedmetadata',()=>{try{video.currentTime=0}catch{};video.play().catch(()=>{})},{once:true});
             }
             if(oldSession&&oldSession!==replacement.sessionId)fetch('/api/live/session/'+encodeURIComponent(oldSession),{method:'DELETE',keepalive:true}).catch(()=>{});
-            if(st){st.textContent='Playing';st.className='livePlaybackStatus ready'}
           }catch(e){
             if(generation===vodSeekGeneration&&st){st.textContent='Seek failed · continuing current playback';st.className='livePlaybackStatus error'}
             if(Math.abs(absoluteNow-target)>1)await video.play().catch(()=>{});

@@ -2214,3 +2214,8 @@ main > .mediaPlaybackSurface > .unifiedVideoPlayer.isFullscreen .mediaPlayerStag
   main > .mediaPlaybackSurface > .unifiedVideoPlayer{width:100%!important;max-width:none!important;margin:0!important;border-radius:0!important}
   main > .mediaPlaybackSurface > .unifiedVideoPlayer .mediaPlayerStage{max-height:62dvh!important}
 }
+
+/* v41.2.1 Subtitle Selection */
+.unifiedVideoPlayer .mediaSubtitleSelect{max-width:150px}
+.unifiedVideoPlayer video::cue{background:rgba(0,0,0,.72);color:#fff;font-size:1em}
+@media(max-width:719px){.unifiedVideoPlayer .mediaSubtitleSelect{max-width:82px}}

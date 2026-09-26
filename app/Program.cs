@@ -3361,6 +3361,54 @@ app.MapGet("/api/proxy/{token}", async (string token, HttpContext ctx) =>
 
 
 
+// v41.2.1 - Subtitle Selection. Discover embedded text subtitle streams with ffprobe
+// and expose them as WebVTT tracks. Image-based subtitle codecs (PGS/DVD) are not
+// advertised because browsers cannot consume them as HTML5 text tracks.
+app.MapGet("/api/media/subtitles/{token}", async (string token) =>
+{
+    if (!proxyTokens.TryGetValue(token, out var target) || target.Kind != "media") return Results.NotFound();
+    var ffprobe = FindExecutable("ffprobe");
+    if (ffprobe is null) return Results.Ok(new { tracks = Array.Empty<object>() });
+    var psi = new ProcessStartInfo { FileName = ffprobe, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
+    foreach (var arg in new[] { "-v","error","-rw_timeout","8000000","-show_entries","stream=index,codec_type,codec_name:stream_tags=language,title","-of","json",target.Url }) psi.ArgumentList.Add(arg);
+    using var process = new Process { StartInfo = psi };
+    try {
+        if (!process.Start()) return Results.Ok(new { tracks = Array.Empty<object>() });
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync(cts.Token);
+        if (process.ExitCode != 0) return Results.Ok(new { tracks = Array.Empty<object>() });
+        using var doc = JsonDocument.Parse(await outputTask);
+        var tracks = new List<object>();
+        if (doc.RootElement.TryGetProperty("streams", out var streams)) foreach (var st in streams.EnumerateArray()) {
+            if ((st.TryGetProperty("codec_type", out var ct) ? ct.GetString() : null) != "subtitle") continue;
+            var codec = st.TryGetProperty("codec_name", out var cc) ? (cc.GetString() ?? "") : "";
+            if (codec is not ("subrip" or "srt" or "ass" or "ssa" or "webvtt" or "mov_text" or "text")) continue;
+            var index = st.TryGetProperty("index", out var ix) ? ix.GetInt32() : -1; if (index < 0) continue;
+            string language = "und", title = "";
+            if (st.TryGetProperty("tags", out var tags)) { if (tags.TryGetProperty("language", out var la)) language = la.GetString() ?? "und"; if (tags.TryGetProperty("title", out var ti)) title = ti.GetString() ?? ""; }
+            tracks.Add(new { index, language, title, codec, url = $"/api/media/subtitles/{token}/{index}.vtt" });
+        }
+        return Results.Ok(new { tracks });
+    } catch { try { if (!process.HasExited) process.Kill(entireProcessTree:true); } catch {} return Results.Ok(new { tracks = Array.Empty<object>() }); }
+}).RequireAuthorization();
+
+app.MapGet("/api/media/subtitles/{token}/{streamIndex:int}.vtt", async (string token, int streamIndex) =>
+{
+    if (!proxyTokens.TryGetValue(token, out var target) || target.Kind != "media") return Results.NotFound();
+    var ffmpeg = FindExecutable("ffmpeg"); if (ffmpeg is null) return Results.NotFound();
+    var psi = new ProcessStartInfo { FileName = ffmpeg, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
+    foreach (var arg in new[] { "-v","error","-rw_timeout","8000000","-i",target.Url,"-map",$"0:{streamIndex}","-f","webvtt","pipe:1" }) psi.ArgumentList.Add(arg);
+    using var process = new Process { StartInfo = psi };
+    try {
+        if (!process.Start()) return Results.NotFound();
+        using var ms = new MemoryStream(); var copy = process.StandardOutput.BaseStream.CopyToAsync(ms);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20)); await process.WaitForExitAsync(cts.Token); await copy;
+        if (process.ExitCode != 0 || ms.Length == 0) return Results.NotFound();
+        return Results.File(ms.ToArray(), "text/vtt; charset=utf-8", enableRangeProcessing:false);
+    } catch { try { if (!process.HasExited) process.Kill(entireProcessTree:true); } catch {} return Results.NotFound(); }
+}).RequireAuthorization();
+
 // v40.3.0 - Streaming Engine 2.0. Prefer native browser byte-range playback for
 // browser-compatible VOD containers. This preserves provider Content-Length/Content-Range,
 // lets the browser build a real seekable timeline, and avoids unnecessary FFmpeg/HLS latency.
@@ -3446,7 +3494,7 @@ app.MapPost("/api/media/start/{token}", async (string token, bool? transcode, do
         args.AddRange(new[]
         {
             "-c:v", "libx264", "-preset", "ultrafast",
-            "-pix_fmt", "yuv420p", "-force_key_frames", "expr:gte(t,n_forced*2)",
+            "-pix_fmt", "yuv420p", "-force_key_frames", seekStartSeconds > 0 ? "expr:gte(t,n_forced*1)" : "expr:gte(t,n_forced*2)",
             "-c:a", "aac", "-b:a", "160k", "-af", "aresample=async=1:first_pts=0"
         });
     }
@@ -3458,7 +3506,7 @@ app.MapPost("/api/media/start/{token}", async (string token, bool? transcode, do
     args.AddRange(new[]
     {
         "-f", "hls",
-        "-hls_time", "2",
+        "-hls_time", seekStartSeconds > 0 ? "1" : "2",
         "-hls_list_size", "0",
         "-hls_playlist_type", "event",
         "-hls_flags", "independent_segments+temp_file",
@@ -3481,7 +3529,7 @@ app.MapPost("/api/media/start/{token}", async (string token, bool? transcode, do
         return Results.Problem($"Could not start FFmpeg: {ex.Message}", statusCode: 500);
     }
 
-    var session = new LiveSession(sessionId, sessionDir, process, errorLog, sourceUrl, DateTimeOffset.UtcNow, durationSeconds, CurrentUserKey());
+    var session = new LiveSession(sessionId, sessionDir, process, errorLog, sourceUrl, DateTimeOffset.UtcNow, durationSeconds, CurrentUserKey(), seekStartSeconds > 0 ? 1d : 2d);
     liveSessions[sessionId] = session;
 
     _ = Task.Run(async () =>
@@ -3605,7 +3653,7 @@ app.MapPost("/api/live/start/{providerId}/{channelKey}", async (string providerI
         return Results.Problem($"Could not start FFmpeg: {ex.Message}", statusCode: 500);
     }
 
-    var session = new LiveSession(sessionId, sessionDir, process, errorLog, sourceUrl, DateTimeOffset.UtcNow, OwnerUserId: CurrentUserKey());
+    var session = new LiveSession(sessionId, sessionDir, process, errorLog, sourceUrl, DateTimeOffset.UtcNow, OwnerUserId: CurrentUserKey(), SegmentDurationSeconds: 1d);
     liveSessions[sessionId] = session;
 
     _ = Task.Run(async () =>
@@ -3653,7 +3701,7 @@ app.MapGet("/api/live/status/{sessionId}", async (string sessionId, int? minSegm
             playbackUrl = $"/api/live/hls/{sessionId}/index.m3u8",
             durationSeconds = session.DurationSeconds,
             bufferedSegments = segmentCount,
-            bufferedSeconds = segmentCount * 2,
+            bufferedSeconds = segmentCount * session.SegmentDurationSeconds,
             processRunning = !session.Process.HasExited,
             newestSegmentAgeMs = Directory.EnumerateFiles(session.Directory, "*.ts")
                 .Select(x => DateTimeOffset.UtcNow - File.GetLastWriteTimeUtc(x))
@@ -5635,7 +5683,7 @@ record StorageTarget(string Id, string Name, string Type, string Destination, bo
 record StorageTargetInput(string? Id, string Name, string? Type, string Destination, bool DefaultDvr, bool DefaultDownload, bool Enabled);
 record MediaDownloadRequest(string Token, string? Title, string? StorageTargetId = null);
 record ProxyTarget(string Url, string Kind, DateTimeOffset Created, string OwnerUserId);
-record LiveSession(string Id, string Directory, Process Process, StringBuilder ErrorLog, string SourceUrl, DateTimeOffset Started, double? DurationSeconds = null, string? OwnerUserId = null);
+record LiveSession(string Id, string Directory, Process Process, StringBuilder ErrorLog, string SourceUrl, DateTimeOffset Started, double? DurationSeconds = null, string? OwnerUserId = null, double SegmentDurationSeconds = 2d);
 record RecentError(DateTimeOffset At, string Area, string Message);
 
 record DownloadJob(string Id, string Title, string SourceUrl, string Path, string Status, double Progress, string? Error, DateTimeOffset Created,
