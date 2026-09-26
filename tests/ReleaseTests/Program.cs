@@ -72,6 +72,9 @@ internal static class Program
         foreach(var x in new[]{"VOD_SEEK_ENGINE_VERSION=","mediaSeekBar","startAtSeconds=0","startSeconds","timelineOffset","savePlaybackPosition?.(true)"}) Has(appJs,x,"VOD Seek Engine: "+x);
         foreach(var x in new[]{"double? startSeconds","seekStartSeconds","-force_key_frames","aresample=async=1:first_pts=0","+genpts"}) Has(programCs,x,"VOD Seek server: "+x);
         Has(stylesCss,".mediaSeekBar","VOD Seek CSS");
+        // v40.6.0 Continuous VOD Playback Engine.
+        foreach(var x in new[]{"CONTINUOUS_VOD_ENGINE_VERSION=","Prepare the replacement stream while the current frame remains visible","Seek failed · continuing current playback","oldSession&&oldSession!==replacement.sessionId"}) Has(appJs,x,"Continuous VOD: "+x);
+        Has(programCs,"Do not stop the currently playing VOD session here","Continuous VOD server handover");
 
         // v40.3.2 Inline Player Stage Fix.
         foreach(var x in new[]{"unifiedPlayerMarkup","unifiedVideoPlayer","mediaPlayerStage","mediaPlayerVideo","mediaPlayerChrome","mediaFullscreen","mediaPlayPause","installUnifiedPlayerChrome"}) Has(appJs,x,"Unified player markup/behavior: "+x);

@@ -1866,3 +1866,6 @@ Release candidate only: native-client/target-LXC validation and review of functi
 
 ### 39.12.0 RC2
 - Continue API hardening: profile-scoped serialized persistence and expanded black-box regression coverage.
+
+## v40.6.0
+- Continuous VOD seek handover and stall recovery; retained contained player layout.

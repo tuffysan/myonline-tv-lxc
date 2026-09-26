@@ -3400,9 +3400,9 @@ app.MapPost("/api/media/start/{token}", async (string token, bool? transcode, do
     var durationSeconds = await ProbeDurationSeconds(sourceUrl);
     var seekStartSeconds = Math.Max(0d, Math.Min(startSeconds ?? 0d, Math.Max(0d, (durationSeconds ?? 0d) - 1d)));
 
-    foreach (var existing in liveSessions.Where(x => x.Value.OwnerUserId == CurrentUserKey()).Select(x => x.Key).ToArray())
-        await StopLiveSession(existing);
-
+    // v40.6.0: Do not stop the currently playing VOD session here.
+    // A replacement session (seek/recovery) must be allowed to become ready before
+    // the browser switches sources; otherwise every seek creates a visible black gap.
     var sessionId = Guid.NewGuid().ToString("N");
     var sessionDir = Path.Combine(liveHlsRoot, sessionId);
     Directory.CreateDirectory(sessionDir);
