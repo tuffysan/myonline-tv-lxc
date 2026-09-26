@@ -1,3 +1,6 @@
+## v40.5.1 — Contained Player Layout Fix
+- Restored bounded VOD player sizing on desktop while preserving fullscreen and unified controls.
+
 ## v40.4.2 — Release Gate Hardening
 - Hardened VOD Seek, Streaming Engine and Playback Resilience release tests so they no longer require obsolete exact version strings.
 - Runtime version markers advanced to 40.4.2.

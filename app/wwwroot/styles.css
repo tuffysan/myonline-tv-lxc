@@ -2125,3 +2125,12 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
 .unifiedVideoPlayer.isPaused .mediaCenterPlay{opacity:1;pointer-events:auto}
 .unifiedVideoPlayer:fullscreen,.unifiedVideoPlayer.isFullscreen{width:100vw!important;height:100vh!important;border-radius:0!important;background:#000}.unifiedVideoPlayer:fullscreen .mediaPlayerStage,.unifiedVideoPlayer.isFullscreen .mediaPlayerStage{width:100%;height:100%;aspect-ratio:auto;border-radius:0}.unifiedVideoPlayer:fullscreen .mediaPlayerChrome{padding:0 28px 22px}
 @media(max-width:719px){.unifiedVideoPlayer{border-radius:0}.unifiedVideoPlayer .mediaPlayerChrome{padding:0 10px 8px}.unifiedVideoPlayer .mediaNowPlaying{display:none}.unifiedVideoPlayer .mediaOverlayStatus{left:10px;bottom:50px}.unifiedVideoPlayer .mediaControlButton{width:34px;height:34px}}
+
+/* v40.5.1 — Contained Player Layout. Desktop VOD stays a bounded player card; fullscreen is explicit. */
+#playerWrap,#mediaPlayer{width:100%;}
+.unifiedVideoPlayer{width:min(100%,1120px)!important;max-width:1120px!important;margin:14px auto!important;align-self:center;box-sizing:border-box}
+.unifiedVideoPlayer .mediaPlayerStage{width:100%!important;aspect-ratio:16/9!important;max-height:min(70vh,630px)}
+.unifiedVideoPlayer:fullscreen,.unifiedVideoPlayer.isFullscreen{width:100vw!important;max-width:none!important;height:100vh!important;margin:0!important}
+.unifiedVideoPlayer:fullscreen .mediaPlayerStage,.unifiedVideoPlayer.isFullscreen .mediaPlayerStage{max-height:none!important;aspect-ratio:auto!important}
+@media(max-width:1199px){.unifiedVideoPlayer{width:min(100%,960px)!important;max-width:960px!important}}
+@media(max-width:719px){.unifiedVideoPlayer{width:100%!important;max-width:none!important;margin:8px 0!important;border-radius:10px}.unifiedVideoPlayer .mediaPlayerStage{max-height:62dvh}}

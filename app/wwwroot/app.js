@@ -1221,10 +1221,10 @@ function ensureMediaPlayerHost(){
 }
 
 // v40.2.1 — Playback Resilience & Resume Fix
-const PLAYBACK_RESILIENCE_VERSION='40.5.0';
-const STREAMING_ENGINE_VERSION='40.5.0';
-const VOD_SEEK_ENGINE_VERSION='40.5.0';
-const UNIFIED_VIDEO_PLAYER_VERSION='40.5.0';
+const PLAYBACK_RESILIENCE_VERSION='40.5.1';
+const STREAMING_ENGINE_VERSION='40.5.1';
+const VOD_SEEK_ENGINE_VERSION='40.5.1';
+const UNIFIED_VIDEO_PLAYER_VERSION='40.5.1';
 function safeMediaPosition(video){
   const n=Number(video?.currentTime);const offset=Number(video?.dataset?.timelineOffset)||0;return Number.isFinite(n)&&n>=0?n+offset:offset;
 }
