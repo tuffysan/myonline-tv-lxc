@@ -3398,11 +3398,11 @@ app.MapGet("/api/media/subtitles/{token}/{streamIndex:int}.vtt", async (HttpCont
     if (!proxyTokens.TryGetValue(token, out var target) || target.Kind != "media") { ctx.Response.StatusCode = 404; return; }
     var ffmpeg = FindExecutable("ffmpeg"); if (ffmpeg is null) { ctx.Response.StatusCode = 404; return; }
 
-    // v41.2.2: stream WebVTT progressively. The old implementation buffered the entire
-    // subtitle stream and waited for FFmpeg to finish the whole VOD before returning it.
-    // For remote VOD that meant the browser got no cues (and commonly hit the 20 s timeout).
+    // v41.2.4: stream WebVTT on the media timeline without copyts/start_at_zero. That v41.2.3
+    // timestamp rewrite could move cues away from HTMLMediaElement.currentTime and make selected subtitles invisible.
+    // genpts keeps a monotonic media-relative timeline while progressive delivery remains enabled.
     var psi = new ProcessStartInfo { FileName = ffmpeg, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
-    foreach (var arg in new[] { "-v","error","-rw_timeout","15000000","-copyts","-start_at_zero","-i",target.Url,"-map",$"0:{streamIndex}","-fix_sub_duration","-c:s","webvtt","-f","webvtt","pipe:1" }) psi.ArgumentList.Add(arg);
+    foreach (var arg in new[] { "-v","error","-rw_timeout","15000000","-fflags","+genpts","-i",target.Url,"-map",$"0:{streamIndex}","-vn","-an","-fix_sub_duration","-c:s","webvtt","-f","webvtt","pipe:1" }) psi.ArgumentList.Add(arg);
     using var process = new Process { StartInfo = psi };
     try {
         if (!process.Start()) { ctx.Response.StatusCode = 404; return; }

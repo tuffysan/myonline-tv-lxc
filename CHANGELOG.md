@@ -2014,3 +2014,6 @@ Release candidate only: native-client/target-LXC validation and review of functi
 
 ## v40.6.0
 - Continuous VOD seek handover and stall recovery; retained contained player layout.
+
+## 41.2.4
+- Subtitle Visibility & Timeline Fix: remove broken copyts/start_at_zero subtitle timestamp rewrite, add genpts and track retry.
