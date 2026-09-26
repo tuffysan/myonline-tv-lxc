@@ -2017,3 +2017,8 @@ Release candidate only: native-client/target-LXC validation and review of functi
 
 ## 41.2.4
 - Subtitle Visibility & Timeline Fix: remove broken copyts/start_at_zero subtitle timestamp rewrite, add genpts and track retry.
+
+## 41.2.5
+- Added embedded audio-language discovery and selection for Movies and Series.
+- Audio selector appears only for media with multiple audio streams.
+- Switching language preserves playback position and explicitly maps the selected FFmpeg audio stream.

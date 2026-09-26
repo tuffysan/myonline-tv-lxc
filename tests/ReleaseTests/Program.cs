@@ -117,6 +117,10 @@ internal static class Program
         foreach(var x in new[]{"\"-fflags\"","\"+genpts\"","\"-fix_sub_duration\"","\"-vn\"","\"-an\""}) Has(programCs,x,"v41.2.4 subtitle timeline: "+x);
         if(programCs.Contains("\"-copyts\"") || programCs.Contains("\"-start_at_zero\"")) throw new Exception("v41.2.4 subtitles must not rewrite the media timeline with copyts/start_at_zero");
 
+        // v41.2.5 Audio Language Selection — multiple embedded audio tracks are discoverable and selectable.
+        foreach(var x in new[]{"AUDIO_TRACK_SELECTION_VERSION='41.2.5'","mediaAudioTracks","installAudioTrackSelector","/api/media/audio-tracks/","audioStreamIndex"}) Has(appJs + programCs,x,"v41.2.5 audio tracks: "+x);
+        foreach(var x in new[]{"stream=index,codec_type,codec_name,channels:stream_tags=language,title:stream_disposition=default","codec_type\", out var ct","audioStreamIndex is int selectedAudio ? $\"0:{selectedAudio}?\" : \"0:a:0?\""}) Has(programCs,x,"v41.2.5 audio server: "+x);
+
         // v41.2.0 Native Seek & Smart Playback Pipeline — Direct Play must seek on the same resource via browser Range/206.
         foreach(var x in new[]{"NATIVE_SMART_SEEK_VERSION='41.2.0'","installNativeVodSeek(video)","video.fastSeek","video._myOnlineTvSeekAbsolute=commit","Playing · native seek","durationSeconds = probe?.DurationSeconds","range = true"}) Has(appJs + programCs,x,"v41.2.0 native seek: "+x);
         Has(programCs,"enableRangeProcessing: true","v41.2.0 Range/206 server path");

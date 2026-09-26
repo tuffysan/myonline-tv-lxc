@@ -3361,6 +3361,37 @@ app.MapGet("/api/proxy/{token}", async (string token, HttpContext ctx) =>
 
 
 
+// v41.2.5 - Audio Track Selection. Discover embedded audio streams and expose language/title metadata.
+app.MapGet("/api/media/audio-tracks/{token}", async (string token) =>
+{
+    if (!proxyTokens.TryGetValue(token, out var target) || target.Kind != "media") return Results.NotFound();
+    var ffprobe = FindExecutable("ffprobe");
+    if (ffprobe is null) return Results.Ok(new { tracks = Array.Empty<object>() });
+    var psi = new ProcessStartInfo { FileName = ffprobe, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
+    foreach (var arg in new[] { "-v","error","-rw_timeout","8000000","-show_entries","stream=index,codec_type,codec_name,channels:stream_tags=language,title:stream_disposition=default","-of","json",target.Url }) psi.ArgumentList.Add(arg);
+    using var process = new Process { StartInfo = psi };
+    try {
+        if (!process.Start()) return Results.Ok(new { tracks = Array.Empty<object>() });
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync(cts.Token);
+        if (process.ExitCode != 0) return Results.Ok(new { tracks = Array.Empty<object>() });
+        using var doc = JsonDocument.Parse(await outputTask);
+        var tracks = new List<object>();
+        if (doc.RootElement.TryGetProperty("streams", out var streams)) foreach (var st in streams.EnumerateArray()) {
+            if ((st.TryGetProperty("codec_type", out var ct) ? ct.GetString() : null) != "audio") continue;
+            var index = st.TryGetProperty("index", out var ix) ? ix.GetInt32() : -1; if (index < 0) continue;
+            var codec = st.TryGetProperty("codec_name", out var cc) ? (cc.GetString() ?? "") : "";
+            var channels = st.TryGetProperty("channels", out var ch) ? ch.GetInt32() : 0;
+            string language = "und", title = "";
+            if (st.TryGetProperty("tags", out var tags)) { if (tags.TryGetProperty("language", out var la)) language = la.GetString() ?? "und"; if (tags.TryGetProperty("title", out var ti)) title = ti.GetString() ?? ""; }
+            var isDefault = st.TryGetProperty("disposition", out var disp) && disp.TryGetProperty("default", out var def) && def.GetInt32() == 1;
+            tracks.Add(new { index, language, title, codec, channels, @default = isDefault });
+        }
+        return Results.Ok(new { tracks });
+    } catch { try { if (!process.HasExited) process.Kill(entireProcessTree:true); } catch {} return Results.Ok(new { tracks = Array.Empty<object>() }); }
+}).RequireAuthorization();
+
 // v41.2.1 - Subtitle Selection. Discover embedded text subtitle streams with ffprobe
 // and expose them as WebVTT tracks. Image-based subtitle codecs (PGS/DVD) are not
 // advertised because browsers cannot consume them as HTML5 text tracks.
@@ -3451,7 +3482,7 @@ app.MapGet("/api/media/capabilities/{token}", async (string token) =>
 // Browser-compatible Movies / Series playback.
 // Raw provider files can be MKV/TS/HEVC/AC3 and are not reliably playable by HTML5 video.
 // Convert/remux them server-side to HLS, with an optional H.264/AAC compatibility transcode.
-app.MapPost("/api/media/start/{token}", async (string token, bool? transcode, double? startSeconds) =>
+app.MapPost("/api/media/start/{token}", async (string token, bool? transcode, double? startSeconds, int? audioStreamIndex) =>
 {
     if (!proxyTokens.TryGetValue(token, out var target) || target.Kind != "media")
         return Results.BadRequest("The media playback token has expired. Reload Movies/Series and try again.");
@@ -3494,7 +3525,7 @@ app.MapPost("/api/media/start/{token}", async (string token, bool? transcode, do
 
     if (seekStartSeconds > 0)
         args.AddRange(new[] { "-ss", seekStartSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) });
-    args.AddRange(new[] { "-i", sourceUrl, "-map", "0:v:0?", "-map", "0:a:0?", "-fflags", "+genpts" });
+    args.AddRange(new[] { "-i", sourceUrl, "-map", "0:v:0?", "-map", audioStreamIndex is int selectedAudio ? $"0:{selectedAudio}?" : "0:a:0?", "-fflags", "+genpts" });
 
     // v41.1.0 Playback Core: server-side HLS is the compatibility path. Always normalize
     // to H.264/AAC so a stream cannot start successfully and then fail on an unsupported

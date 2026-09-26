@@ -1277,6 +1277,7 @@ const INSTANT_VOD_SEEK_VERSION='41.1.2';
 const NATIVE_SMART_SEEK_VERSION='41.2.0';
 const SUBTITLE_SELECTION_VERSION='41.2.4';
 const SUBTITLE_SYNC_PRESENTATION_VERSION='41.2.4';
+const AUDIO_TRACK_SELECTION_VERSION='41.2.5';
 const LIVE_STARTUP_SEGMENTS=1;
 const VOD_STARTUP_SEGMENTS=2;
 const VOD_BUFFER_FLOOR_SECONDS=15;
@@ -1530,6 +1531,7 @@ function unifiedPlayerMarkup(name,withStatus=true){
           <span class="mediaNowPlaying">${esc(name)}</span>
           <button id="mediaMute" class="mediaControlButton" type="button" aria-label="Mute or unmute">🔊</button>
           <input id="mediaVolume" class="mediaVolume" type="range" min="0" max="1" step="0.05" value="1" aria-label="Volume">
+          <select id="mediaAudioTracks" class="mediaPlaybackRate mediaAudioTrackSelect" aria-label="Audio language" hidden></select>
           <select id="mediaSubtitles" class="mediaPlaybackRate mediaSubtitleSelect" aria-label="Subtitles" hidden><option value="off">CC Off</option></select>
           <select id="mediaPlaybackRate" class="mediaPlaybackRate" aria-label="Playback speed"><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select>
           <button id="mediaFullscreen" class="mediaControlButton" type="button" aria-label="Fullscreen">⛶</button>
@@ -1590,6 +1592,22 @@ function installUnifiedPlayerChrome(video){
   syncVolume();sync();show();
 }
 
+
+async function installAudioTrackSelector(video,token,{name='',mediaId=null,poster='',durationSeconds=0,selectedAudioIndex=null}={}){
+  const select=$('#mediaAudioTracks');if(!video||!select||!token)return;
+  let data=null;try{data=await api('/api/media/audio-tracks/'+encodeURIComponent(token))}catch{return}
+  const tracks=Array.isArray(data?.tracks)?data.tracks:[];if(tracks.length<2)return;
+  const languageName=code=>{try{return new Intl.DisplayNames([navigator.language||'en'],{type:'language'}).of(code)||code}catch{return code||'Unknown'}};
+  select.innerHTML='';
+  tracks.forEach((t,i)=>{const o=document.createElement('option');o.value=String(t.index);const lang=languageName(t.language||'und');o.textContent=t.title?`${lang} · ${t.title}`:lang;o.selected=Number.isInteger(selectedAudioIndex)?Number(t.index)===selectedAudioIndex:(!!t.default||(!tracks.some(x=>x.default)&&i===0));select.appendChild(o)});
+  select.addEventListener('change',async()=>{
+    const streamIndex=Number(select.value);if(!Number.isInteger(streamIndex))return;
+    const position=safeMediaPosition(video);
+    const st=$('#mediaPlaybackStatus');if(st){st.textContent='Changing audio…';st.className='livePlaybackStatus'}
+    await playServerMedia(token,name,mediaId,true,poster,position,durationSeconds,streamIndex);
+  });
+  select.hidden=false;
+}
 
 async function installSubtitleSelector(video,token){
   const select=$('#mediaSubtitles');if(!video||!select||!token)return;
@@ -1665,12 +1683,13 @@ function installResumeStartOverChoice({token,name,mediaId,poster,resumeSeconds,d
   $('#startOverPlaybackChoice').onclick=async()=>{host.hidden=true;pendingResumeSeconds=0;await playServerMedia(token,name,mediaId,false,poster,0,durationSeconds)};
 }
 
-async function playServerMedia(token,name,mediaId=null,forceTranscode=false,poster='',startAtSeconds=0,knownDurationSeconds=0){
+async function playServerMedia(token,name,mediaId=null,forceTranscode=false,poster='',startAtSeconds=0,knownDurationSeconds=0,audioStreamIndex=null){
   if(!forceTranscode)mediaFallbackTried=false;
   destroyPlayer();
   const wrap=ensureMediaPlayerHost();
   wrap.innerHTML=unifiedPlayerMarkup(name,true);
   installSubtitleSelector($('#video'),token);
+  installAudioTrackSelector($('#video'),token,{name,mediaId,poster,durationSeconds:knownDurationSeconds,selectedAudioIndex:audioStreamIndex});
   wrap.scrollIntoView({behavior:'smooth',block:'start'});
 
   const initialResume=Math.max(0,Number(startAtSeconds)||Number(pendingResumeSeconds)||0);
@@ -1687,6 +1706,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
     const qs=new URLSearchParams();
     qs.set('transcode','true');
     if(seekStart>0)qs.set('startSeconds',String(seekStart));
+    if(Number.isInteger(audioStreamIndex))qs.set('audioStreamIndex',String(audioStreamIndex));
     const info=await api('/api/media/start/'+encodeURIComponent(token)+(qs.size?'?'+qs.toString():''),{method:'POST'});
     activeMediaSession=info.sessionId;
     activeLiveSession=info.sessionId;
