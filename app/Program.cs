@@ -3445,7 +3445,7 @@ app.MapPost("/api/media/start/{token}", async (string token, bool? transcode, do
     {
         args.AddRange(new[]
         {
-            "-c:v", "libx264", "-preset", seekStartSeconds > 0 ? "ultrafast" : "veryfast",
+            "-c:v", "libx264", "-preset", "ultrafast",
             "-pix_fmt", "yuv420p", "-force_key_frames", "expr:gte(t,n_forced*2)",
             "-c:a", "aac", "-b:a", "160k", "-af", "aresample=async=1:first_pts=0"
         });
@@ -3567,7 +3567,8 @@ app.MapPost("/api/live/start/{providerId}/{channelKey}", async (string providerI
     var ffmpegArgs = new List<string>
     {
         "-hide_banner", "-loglevel", "warning", "-nostdin",
-        "-rw_timeout", "15000000",
+        "-rw_timeout", "8000000",
+        "-fflags", "nobuffer", "-flags", "low_delay", "-analyzeduration", "1000000", "-probesize", "1000000",
         "-i", sourceUrl,
         "-map", "0:v:0?", "-map", "0:a:0?"
     };
@@ -3585,8 +3586,8 @@ app.MapPost("/api/live/start/{providerId}/{channelKey}", async (string providerI
     }
     ffmpegArgs.AddRange(new[]
     {
-        "-f", "hls", "-hls_time", "2", "-hls_list_size", "12",
-        "-hls_flags", "delete_segments+append_list+omit_endlist+independent_segments",
+        "-f", "hls", "-hls_time", "1", "-hls_list_size", "6",
+        "-hls_flags", "delete_segments+append_list+omit_endlist+independent_segments+temp_file",
         "-hls_segment_filename", segmentPattern, playlistPath
     });
     foreach (var arg in ffmpegArgs) psi.ArgumentList.Add(arg);
@@ -3782,7 +3783,7 @@ app.MapGet("/api/providers/health", async () =>
                 throw new InvalidOperationException("Provider URL is missing.");
 
             using var request = new HttpRequestMessage(HttpMethod.Get, testUrl);
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(4));
             using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
             ok = response.IsSuccessStatusCode;
             message = $"{(int)response.StatusCode} {response.ReasonPhrase}";

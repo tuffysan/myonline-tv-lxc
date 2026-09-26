@@ -1030,7 +1030,7 @@ async function playLive(channelKey,name,forceTranscode=false){
     let state=null;
     const deadline=Date.now()+22000;
     while(Date.now()<deadline){
-      state=await api(vodStatusUrl(info.statusUrl||('/api/live/status/'+encodeURIComponent(info.sessionId)),VOD_STARTUP_SEGMENTS));
+      state=await api(vodStatusUrl(info.statusUrl||('/api/live/status/'+encodeURIComponent(info.sessionId)),LIVE_STARTUP_SEGMENTS));
       if(state.status==='ready')break;
       if(state.status==='failed')throw new Error(state.error||'FFmpeg could not prepare this channel.');
       liveStatus('Preparing browser stream…','loading');
@@ -1042,7 +1042,7 @@ async function playLive(channelKey,name,forceTranscode=false){
     if(!video)return;
     const playbackUrl=state.playbackUrl||info.playbackUrl;
     if(window.Hls&&Hls.isSupported()){
-      hls=new Hls({enableWorker:true,lowLatencyMode:true,liveSyncDurationCount:3,liveMaxLatencyDurationCount:8,maxLiveSyncPlaybackRate:1.15,backBufferLength:30});
+      hls=new Hls({enableWorker:true,lowLatencyMode:true,liveSyncDurationCount:1,liveMaxLatencyDurationCount:3,maxLiveSyncPlaybackRate:1.25,backBufferLength:15,maxBufferLength:8,maxMaxBufferLength:16,startFragPrefetch:true});
       hls.loadSource(playbackUrl);hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED,()=>video.play().catch(()=>{}));
       installLiveReliability(video,()=>hls,()=>playLive(channelKey,name,forceTranscode));
@@ -1271,8 +1271,10 @@ const SMART_VOD_BUFFER_VERSION='40.9.0';
 // v41.0.13 — VOD Streaming Pipeline Fix. Start with a real cushion; the HLS manifest is
 // served no-cache by the backend so hls.js always sees newly produced segments.
 const VOD_STREAMING_PIPELINE_VERSION='41.0.13';
-const PLAYBACK_CORE_VERSION='41.1.0';
-const VOD_STARTUP_SEGMENTS=6;
+const PLAYBACK_CORE_VERSION='41.1.1';
+const PLAYBACK_STARTUP_FIX_VERSION='41.1.1';
+const LIVE_STARTUP_SEGMENTS=1;
+const VOD_STARTUP_SEGMENTS=2;
 const VOD_BUFFER_FLOOR_SECONDS=15;
 const VOD_BUFFER_TARGET_SECONDS=60;
 const VOD_SEEK_SEGMENTS=3;
@@ -1600,7 +1602,7 @@ async function tryDirectVodPlayback(token,name,mediaId,poster,requestedResume){
     const onMeta=()=>{metadata=true;applyPendingResume(video,requestedResume);video.play().catch(bad)};
     const onPlaying=()=>{if(metadata)commit()};
     const cleanup=()=>{clearTimeout(timer);video.removeEventListener('loadedmetadata',onMeta);video.removeEventListener('playing',onPlaying);video.removeEventListener('error',bad)};
-    const timer=setTimeout(()=>{if(video.readyState>=3&&!video.paused)commit();else bad()},12000);
+    const timer=setTimeout(()=>{if(video.readyState>=3&&!video.paused)commit();else bad()},5000);
     video.addEventListener('loadedmetadata',onMeta,{once:true});video.addEventListener('playing',onPlaying,{once:true});video.addEventListener('error',bad,{once:true});
     video.load();
   });

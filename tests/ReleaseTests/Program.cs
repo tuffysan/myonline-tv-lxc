@@ -38,7 +38,7 @@ internal static class Program
         T.Assert(stylesCss.Contains("v41.0.12 — Player Layout Consolidation") && stylesCss.Contains("width:min(calc(100% - 24px),960px)!important") && stylesCss.Contains("max-width:960px!important"),"v41 authoritative contained player layout protected"); T.Pass("v41 authoritative contained player layout protected");
         T.Assert(appJs.Contains("NEXT_EPISODE_COUNTDOWN_SECONDS=10") && appJs.Contains("installResumeStartOverChoice"),"v41 Movies & Series continuity protected"); T.Pass("v41 Movies & Series continuity protected");
         T.Assert(appJs.Contains("installLiveReliability") && appJs.Contains("++livePlaybackGeneration;stopLiveReliability()"),"v41 Live TV recovery and stale-channel guard protected"); T.Pass("v41 Live TV recovery and stale-channel guard protected");
-        T.Assert(programCs.Contains("\"-hls_list_size\", \"12\"") && programCs.Contains("independent_segments"),"v41 server HLS reliability policy protected"); T.Pass("v41 server HLS reliability policy protected");
+        T.Assert(programCs.Contains("\"-hls_list_size\", \"0\"") && programCs.Contains("\"-hls_playlist_type\", \"event\"") && programCs.Contains("independent_segments+temp_file") && programCs.Contains("\"-hls_list_size\", \"6\"") && programCs.Contains("delete_segments+append_list+omit_endlist+independent_segments+temp_file"),"v41 server HLS reliability policy protected"); T.Pass("v41 server HLS reliability policy protected");
 
         // Downloads 2.0 source-regression checks
         foreach(var x in new[]{"/api/downloads/summary","/api/downloads/history","downloadCancellations","downloads-state.json","SemaphoreSlim(2, 2)","Status = \"Interrupted\""}) Has(programCs,x,"Downloads 2.0: "+x);
@@ -89,20 +89,26 @@ internal static class Program
 
         // v41.1.0 Playback Core supersedes the historical v40.6.1 Smart VOD buffer ceiling.
         // Keep the useful buffer/status invariants, but validate the active 60s/120s policy instead of the obsolete 240s ceiling.
-        foreach(var x in new[]{"SMART_VOD_BUFFER_VERSION=","VOD_STARTUP_SEGMENTS=6","VOD_SEEK_SEGMENTS=3","VOD_BUFFER_FLOOR_SECONDS=15","VOD_BUFFER_TARGET_SECONDS=60","vodStatusUrl","bufferedAheadSeconds","installVodBufferMonitor","startFragPrefetch:true"}) Has(appJs,x,"Smart VOD compatibility: "+x);
+        foreach(var x in new[]{"SMART_VOD_BUFFER_VERSION=","VOD_STARTUP_SEGMENTS=2","VOD_SEEK_SEGMENTS=3","VOD_BUFFER_FLOOR_SECONDS=15","VOD_BUFFER_TARGET_SECONDS=60","vodStatusUrl","bufferedAheadSeconds","installVodBufferMonitor","startFragPrefetch:true"}) Has(appJs,x,"Smart VOD compatibility: "+x);
         T.Assert(appJs.Contains("backBufferLength:60,maxBufferLength:60,maxMaxBufferLength:120"),"Playback Core owns the active VOD buffer ceiling"); T.Pass("Playback Core owns the active VOD buffer ceiling");
         T.Assert(!appJs.Contains("maxMaxBufferLength:240"),"obsolete 240 second VOD buffer ceiling is removed"); T.Pass("obsolete 240 second VOD buffer ceiling is removed");
         foreach(var x in new[]{"int? minSegments","requiredSegments","bufferedSegments = segmentCount","bufferedSeconds = segmentCount * 2","-hls_time", "\"2\""}) Has(programCs,x,"Smart VOD server compatibility: "+x);
 
 
         // v41.0.13 VOD streaming pipeline: growing HLS manifests must never be cached.
-        foreach(var x in new[]{"VOD_STREAMING_PIPELINE_VERSION='41.0.13'","VOD_STARTUP_SEGMENTS=6","VOD_SEEK_SEGMENTS=3","maxBufferLength:60","fragLoadingTimeOut:20000"}) Has(appJs,x,"v41.0.13 VOD pipeline: "+x);
+        foreach(var x in new[]{"VOD_STREAMING_PIPELINE_VERSION='41.0.13'","VOD_STARTUP_SEGMENTS=2","VOD_SEEK_SEGMENTS=3","maxBufferLength:60","fragLoadingTimeOut:20000"}) Has(appJs,x,"v41.0.13 VOD pipeline: "+x);
         foreach(var x in new[]{"no-store, no-cache, must-revalidate, max-age=0","Pragma = \"no-cache\"","processRunning = !session.Process.HasExited","newestSegmentAgeMs"}) Has(programCs,x,"v41.0.13 HLS delivery: "+x);
 
 
         // v41.1.0 Playback Core — Direct Play first, codec-aware fallback, atomic EVENT HLS.
-        foreach(var x in new[]{"PLAYBACK_CORE_VERSION='41.1.0'","tryDirectVodPlayback(token,name,mediaId,poster,initialResume)","Direct VOD fallback to compatibility HLS","backBufferLength:60,maxBufferLength:60,maxMaxBufferLength:120"}) Has(appJs,x,"v41.1 playback core: "+x);
+        foreach(var x in new[]{"PLAYBACK_CORE_VERSION='41.1.1'","tryDirectVodPlayback(token,name,mediaId,poster,initialResume)","Direct VOD fallback to compatibility HLS","backBufferLength:60,maxBufferLength:60,maxMaxBufferLength:120"}) Has(appJs,x,"v41.1 playback core: "+x);
         foreach(var x in new[]{"playback-core-41.1","ProbeMediaProfile","hls-transcode","-reconnect_streamed","-hls_playlist_type", "independent_segments+temp_file"}) Has(programCs,x,"v41.1 server playback core: "+x);
+
+
+        // v41.1.1 Playback Startup Fix — Live and VOD have independent startup profiles.
+        foreach(var x in new[]{"PLAYBACK_STARTUP_FIX_VERSION='41.1.1'","LIVE_STARTUP_SEGMENTS=1","VOD_STARTUP_SEGMENTS=2","liveSyncDurationCount:1","maxBufferLength:8","setTimeout(()=>{if(video.readyState>=3&&!video.paused)commit();else bad()},5000)"}) Has(appJs,x,"v41.1.1 startup: "+x);
+        foreach(var x in new[]{"-preset", "\"ultrafast\"", "-analyzeduration", "\"1000000\"", "-probesize", "\"1000000\"", "-hls_time", "\"1\""}) Has(programCs,x,"v41.1.1 server startup: "+x);
+        T.Assert(!appJs.Contains(")),VOD_STARTUP_SEGMENTS));\n      if(state.status==='ready')break;\n      if(state.status==='failed')throw new Error(state.error||'FFmpeg could not prepare this channel.')"),"Live TV does not use the VOD startup threshold"); T.Pass("Live TV does not use the VOD startup threshold");
 
         // v41.0.12 CURRENT PLAYBACK CONTRACT.
         // Historical playback implementation strings from v40.x/v41.0.x must not gate current releases.
@@ -133,7 +139,7 @@ internal static class Program
         T.Assert(appJs.Contains("installLiveReliability") && appJs.Contains("++livePlaybackGeneration;stopLiveReliability()"),"current v41 Live TV recovery contract"); T.Pass("current v41 Live TV recovery contract");
         T.Assert(appJs.Contains("NEXT_EPISODE_COUNTDOWN_SECONDS=10") && appJs.Contains("installResumeStartOverChoice"),"current v41 Movies & Series continuity contract"); T.Pass("current v41 Movies & Series continuity contract");
         T.Assert(stylesCss.Contains("v41.0.12 — Player Layout Consolidation") && stylesCss.Contains("max-width:960px!important") && stylesCss.Contains("object-fit:contain!important"),"current v41 player geometry contract"); T.Pass("current v41 player geometry contract");
-        T.Assert(programCs.Contains("\"-hls_list_size\", \"12\"") && programCs.Contains("independent_segments"),"current v41 server HLS contract"); T.Pass("current v41 server HLS contract");
+        T.Assert(programCs.Contains("\"-hls_list_size\", \"0\"") && programCs.Contains("\"-hls_playlist_type\", \"event\"") && programCs.Contains("\"-hls_list_size\", \"6\"") && programCs.Contains("independent_segments+temp_file"),"current v41 server HLS contract"); T.Pass("current v41 server HLS contract");
 
         // v40.1.0 Home Experience 3.0.
         foreach(var x in new[]{"HOME_EXPERIENCE_3_VERSION='40.2.0'","renderHomeExperience3","homeExperience3Hero","homeExperience3Rail","homeExperience3Card","homeExperience3Capabilities"}) Has(appJs,x,"Home Experience 3.0: "+x);
