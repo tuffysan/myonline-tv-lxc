@@ -1,3 +1,8 @@
+## v40.12.0 — Live TV Reliability
+- Dedicated Live TV watchdog, reconnect and stall recovery.
+- Live-edge latency controls and safer rapid channel switching.
+- Expanded server-side live HLS window for more resilient playback.
+
 # v40.11.0 — Movies & Series UX
 
 - Resume/Start Over choice is surfaced in the player for meaningful saved positions.

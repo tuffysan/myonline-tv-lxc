@@ -975,8 +975,37 @@ async function toggleFav(id){fav=new Set(await api('/api/favourites/'+encodeURIC
 
 let activeLiveSession=null;
 let liveFallbackTried=false;
+const LIVE_TV_RELIABILITY_VERSION='40.12.0';
+let livePlaybackGeneration=0;
+let liveRecoveryTimer=null;
+let liveUserPaused=false;
+let liveRecoveryAttempts=0;
+const LIVE_MAX_RECOVERY_ATTEMPTS=5;
+function liveBufferAhead(video){
+  try{const t=video.currentTime||0;for(let i=0;i<video.buffered.length;i++)if(video.buffered.start(i)<=t+.25&&video.buffered.end(i)>=t)return Math.max(0,video.buffered.end(i)-t)}catch{}return 0;
+}
+function stopLiveReliability(){if(liveRecoveryTimer){clearInterval(liveRecoveryTimer);liveRecoveryTimer=null}}
+function installLiveReliability(video,hlsRef,restart){
+  stopLiveReliability();liveRecoveryAttempts=0;let lastTime=video.currentTime||0,lastProgress=Date.now();
+  video.addEventListener('pause',()=>{if(!video.ended&&video.dataset.internalPause!=='1')liveUserPaused=true});
+  video.addEventListener('play',()=>{liveUserPaused=false;liveRecoveryAttempts=0;lastProgress=Date.now()});
+  video.addEventListener('timeupdate',()=>{if(Math.abs((video.currentTime||0)-lastTime)>.15){lastTime=video.currentTime||0;lastProgress=Date.now();liveRecoveryAttempts=0}});
+  const recover=async(reason)=>{
+    if(liveUserPaused||document.hidden||liveRecoveryAttempts>=LIVE_MAX_RECOVERY_ATTEMPTS)return;
+    liveRecoveryAttempts++;liveStatus('Reconnecting live TV…','loading');
+    try{const hh=hlsRef?.();if(hh){if(reason==='media'){hh.recoverMediaError();}else{hh.startLoad(-1)}}await video.play();return}catch{}
+    if(liveRecoveryAttempts>=3)try{await restart()}catch{}
+  };
+  video.addEventListener('waiting',()=>{if(liveBufferAhead(video)<1.5)setTimeout(()=>{if(!liveUserPaused&&video.readyState<3)recover('waiting')},1800)});
+  video.addEventListener('stalled',()=>recover('stalled'));
+  video.addEventListener('error',()=>recover('media'));
+  liveRecoveryTimer=setInterval(()=>{if(liveUserPaused||video.paused||video.ended)return;if(Date.now()-lastProgress>6500&&liveBufferAhead(video)<2.5)recover('watchdog')},2000);
+}
+
 
 async function playLive(channelKey,name,forceTranscode=false){
+  const generation=++livePlaybackGeneration;
+  stopLiveReliability();
   if(!forceTranscode)liveFallbackTried=false;
   destroyPlayer();
   const wrap=$('#playerWrap')||$('#mediaPlayer');
@@ -988,6 +1017,7 @@ async function playLive(channelKey,name,forceTranscode=false){
   wrap.scrollIntoView({behavior:'smooth',block:'start'});
   try{
     const info=await api('/api/live/start/'+encodeURIComponent(currentProvider)+'/'+encodeURIComponent(channelKey)+(forceTranscode?'?transcode=true':''),{method:'POST'});
+    if(generation!==livePlaybackGeneration)return;
     activeLiveSession=info.sessionId;
 
     let state=null;
@@ -1005,9 +1035,10 @@ async function playLive(channelKey,name,forceTranscode=false){
     if(!video)return;
     const playbackUrl=state.playbackUrl||info.playbackUrl;
     if(window.Hls&&Hls.isSupported()){
-      hls=new Hls({enableWorker:true,lowLatencyMode:true,liveSyncDurationCount:3,backBufferLength:30});
+      hls=new Hls({enableWorker:true,lowLatencyMode:true,liveSyncDurationCount:3,liveMaxLatencyDurationCount:8,maxLiveSyncPlaybackRate:1.15,backBufferLength:30});
       hls.loadSource(playbackUrl);hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED,()=>video.play().catch(()=>{}));
+      installLiveReliability(video,()=>hls,()=>playLive(channelKey,name,forceTranscode));
       hls.on(Hls.Events.ERROR,async(_,d)=>{
         if(d.fatal){
           console.warn('HLS fatal',d);
@@ -1022,7 +1053,7 @@ async function playLive(channelKey,name,forceTranscode=false){
         }
       });
     }else if(video.canPlayType('application/vnd.apple.mpegurl')){
-      video.src=playbackUrl;await video.play().catch(()=>{});
+      video.src=playbackUrl;installLiveReliability(video,()=>null,()=>playLive(channelKey,name,forceTranscode));await video.play().catch(()=>{});
     }else throw new Error('This browser does not support HLS playback.');
     liveStatus('Playing','ready');
   }catch(e){
@@ -1730,6 +1761,7 @@ function playMedia(url,name,mediaId=null){
   wrap.scrollIntoView({behavior:'smooth',block:'start'});
 }
 function destroyPlayer(){
+  ++livePlaybackGeneration;stopLiveReliability();liveUserPaused=false;
   if(hls){try{hls.destroy()}catch{}hls=null}
   if(activeLiveSession){
     const id=activeLiveSession;activeLiveSession=null;activeMediaSession=null;

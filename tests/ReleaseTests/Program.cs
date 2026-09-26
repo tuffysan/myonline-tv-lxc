@@ -94,6 +94,11 @@ internal static class Program
         foreach(var x in new[]{"STREAMING_ENGINE_VERSION=","tryDirectVodPlayback","/api/media/capabilities/","Direct play · preparing timeline…","maxBufferLength:","maxMaxBufferLength:","setTimeout(async()=>"}) Has(appJs,x,"Streaming Engine 2.0: "+x);
         foreach(var x in new[]{"/api/media/capabilities/{token}","streaming-engine-2.0","directUrl","range = true"}) Has(programCs,x,"Streaming Engine 2.0 server: "+x);
 
+        // v40.12.0 Live TV Reliability.
+        foreach(var x in new[]{"LIVE_TV_RELIABILITY_VERSION=","livePlaybackGeneration","installLiveReliability","LIVE_MAX_RECOVERY_ATTEMPTS=5","liveBufferAhead","Reconnecting live TV…","maxLiveSyncPlaybackRate:1.15","liveMaxLatencyDurationCount:8"}) Has(appJs,x,"Live TV Reliability: "+x);
+        foreach(var x in new[]{"\"-hls_list_size\", \"12\"","delete_segments+append_list+omit_endlist+independent_segments"}) Has(programCs,x,"Live TV Reliability server: "+x);
+        T.Assert(appJs.Contains("++livePlaybackGeneration;stopLiveReliability()"),"Live TV Reliability cancels stale playback and watchdogs");T.Pass("Live TV Reliability cancels stale playback and watchdogs");
+
         // v40.11.0 Movies & Series UX.
         foreach(var x in new[]{"MOVIES_SERIES_UX_VERSION=","NEXT_EPISODE_COUNTDOWN_SECONDS=10","mediaResumeChoice","installResumeStartOverChoice","Resume from","Start over","nextEpisodeCountdown","Playing in ${remaining}s","cancelNextMedia"}) Has(appJs,x,"Movies & Series UX: "+x);
         foreach(var x in new[]{".mediaResumeChoice",".nextEpisodeCountdown"}) Has(stylesCss,x,"Movies & Series UX CSS: "+x);

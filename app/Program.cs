@@ -3571,8 +3571,8 @@ app.MapPost("/api/live/start/{providerId}/{channelKey}", async (string providerI
     }
     ffmpegArgs.AddRange(new[]
     {
-        "-f", "hls", "-hls_time", "2", "-hls_list_size", "6",
-        "-hls_flags", "delete_segments+append_list+omit_endlist",
+        "-f", "hls", "-hls_time", "2", "-hls_list_size", "12",
+        "-hls_flags", "delete_segments+append_list+omit_endlist+independent_segments",
         "-hls_segment_filename", segmentPattern, playlistPath
     });
     foreach (var arg in ffmpegArgs) psi.ArgumentList.Add(arg);
