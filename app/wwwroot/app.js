@@ -1275,7 +1275,7 @@ const PLAYBACK_CORE_VERSION='41.1.1';
 const PLAYBACK_STARTUP_FIX_VERSION='41.1.1';
 const INSTANT_VOD_SEEK_VERSION='41.1.2';
 const NATIVE_SMART_SEEK_VERSION='41.2.0';
-const SUBTITLE_SELECTION_VERSION='41.2.1';
+const SUBTITLE_SELECTION_VERSION='41.2.2';
 const LIVE_STARTUP_SEGMENTS=1;
 const VOD_STARTUP_SEGMENTS=2;
 const VOD_BUFFER_FLOOR_SECONDS=15;
@@ -1596,9 +1596,10 @@ async function installSubtitleSelector(video,token){
   const tracks=Array.isArray(data?.tracks)?data.tracks:[];if(!tracks.length)return;
   select.innerHTML='<option value="off">CC Off</option>';
   const languageName=code=>{try{return new Intl.DisplayNames([navigator.language||'en'],{type:'language'}).of(code)||code}catch{return code||'Unknown'}};
-  tracks.forEach((t,i)=>{const tr=document.createElement('track');tr.kind='subtitles';tr.srclang=t.language||'und';tr.label=t.title||languageName(t.language||'und')||('Subtitle '+(i+1));tr.src=t.url;video.appendChild(tr);const o=document.createElement('option');o.value=String(i);o.textContent=tr.label;select.appendChild(o)});
+  tracks.forEach((t,i)=>{const tr=document.createElement('track');tr.kind='subtitles';tr.srclang=t.language||'und';tr.label=t.title||languageName(t.language||'und')||('Subtitle '+(i+1));tr.src=t.url;tr.dataset.subtitleIndex=String(i);video.appendChild(tr);const o=document.createElement('option');o.value=String(i);o.textContent=tr.label;select.appendChild(o)});
   const disable=()=>{for(const t of video.textTracks)t.mode='disabled'};
-  select.addEventListener('change',()=>{disable();if(select.value!=='off'){const i=Number(select.value);if(Number.isInteger(i)&&video.textTracks[i])video.textTracks[i].mode='showing'}});
+  const activate=i=>{disable();const el=video.querySelector(`track[data-subtitle-index=\"${i}\"]`);if(!el)return;const apply=()=>{if(el.track)el.track.mode='showing'};apply();el.addEventListener('load',apply,{once:true});};
+  select.addEventListener('change',()=>{if(select.value==='off')disable();else{const i=Number(select.value);if(Number.isInteger(i))activate(i)}});
   select.hidden=false;
 }
 

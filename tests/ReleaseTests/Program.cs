@@ -111,7 +111,7 @@ internal static class Program
         T.Assert(!appJs.Contains(")),VOD_STARTUP_SEGMENTS));\n      if(state.status==='ready')break;\n      if(state.status==='failed')throw new Error(state.error||'FFmpeg could not prepare this channel.')"),"Live TV does not use the VOD startup threshold"); T.Pass("Live TV does not use the VOD startup threshold");
 
         // v41.2.1 Subtitle Selection — embedded text subtitle streams are discoverable and selectable as WebVTT.
-        foreach(var x in new[]{"SUBTITLE_SELECTION_VERSION='41.2.1'","installSubtitleSelector(video,token)","mediaSubtitles","textTracks[i].mode='showing'","/api/media/subtitles/"}) Has(appJs + programCs,x,"v41.2.1 subtitles: "+x);
+        foreach(var x in new[]{"SUBTITLE_SELECTION_VERSION='41.2.2'","installSubtitleSelector(video,token)","mediaSubtitles","el.track.mode='showing'","/api/media/subtitles/"}) Has(appJs + programCs,x,"v41.2.1 subtitles: "+x);
         foreach(var x in new[]{"codec is not (\"subrip\" or \"srt\" or \"ass\"","\"-f\",\"webvtt\"","text/vtt; charset=utf-8"}) Has(programCs,x,"v41.2.1 subtitle server: "+x);
 
         // v41.2.0 Native Seek & Smart Playback Pipeline — Direct Play must seek on the same resource via browser Range/206.

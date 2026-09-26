@@ -3393,20 +3393,31 @@ app.MapGet("/api/media/subtitles/{token}", async (string token) =>
     } catch { try { if (!process.HasExited) process.Kill(entireProcessTree:true); } catch {} return Results.Ok(new { tracks = Array.Empty<object>() }); }
 }).RequireAuthorization();
 
-app.MapGet("/api/media/subtitles/{token}/{streamIndex:int}.vtt", async (string token, int streamIndex) =>
+app.MapGet("/api/media/subtitles/{token}/{streamIndex:int}.vtt", async (HttpContext ctx, string token, int streamIndex) =>
 {
-    if (!proxyTokens.TryGetValue(token, out var target) || target.Kind != "media") return Results.NotFound();
-    var ffmpeg = FindExecutable("ffmpeg"); if (ffmpeg is null) return Results.NotFound();
+    if (!proxyTokens.TryGetValue(token, out var target) || target.Kind != "media") { ctx.Response.StatusCode = 404; return; }
+    var ffmpeg = FindExecutable("ffmpeg"); if (ffmpeg is null) { ctx.Response.StatusCode = 404; return; }
+
+    // v41.2.2: stream WebVTT progressively. The old implementation buffered the entire
+    // subtitle stream and waited for FFmpeg to finish the whole VOD before returning it.
+    // For remote VOD that meant the browser got no cues (and commonly hit the 20 s timeout).
     var psi = new ProcessStartInfo { FileName = ffmpeg, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
-    foreach (var arg in new[] { "-v","error","-rw_timeout","8000000","-i",target.Url,"-map",$"0:{streamIndex}","-f","webvtt","pipe:1" }) psi.ArgumentList.Add(arg);
+    foreach (var arg in new[] { "-v","error","-rw_timeout","15000000","-i",target.Url,"-map",$"0:{streamIndex}","-c:s","webvtt","-f","webvtt","pipe:1" }) psi.ArgumentList.Add(arg);
     using var process = new Process { StartInfo = psi };
     try {
-        if (!process.Start()) return Results.NotFound();
-        using var ms = new MemoryStream(); var copy = process.StandardOutput.BaseStream.CopyToAsync(ms);
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20)); await process.WaitForExitAsync(cts.Token); await copy;
-        if (process.ExitCode != 0 || ms.Length == 0) return Results.NotFound();
-        return Results.File(ms.ToArray(), "text/vtt; charset=utf-8", enableRangeProcessing:false);
-    } catch { try { if (!process.HasExited) process.Kill(entireProcessTree:true); } catch {} return Results.NotFound(); }
+        if (!process.Start()) { ctx.Response.StatusCode = 404; return; }
+        ctx.Response.StatusCode = 200;
+        ctx.Response.ContentType = "text/vtt; charset=utf-8";
+        ctx.Response.Headers.CacheControl = "private, max-age=300";
+        ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+        var stderrDrain = process.StandardError.ReadToEndAsync();
+        await process.StandardOutput.BaseStream.CopyToAsync(ctx.Response.Body, ctx.RequestAborted);
+        await ctx.Response.Body.FlushAsync(ctx.RequestAborted);
+        await process.WaitForExitAsync(ctx.RequestAborted);
+        await stderrDrain;
+    }
+    catch (OperationCanceledException) { try { if (!process.HasExited) process.Kill(entireProcessTree:true); } catch {} }
+    catch { try { if (!process.HasExited) process.Kill(entireProcessTree:true); } catch {} if (!ctx.Response.HasStarted) ctx.Response.StatusCode = 404; }
 }).RequireAuthorization();
 
 // v40.3.0 - Streaming Engine 2.0. Prefer native browser byte-range playback for
