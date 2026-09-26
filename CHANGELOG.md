@@ -1,3 +1,6 @@
+## v41.0.2 — VOD Playback Recovery & Layout Fix
+- Fast startup, continuous buffer recovery, pause-state fix, and contained desktop VOD layout.
+
 ## v41.0.1 — Live Stream Generation Guard Fix
 - Fixes Live TV starts being invalidated by their own generation guard.
 - Adds a regression gate for the teardown/generation ordering.
