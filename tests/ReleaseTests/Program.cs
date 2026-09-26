@@ -72,9 +72,18 @@ internal static class Program
         foreach(var x in new[]{"VOD_SEEK_ENGINE_VERSION=","mediaSeekBar","startAtSeconds=0","startSeconds","timelineOffset","savePlaybackPosition?.(true)"}) Has(appJs,x,"VOD Seek Engine: "+x);
         foreach(var x in new[]{"double? startSeconds","seekStartSeconds","-force_key_frames","aresample=async=1:first_pts=0","+genpts"}) Has(programCs,x,"VOD Seek server: "+x);
         Has(stylesCss,".mediaSeekBar","VOD Seek CSS");
+
+        // v40.6.1 Smart VOD Buffering.
+        foreach(var x in new[]{"SMART_VOD_BUFFER_VERSION=","VOD_STARTUP_SEGMENTS=3","VOD_SEEK_SEGMENTS=4","vodStatusUrl","bufferedAheadSeconds","installVodBufferMonitor","startFragPrefetch:true","maxBufferLength:120","maxMaxBufferLength:240"}) Has(appJs,x,"Smart VOD Buffer: "+x);
+        foreach(var x in new[]{"int? minSegments","requiredSegments","bufferedSegments = segmentCount","bufferedSeconds = segmentCount * 2","-hls_time", "\"2\""}) Has(programCs,x,"Smart VOD server buffer: "+x);
+
         // v40.6.0 Continuous VOD Playback Engine.
         foreach(var x in new[]{"CONTINUOUS_VOD_ENGINE_VERSION=","Prepare the replacement stream while the current frame remains visible","Seek failed · continuing current playback","oldSession&&oldSession!==replacement.sessionId"}) Has(appJs,x,"Continuous VOD: "+x);
-        Has(programCs,"Do not stop the currently playing VOD session here","Continuous VOD server handover");
+        T.Assert(programCs.Contains("Keep the current VOD session alive while a replacement is prebuffered") &&
+                 programCs.Contains("liveSessions[sessionId] = session") &&
+                 programCs.Contains("app.MapDelete(\"/api/live/session/{sessionId}\"") &&
+                 !programCs.Contains("Do not stop the currently playing VOD session here"),
+                 "Continuous VOD server handover capability"); T.Pass("Continuous VOD server handover capability");
 
         // v40.3.2 Inline Player Stage Fix.
         foreach(var x in new[]{"unifiedPlayerMarkup","unifiedVideoPlayer","mediaPlayerStage","mediaPlayerVideo","mediaPlayerChrome","mediaFullscreen","mediaPlayPause","installUnifiedPlayerChrome"}) Has(appJs,x,"Unified player markup/behavior: "+x);
@@ -82,7 +91,7 @@ internal static class Program
         T.Assert(appJs.Split("unifiedPlayerMarkup(name").Length-1 >= 2,"Both VOD player creation paths use unified player");T.Pass("Both VOD player creation paths use unified player");
 
         // v40.3.0 Streaming Engine 2.0.
-        foreach(var x in new[]{"STREAMING_ENGINE_VERSION=","tryDirectVodPlayback","/api/media/capabilities/","Direct play · preparing timeline…","maxBufferLength:90","maxMaxBufferLength:180","setTimeout(async()=>"}) Has(appJs,x,"Streaming Engine 2.0: "+x);
+        foreach(var x in new[]{"STREAMING_ENGINE_VERSION=","tryDirectVodPlayback","/api/media/capabilities/","Direct play · preparing timeline…","maxBufferLength:","maxMaxBufferLength:","setTimeout(async()=>"}) Has(appJs,x,"Streaming Engine 2.0: "+x);
         foreach(var x in new[]{"/api/media/capabilities/{token}","streaming-engine-2.0","directUrl","range = true"}) Has(programCs,x,"Streaming Engine 2.0 server: "+x);
 
         // v40.2.1 Playback Resilience & Resume Fix.

@@ -993,7 +993,7 @@ async function playLive(channelKey,name,forceTranscode=false){
     let state=null;
     const deadline=Date.now()+22000;
     while(Date.now()<deadline){
-      state=await api(info.statusUrl||('/api/live/status/'+encodeURIComponent(info.sessionId)));
+      state=await api(vodStatusUrl(info.statusUrl||('/api/live/status/'+encodeURIComponent(info.sessionId)),VOD_STARTUP_SEGMENTS));
       if(state.status==='ready')break;
       if(state.status==='failed')throw new Error(state.error||'FFmpeg could not prepare this channel.');
       liveStatus('Preparing browser stream…','loading');
@@ -1221,11 +1221,21 @@ function ensureMediaPlayerHost(){
 }
 
 // v40.2.1 — Playback Resilience & Resume Fix
-const PLAYBACK_RESILIENCE_VERSION='40.6.0';
-const STREAMING_ENGINE_VERSION='40.6.0';
-const VOD_SEEK_ENGINE_VERSION='40.6.0';
-const UNIFIED_VIDEO_PLAYER_VERSION='40.6.0';
-const CONTINUOUS_VOD_ENGINE_VERSION='40.6.0';
+const PLAYBACK_RESILIENCE_VERSION='40.6.3';
+const STREAMING_ENGINE_VERSION='40.6.3';
+const VOD_SEEK_ENGINE_VERSION='40.6.3';
+const UNIFIED_VIDEO_PLAYER_VERSION='40.6.3';
+const CONTINUOUS_VOD_ENGINE_VERSION='40.6.3';
+const SMART_VOD_BUFFER_VERSION='40.6.3';
+const VOD_STARTUP_SEGMENTS=3;
+const VOD_SEEK_SEGMENTS=4;
+function vodStatusUrl(url,minSegments){
+  const sep=String(url).includes('?')?'&':'?';
+  return String(url)+sep+'minSegments='+encodeURIComponent(String(minSegments));
+}
+function bufferedAheadSeconds(video){
+  try{const t=Number(video.currentTime)||0,b=video.buffered;for(let i=0;i<b.length;i++)if(t>=b.start(i)-.1&&t<=b.end(i)+.1)return Math.max(0,b.end(i)-t)}catch{}return 0;
+}
 function safeMediaPosition(video){
   const n=Number(video?.currentTime);const offset=Number(video?.dataset?.timelineOffset)||0;return Number.isFinite(n)&&n>=0?n+offset:offset;
 }
@@ -1270,6 +1280,19 @@ function installResilientContinueTracking(video,{mediaId,name,url='',poster='',d
   document.addEventListener('visibilitychange',()=>{if(document.hidden)save(true)});
   return save;
 }
+function installVodBufferMonitor(video){
+  if(!video||video.dataset.bufferMonitorInstalled)return;video.dataset.bufferMonitorInstalled='1';
+  const seek=$('#mediaSeekBar'),status=$('#mediaPlaybackStatus');
+  const update=()=>{
+    const duration=Number(video.dataset.mediaDuration)||Number(video.duration)||0;
+    let end=0;try{const b=video.buffered;if(b.length)end=b.end(b.length-1)+(Number(video.dataset.timelineOffset)||0)}catch{}
+    if(seek&&duration>0){seek.style.setProperty('--buffered-percent',Math.max(0,Math.min(100,end/duration*100)).toFixed(2)+'%')}
+    const ahead=bufferedAheadSeconds(video);
+    if(status&&!video.paused&&!video.ended&&ahead>0&&ahead<3)status.textContent='Buffering · low buffer…';
+  };
+  for(const e of ['progress','timeupdate','loadedmetadata','durationchange'])video.addEventListener(e,update);
+  update();
+}
 function installVodRecovery(video,getHls,savePosition){
   if(!video||video.dataset.vodRecoveryInstalled)return;
   video.dataset.vodRecoveryInstalled='1';
@@ -1291,7 +1314,7 @@ function installVodRecovery(video,getHls,savePosition){
         if(instance&&recoveryStage===2){status('Buffering · recovering media…');instance.recoverMediaError();return arm()}
         status('Stream stalled · retrying playback…');await video.play().catch(()=>{});
       }catch{}
-    },12000);
+    },8000);
   };
   video.addEventListener('waiting',arm);
   video.addEventListener('stalled',arm);
@@ -1360,7 +1383,7 @@ async function tryDirectVodPlayback(token,name,mediaId,poster,requestedResume){
   const video=$('#video');if(!video)return false;
   const st=$('#mediaPlaybackStatus');if(st)st.textContent='Direct play · preparing timeline…';
   video.preload='auto';video.src=caps.directUrl;
-  installMediaDurationDisplay(video,0);applyPendingResume(video,requestedResume);
+  installMediaDurationDisplay(video,0);installVodBufferMonitor(video);applyPendingResume(video,requestedResume);
   const save=installResilientContinueTracking(video,{mediaId,name,url:caps.directUrl,poster});
   installVodRecovery(video,()=>null,save);
   return await new Promise(resolve=>{
@@ -1399,7 +1422,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
     let state=null;
     const deadline=Date.now()+30000;
     while(Date.now()<deadline){
-      state=await api(info.statusUrl||('/api/live/status/'+encodeURIComponent(info.sessionId)));
+      state=await api(vodStatusUrl(info.statusUrl||('/api/live/status/'+encodeURIComponent(info.sessionId)),VOD_STARTUP_SEGMENTS));
       if(state.status==='ready')break;
       if(state.status==='failed')throw new Error(state.error||'FFmpeg could not prepare this video.');
       await new Promise(r=>setTimeout(r,500));
@@ -1412,6 +1435,8 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
     const playbackUrl=state.playbackUrl||info.playbackUrl;
     const mediaDurationSeconds=Number(state.durationSeconds||info.durationSeconds)||0;
     installMediaDurationDisplay(video,mediaDurationSeconds);
+    video.dataset.mediaDuration=String(mediaDurationSeconds||0);
+    installVodBufferMonitor(video);
     const seekBar=$('#mediaSeekBar');
     if(seekBar&&mediaDurationSeconds>0){
       seekBar.max=String(Math.floor(mediaDurationSeconds));
@@ -1431,7 +1456,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
           let replacementState=null;
           const seekDeadline=Date.now()+30000;
           while(Date.now()<seekDeadline){
-            replacementState=await api(replacement.statusUrl||('/api/live/status/'+encodeURIComponent(replacement.sessionId)));
+            replacementState=await api(vodStatusUrl(replacement.statusUrl||('/api/live/status/'+encodeURIComponent(replacement.sessionId)),VOD_SEEK_SEGMENTS));
             if(replacementState.status==='ready')break;
             if(replacementState.status==='failed')throw new Error(replacementState.error||'Seek stream failed.');
             await new Promise(r=>setTimeout(r,250));
@@ -1486,7 +1511,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
     });
 
     if(window.Hls&&Hls.isSupported()){
-      hls=new Hls({enableWorker:true,lowLatencyMode:false,backBufferLength:60,maxBufferLength:90,maxMaxBufferLength:180,maxBufferHole:0.5});
+      hls=new Hls({enableWorker:true,lowLatencyMode:false,backBufferLength:120,maxBufferLength:120,maxMaxBufferLength:240,maxBufferSize:120*1000*1000,maxBufferHole:0.5,startFragPrefetch:true});
       hls.loadSource(playbackUrl);hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED,()=>{installResumeTracking();video.play().catch(()=>{})});
       hls.on(Hls.Events.ERROR,async(_,d)=>{

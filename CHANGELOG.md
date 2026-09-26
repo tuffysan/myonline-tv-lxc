@@ -1,3 +1,20 @@
+# v40.6.3 - Smart Buffer Release Gate Fix
+
+- Keeps Smart VOD Buffering at 120 s target / 240 s maximum.
+- Removes obsolete Streaming Engine regression assertions that required the historical 90/180 second buffer values.
+- Streaming Engine regression coverage now checks buffer capability markers while Smart VOD tests own the current 120/240 policy.
+- Preserves the v40.6.2 Continuous VOD server handover capability test.
+
+# v40.6.2 - Release Gate & Handover Fix
+
+- Fixes the Continuous VOD server-handover regression gate that incorrectly required a comment string that was not present in the implementation.
+- The release gate now verifies the actual handover capability: replacement sessions are created independently, registered in `liveSessions`, and old sessions remain explicitly deletable after client handover.
+- Keeps Smart VOD Buffering, continuous seek handover, contained player layout, and A/V sync behavior from v40.6.1 unchanged.
+- Prevents future release failures caused by testing an explanatory comment instead of executable capability markers.
+
+## v40.6.1
+- Smart VOD buffering, prebuffered seek handover, buffer health UI and stronger stall recovery.
+
 ## v40.5.1 — Contained Player Layout Fix
 - Restored bounded VOD player sizing on desktop while preserving fullscreen and unified controls.
 

@@ -3400,7 +3400,7 @@ app.MapPost("/api/media/start/{token}", async (string token, bool? transcode, do
     var durationSeconds = await ProbeDurationSeconds(sourceUrl);
     var seekStartSeconds = Math.Max(0d, Math.Min(startSeconds ?? 0d, Math.Max(0d, (durationSeconds ?? 0d) - 1d)));
 
-    // v40.6.0: Do not stop the currently playing VOD session here.
+    // v40.6.1: Keep the current VOD session alive while a replacement is prebuffered.
     // A replacement session (seek/recovery) must be allowed to become ready before
     // the browser switches sources; otherwise every seek creates a visible black gap.
     var sessionId = Guid.NewGuid().ToString("N");
@@ -3445,7 +3445,7 @@ app.MapPost("/api/media/start/{token}", async (string token, bool? transcode, do
     args.AddRange(new[]
     {
         "-f", "hls",
-        "-hls_time", "4",
+        "-hls_time", "2",
         "-hls_list_size", "0",
         "-hls_flags", "independent_segments",
         "-hls_segment_filename", segmentPattern,
@@ -3623,18 +3623,22 @@ app.MapPost("/api/live/start/{providerId}/{channelKey}", async (string providerI
     });
 }).RequireAuthorization();
 
-app.MapGet("/api/live/status/{sessionId}", async (string sessionId) =>
+app.MapGet("/api/live/status/{sessionId}", async (string sessionId, int? minSegments) =>
 {
     if (!liveSessions.TryGetValue(sessionId, out var session)) return Results.NotFound();
     var playlistPath = Path.Combine(session.Directory, "index.m3u8");
-    var ready = File.Exists(playlistPath) && Directory.EnumerateFiles(session.Directory, "*.ts").Any();
+    var requiredSegments = Math.Clamp(minSegments ?? 1, 1, 12);
+    var segmentCount = Directory.Exists(session.Directory) ? Directory.EnumerateFiles(session.Directory, "*.ts").Count() : 0;
+    var ready = File.Exists(playlistPath) && segmentCount >= requiredSegments;
     if (ready)
         return Results.Ok(new
         {
             sessionId,
             status = "ready",
             playbackUrl = $"/api/live/hls/{sessionId}/index.m3u8",
-            durationSeconds = session.DurationSeconds
+            durationSeconds = session.DurationSeconds,
+            bufferedSegments = segmentCount,
+            bufferedSeconds = segmentCount * 2
         });
 
     if (session.Process.HasExited)

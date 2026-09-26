@@ -2134,3 +2134,6 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
 .unifiedVideoPlayer:fullscreen .mediaPlayerStage,.unifiedVideoPlayer.isFullscreen .mediaPlayerStage{max-height:none!important;aspect-ratio:auto!important}
 @media(max-width:1199px){.unifiedVideoPlayer{width:min(100%,960px)!important;max-width:960px!important}}
 @media(max-width:719px){.unifiedVideoPlayer{width:100%!important;max-width:none!important;margin:8px 0!important;border-radius:10px}.unifiedVideoPlayer .mediaPlayerStage{max-height:62dvh}}
+
+/* v40.6.1 Smart VOD Buffering */
+.unifiedVideoPlayer .mediaSeekBar{--buffered-percent:0%;background:linear-gradient(to right,currentColor 0 var(--buffered-percent),rgba(255,255,255,.28) var(--buffered-percent) 100%)}
