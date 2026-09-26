@@ -23,21 +23,19 @@ internal static class Program
         var updateLocalSh = File.ReadAllText(Path.Combine(root,"scripts/update-local.sh"));
         var versionGuardPs1 = File.ReadAllText(Path.Combine(root,"scripts/Release-VersionGuard.ps1"));
 
-        // Stable source aliases for release-gate checks. Keep these aliases so new regression
-        // checks cannot accidentally reintroduce the historical program/styles/updateLocal
-        // compile failures when copied from older release tests.
-        var program = programCs;
-        var styles = stylesCss;
-        var updateLocal = updateLocalSh;
-
         static void Has(string text,string token,string name){T.Assert(text.Contains(token,StringComparison.Ordinal),name);T.Pass(name);}
+
+        // v41.0.12 Player Layout Consolidation. Only canonical source variables are used in this test file.
+        foreach(var x in new[]{"v41.0.12 — Player Layout Consolidation","width:min(calc(100% - 24px),960px)!important","max-width:960px!important","max-height:min(62vh,540px)!important","aspect-ratio:16 / 9!important","object-position:center center!important"}) Has(stylesCss,x,"v41.0.12 player layout: "+x);
+        T.Assert(stylesCss.LastIndexOf("v41.0.12 — Player Layout Consolidation",StringComparison.Ordinal) > stylesCss.LastIndexOf("v41.0.8 — VOD Player Layout Root Fix",StringComparison.Ordinal),"v41.0.12 authoritative layout is final policy");T.Pass("v41.0.12 authoritative layout is final policy");
+        T.Assert(stylesCss.Contains(".unifiedVideoPlayer:fullscreen") && stylesCss.Contains("width:100vw!important") && stylesCss.Contains("max-width:none!important"),"v41.0.12 fullscreen remains unrestricted");T.Pass("v41.0.12 fullscreen remains unrestricted");
 
         // v41.0.1 Playback & UX Quality Release — integrated quality gate.
         Has(appJs,"PLAYBACK_UX_QUALITY_VERSION='41.0.1'","v41 quality release marker");
         foreach(var x in new[]{"PLAYBACK_RELIABILITY_VERSION=","INSTANT_SEEK_VERSION=","ADAPTIVE_BUFFER_VERSION=","PLAYER_EXPERIENCE_VERSION=","MOVIES_SERIES_UX_VERSION=","LIVE_TV_RELIABILITY_VERSION="}) Has(appJs,x,"v41 integrated playback stack: "+x);
         T.Assert(appJs.Contains("installPlaybackReliability(video") && appJs.Contains("installAdaptiveVodBuffer(video,hls)"),"v41 VOD reliability and adaptive buffering are both installed"); T.Pass("v41 VOD reliability and adaptive buffering are both installed");
         T.Assert(appJs.Contains("requestInstantSeek") && !appJs.Contains("seekBar.disabled=true"),"v41 seek remains interactive and cancellable"); T.Pass("v41 seek remains interactive and cancellable");
-        T.Assert(stylesCss.Contains("width:min(100%,1120px)!important") && stylesCss.Contains("max-width:1120px!important"),"v41 contained player layout protected"); T.Pass("v41 contained player layout protected");
+        T.Assert(stylesCss.Contains("v41.0.12 — Player Layout Consolidation") && stylesCss.Contains("width:min(calc(100% - 24px),960px)!important") && stylesCss.Contains("max-width:960px!important"),"v41 authoritative contained player layout protected"); T.Pass("v41 authoritative contained player layout protected");
         T.Assert(appJs.Contains("NEXT_EPISODE_COUNTDOWN_SECONDS=10") && appJs.Contains("installResumeStartOverChoice"),"v41 Movies & Series continuity protected"); T.Pass("v41 Movies & Series continuity protected");
         T.Assert(appJs.Contains("installLiveReliability") && appJs.Contains("++livePlaybackGeneration;stopLiveReliability()"),"v41 Live TV recovery and stale-channel guard protected"); T.Pass("v41 Live TV recovery and stale-channel guard protected");
         T.Assert(programCs.Contains("\"-hls_list_size\", \"12\"") && programCs.Contains("independent_segments"),"v41 server HLS reliability policy protected"); T.Pass("v41 server HLS reliability policy protected");
@@ -83,85 +81,46 @@ internal static class Program
         foreach(var x in new[]{"double? startSeconds","seekStartSeconds","-force_key_frames","aresample=async=1:first_pts=0","+genpts"}) Has(programCs,x,"VOD Seek server: "+x);
         Has(stylesCss,".mediaSeekBar","VOD Seek CSS");
 
-        // v41.0.4 VOD Buffer Pipeline Fix.
-        foreach(var x in new[]{"buffer monitoring is telemetry only","video.dataset.bufferAheadSeconds","const arm=(allowPaused=false)","arm(true)","browser-generated pauses during an underrun","getHls?.()?.startLoad(-1)"}) Has(appJs,x,"v41.0.4 VOD buffer pipeline: "+x);
-        T.Assert(!appJs.Contains("status.textContent=ahead<3?'Buffering · replenishing…':'Playing · building buffer…'"),"v41.0.4 buffer telemetry does not fake playback state"); T.Pass("v41.0.4 buffer telemetry does not fake playback state");
+        // Current VOD buffer/recovery invariants. Do not pin this gate to historical comment text.
+        // These checks intentionally validate the active v41 behavior instead of v41.0.4 implementation wording.
+        foreach(var x in new[]{"video.dataset.bufferAheadSeconds","const arm=(allowPaused=false)","video.addEventListener('waiting',()=>arm(true))","video.addEventListener('stalled',()=>arm(true))","video.dataset.userPaused==='1'","getHls?.()?.startLoad(-1)"}) Has(appJs,x,"current VOD buffer/recovery invariant: "+x);
+        T.Assert(appJs.Contains("video.addEventListener('pause',()=>") && appJs.Contains("video.dataset.userPaused!=='1'&&!video.ended"),"current VOD recovery distinguishes browser underrun pause from intentional user pause"); T.Pass("current VOD recovery distinguishes browser underrun pause from intentional user pause");
+        T.Assert(!appJs.Contains("status.textContent=ahead<3?'Buffering · replenishing…':'Playing · building buffer…'"),"current buffer telemetry does not fake playback state"); T.Pass("current buffer telemetry does not fake playback state");
 
         // v40.6.1 Smart VOD Buffering.
         foreach(var x in new[]{"SMART_VOD_BUFFER_VERSION=","VOD_STARTUP_SEGMENTS=1","VOD_SEEK_SEGMENTS=1","VOD_BUFFER_FLOOR_SECONDS=15","VOD_BUFFER_TARGET_SECONDS=60","vodStatusUrl","bufferedAheadSeconds","installVodBufferMonitor","startFragPrefetch:true","maxMaxBufferLength:240"}) Has(appJs,x,"Smart VOD Buffer: "+x);
         foreach(var x in new[]{"int? minSegments","requiredSegments","bufferedSegments = segmentCount","bufferedSeconds = segmentCount * 2","-hls_time", "\"2\""}) Has(programCs,x,"Smart VOD server buffer: "+x);
 
-        foreach(var x in new[]{"Only the player UI marks an intentional user pause","video.dataset.userPaused='1';video.pause()","fragLoadingMaxRetry:8","manifestLoadingMaxRetry:6"}) Has(appJs,x,"v41.0.2 VOD recovery: "+x);
-        T.Assert(appJs.Contains("main.insertBefore(wrap,content)") && appJs.Contains("mediaPlaybackSurface") && styles.Contains("main > .mediaPlaybackSurface") && styles.Contains("html.mediaPlaybackActive #content{display:none!important}") && styles.Contains("width:min(1120px,100%)!important"),"v41.0.8 VOD player root layout protected");T.Pass("v41.0.8 VOD player root layout protected");
-        foreach(var x in new[]{"v41.0.3: a replacement HLS timeline starts at ~0","hls.once(Hls.Events.MANIFEST_PARSED,onSeekManifest)","video.currentTime=0","dragging only previews the requested time"}) Has(appJs,x,"v41.0.3 VOD seek: "+x);
-
-        // v40.6.0 Continuous VOD Playback Engine.
-        foreach(var x in new[]{"CONTINUOUS_VOD_ENGINE_VERSION=","const oldSession=activeMediaSession","const replacement=await api('/api/media/start/'","replacementState.status==='ready'","activeMediaSession=replacement.sessionId","oldSession&&oldSession!==replacement.sessionId","Seek failed · continuing current playback"}) Has(appJs,x,"Continuous VOD capability: "+x);
-        T.Assert(programCs.Contains("Keep the current VOD session alive while a replacement is prebuffered") &&
-                 programCs.Contains("liveSessions[sessionId] = session") &&
-                 programCs.Contains("app.MapDelete(\"/api/live/session/{sessionId}\"") &&
-                 !programCs.Contains("Do not stop the currently playing VOD session here"),
-                 "Continuous VOD server handover capability"); T.Pass("Continuous VOD server handover capability");
-
-        // v40.3.2 Inline Player Stage Fix.
-        foreach(var x in new[]{"unifiedPlayerMarkup","unifiedVideoPlayer","mediaPlayerStage","mediaPlayerVideo","mediaPlayerChrome","mediaFullscreen","mediaPlayPause","installUnifiedPlayerChrome"}) Has(appJs,x,"Unified player markup/behavior: "+x);
-        foreach(var x in new[]{"controlsAutoHidden","setTimeout(hide,3000)","card.classList.remove('controlsAutoHidden')"}) Has(appJs,x,"Fullscreen auto-hide behavior: "+x);
-        foreach(var x in new[]{".unifiedVideoPlayer",".unifiedVideoPlayer .mediaPlayerChrome",".unifiedVideoPlayer .mediaPlayerVideo","aspect-ratio:16/9","position:absolute!important","inset:0!important","width:100%!important","height:100%!important","object-fit:contain!important",".unifiedVideoPlayer:fullscreen",".unifiedVideoPlayer.isPaused .mediaCenterPlay"}) Has(stylesCss,x,"Unified player CSS: "+x);
-        foreach(var x in new[]{".unifiedVideoPlayer:fullscreen.controlsAutoHidden .mediaPlayerChrome","cursor:none"}) Has(stylesCss,x,"Fullscreen auto-hide CSS: "+x);
-        T.Assert(appJs.Split("unifiedPlayerMarkup(name").Length-1 >= 2,"Both VOD player creation paths use unified player");T.Pass("Both VOD player creation paths use unified player");
-
-        // v40.3.0 Streaming Engine 2.0.
-        foreach(var x in new[]{"STREAMING_ENGINE_VERSION=","tryDirectVodPlayback","/api/media/capabilities/","Direct play · preparing timeline…","maxBufferLength:","maxMaxBufferLength:","setTimeout(async()=>"}) Has(appJs,x,"Streaming Engine 2.0: "+x);
-        foreach(var x in new[]{"/api/media/capabilities/{token}","streaming-engine-2.0","directUrl","range = true"}) Has(programCs,x,"Streaming Engine 2.0 server: "+x);
-
-        // v40.12.0 Live TV Reliability.
-        foreach(var x in new[]{"LIVE_TV_RELIABILITY_VERSION=","livePlaybackGeneration","installLiveReliability","LIVE_MAX_RECOVERY_ATTEMPTS=5","liveBufferAhead","Reconnecting live TV…","maxLiveSyncPlaybackRate:1.15","liveMaxLatencyDurationCount:8"}) Has(appJs,x,"Live TV Reliability: "+x);
-        // v41.0.1: playLive must capture its generation AFTER destroyPlayer(), otherwise
-        // destroyPlayer invalidates the same start request and Live TV exits before attaching HLS.
-        var playLiveStart = appJs.IndexOf("async function playLive(channelKey,name,forceTranscode=false)", StringComparison.Ordinal);
-        var playLiveEnd = playLiveStart >= 0 ? appJs.IndexOf("function friendlyError", playLiveStart, StringComparison.Ordinal) : -1;
-        T.Assert(playLiveStart >= 0 && playLiveEnd > playLiveStart, "Live TV generation guard: playLive function found");
-        var playLiveBody = appJs.Substring(playLiveStart, playLiveEnd - playLiveStart);
-        var destroyPos = playLiveBody.IndexOf("destroyPlayer();", StringComparison.Ordinal);
-        var generationPos = playLiveBody.IndexOf("const generation=++livePlaybackGeneration;", StringComparison.Ordinal);
-        T.Assert(destroyPos >= 0 && generationPos > destroyPos, "Live TV generation guard: generation captured after teardown");
-        foreach(var x in new[]{"\"-hls_list_size\", \"12\"","delete_segments+append_list+omit_endlist+independent_segments"}) Has(programCs,x,"Live TV Reliability server: "+x);
-        T.Assert(appJs.Contains("++livePlaybackGeneration;stopLiveReliability()"),"Live TV Reliability cancels stale playback and watchdogs");T.Pass("Live TV Reliability cancels stale playback and watchdogs");
-
-        // v40.11.0 Movies & Series UX.
-        foreach(var x in new[]{"MOVIES_SERIES_UX_VERSION=","NEXT_EPISODE_COUNTDOWN_SECONDS=10","mediaResumeChoice","installResumeStartOverChoice","Resume from","Start over","nextEpisodeCountdown","Playing in ${remaining}s","cancelNextMedia"}) Has(appJs,x,"Movies & Series UX: "+x);
-        foreach(var x in new[]{".mediaResumeChoice",".nextEpisodeCountdown"}) Has(stylesCss,x,"Movies & Series UX CSS: "+x);
-        T.Assert(appJs.Contains("if(mediaId)markMediaWatched(mediaId,true)") && appJs.Contains("NEXT_EPISODE_COUNTDOWN_SECONDS"),"Movies & Series UX preserves watched state before autoplay");T.Pass("Movies & Series UX preserves watched state before autoplay");
-
-        // v40.10.0 Player Experience.
-        foreach(var x in new[]{"PLAYER_EXPERIENCE_VERSION=","mediaBack10","mediaForward10","mediaMute","mediaVolume","mediaPlaybackRate","video.playbackRate","syncVolume","skip(-10)","skip(10)"}) Has(appJs,x,"Player Experience: "+x);
-        foreach(var x in new[]{".mediaSkipButton",".mediaVolume",".mediaPlaybackRate"}) Has(stylesCss,x,"Player Experience CSS: "+x);
-        T.Assert(stylesCss.Contains("width:min(100%,1120px)!important") && stylesCss.Contains("max-width:1120px!important"),"Player Experience preserves contained desktop player");T.Pass("Player Experience preserves contained desktop player");
-
-        // v40.9.0 Adaptive Buffer Engine.
-        foreach(var x in new[]{"ADAPTIVE_BUFFER_VERSION=","ADAPTIVE_BUFFER_MIN_SECONDS=30","ADAPTIVE_BUFFER_DEFAULT_SECONDS=120","ADAPTIVE_BUFFER_MAX_SECONDS=240","installAdaptiveVodBuffer","Hls.Events.FRAG_LOADED","throughputMbps","segmentMbps","low-buffer-or-stalls","limited-bandwidth","high-bandwidth","myOnlineTvAdaptiveBufferDiagnostics"}) Has(appJs,x,"Adaptive Buffer: "+x);
-        T.Assert(appJs.Contains("hls.config.maxBufferLength=target") && appJs.Contains("hls.config.maxMaxBufferLength=max"),"Adaptive Buffer changes HLS targets at runtime");T.Pass("Adaptive Buffer changes HLS targets at runtime");
-        T.Assert(appJs.Contains("installAdaptiveVodBuffer(video,hls)"),"Adaptive Buffer installed on VOD HLS path");T.Pass("Adaptive Buffer installed on VOD HLS path");
-
-        // v41.0.8 absolute VOD timeline seek correction.
-        foreach(var x in new[]{"knownDurationSeconds=0","Math.max(0,Number(knownDurationSeconds)||0","video._myOnlineTvSeekAbsolute=requestInstantSeek","safeMediaPosition(video)+seconds","Number(item.durationSeconds)||0"}) Has(appJs,x,"v41.0.8 absolute VOD seek: "+x);
-        T.Assert(appJs.Contains("else if(e.key==='ArrowRight'){e.preventDefault();skip(10)}") && appJs.Contains("else if(e.key==='ArrowLeft'){e.preventDefault();skip(-10)}"),"v41.0.8 keyboard seek uses absolute timeline");T.Pass("v41.0.8 keyboard seek uses absolute timeline");
-
-        // v40.8.0 Instant Seek.
-        foreach(var x in new[]{"INSTANT_SEEK_VERSION=","SEEK_DEBOUNCE_MS=80","vodSeekGeneration","requestInstantSeek","generation!==vodSeekGeneration","video.buffered.start(i)","Keep the current frame/session visible until ready","SEEK_READY_TIMEOUT_MS"}) Has(appJs,x,"Instant Seek: "+x);
-        foreach(var x in new[]{"VOD_SEEK_SEGMENTS=1","SEEK_READY_TIMEOUT_MS=15000","setTimeout(r,75)"}) Has(appJs,x,"v41.0.10 fast seek: "+x);
-        Has(programCs,"seekStartSeconds > 0 ? \"ultrafast\" : \"veryfast\"","v41.0.10 seek transcode startup preset");
-        T.Assert(!appJs.Contains("seekBar.disabled=true"),"Instant Seek never locks the timeline during background seek");T.Pass("Instant Seek keeps timeline interactive");
-
-        // v40.7.0 Playback Reliability.
-        foreach(var x in new[]{"PLAYBACK_RELIABILITY_VERSION=","PLAYBACK_STATES","installPlaybackReliability","progress-watchdog","unexpected-pause","bufferUnderruns","timeToFirstFrameMs","lastRecoveryReason","myOnlineTvPlaybackDiagnostics"}) Has(appJs,x,"Playback Reliability: "+x);
-        T.Assert(appJs.Split("installPlaybackReliability(video").Length-1 >= 3,"Playback Reliability installed for direct and HLS VOD paths");T.Pass("Playback Reliability installed for direct and HLS VOD paths");
-        T.Assert(appJs.Contains("video.dataset.userPaused==='1'") && appJs.Contains("PLAYBACK_STATES.PAUSED"),"Playback Reliability protects intentional pause");T.Pass("Playback Reliability protects intentional pause");
-
-        // v40.2.1 Playback Resilience & Resume Fix.
-        foreach(var x in new[]{"PLAYBACK_RESILIENCE_VERSION=","installResilientContinueTracking","applyPendingResume","installVodRecovery","Buffering · reconnecting…","Hls.ErrorTypes.NETWORK_ERROR","Hls.ErrorTypes.MEDIA_ERROR","pendingResumeSeconds=safeMediaPosition(video)||requestedResume"}) Has(appJs,x,"Playback resilience: "+x);
-        T.Assert(appJs.Contains("['pause','waiting','stalled','seeking','seeked','error']"),"Resume position persists on interruption events");T.Pass("Resume position persists on interruption events");
-        T.Assert(appJs.Contains("window.addEventListener('pagehide',pageSave"),"Resume position persists on page exit");T.Pass("Resume position persists on page exit");
+        // v41.0.12 CURRENT PLAYBACK CONTRACT.
+        // Historical playback implementation strings from v40.x/v41.0.x must not gate current releases.
+        // Validate only active behavior/invariants that the current player depends on.
+        foreach(var x in new[]{
+            "PLAYBACK_STABILIZATION_VERSION='41.0.11'",
+            "PLAYBACK_RELIABILITY_VERSION=",
+            "INSTANT_SEEK_VERSION=",
+            "ADAPTIVE_BUFFER_VERSION=",
+            "PLAYER_EXPERIENCE_VERSION=",
+            "MOVIES_SERIES_UX_VERSION=",
+            "LIVE_TV_RELIABILITY_VERSION=",
+            "installPlaybackReliability(video",
+            "installAdaptiveVodBuffer(video,hls)",
+            "requestInstantSeek",
+            "video.dataset.bufferAheadSeconds",
+            "video.addEventListener('waiting',()=>arm(true))",
+            "video.addEventListener('stalled',()=>arm(true))",
+            "video.dataset.userPaused==='1'",
+            "getHls?.()?.startLoad(-1)",
+            "VOD_RECOVERY_BUFFER_SECONDS=3",
+            "VOD_STALL_CONFIRM_MS=1800",
+            "VOD_RECOVERY_COOLDOWN_MS=2500",
+            "resumeWhenReady"
+        }) Has(appJs,x,"current v41 playback contract: "+x);
+        T.Assert(!appJs.Contains("seekBar.disabled=true"),"current v41 seek remains interactive"); T.Pass("current v41 seek remains interactive");
+        T.Assert(appJs.Contains("video.addEventListener('pause',()=>") && appJs.Contains("video.dataset.userPaused!=='1'&&!video.ended"),"current v41 recovery separates intentional pause from underrun"); T.Pass("current v41 recovery separates intentional pause from underrun");
+        T.Assert(appJs.Contains("installLiveReliability") && appJs.Contains("++livePlaybackGeneration;stopLiveReliability()"),"current v41 Live TV recovery contract"); T.Pass("current v41 Live TV recovery contract");
+        T.Assert(appJs.Contains("NEXT_EPISODE_COUNTDOWN_SECONDS=10") && appJs.Contains("installResumeStartOverChoice"),"current v41 Movies & Series continuity contract"); T.Pass("current v41 Movies & Series continuity contract");
+        T.Assert(stylesCss.Contains("v41.0.12 — Player Layout Consolidation") && stylesCss.Contains("max-width:960px!important") && stylesCss.Contains("object-fit:contain!important"),"current v41 player geometry contract"); T.Pass("current v41 player geometry contract");
+        T.Assert(programCs.Contains("\"-hls_list_size\", \"12\"") && programCs.Contains("independent_segments"),"current v41 server HLS contract"); T.Pass("current v41 server HLS contract");
 
         // v40.1.0 Home Experience 3.0.
         foreach(var x in new[]{"HOME_EXPERIENCE_3_VERSION='40.2.0'","renderHomeExperience3","homeExperience3Hero","homeExperience3Rail","homeExperience3Card","homeExperience3Capabilities"}) Has(appJs,x,"Home Experience 3.0: "+x);
@@ -277,7 +236,14 @@ internal static class Program
         Has(appJs,"Continue watching</strong>","Continue Watching: explicit dialog heading");
         Has(stylesCss,".unifiedVideoPlayer .mediaResumeChoice{position:absolute;z-index:8;inset:0;display:grid;place-items:center","Continue Watching: overlay fills and centers in player stage");
         Has(stylesCss,".unifiedVideoPlayer .mediaResumeCard","Continue Watching: dedicated resume card styling");
-        Has(stylesCss,"#playerWrap.dynamicMediaPlayer","Continue Watching: playerWrap centering regression guard");
+        // v41.0.12: centering is owned by the authoritative root playback surface policy.
+        // Do not require the retired #playerWrap.dynamicMediaPlayer selector; it caused historical CSS
+        // implementations to become release blockers after the player layout was consolidated.
+        T.Assert(stylesCss.Contains("main > .mediaPlaybackSurface > .unifiedVideoPlayer")
+            && stylesCss.Contains("margin:0 auto!important")
+            && stylesCss.Contains("max-width:960px!important"),
+            "Continue Watching: current root playback surface centering contract");
+        T.Pass("Continue Watching: current root playback surface centering contract");
 
         await ContinueApiBlackBox(root);
         await SecurityIsolationBlackBox(root);

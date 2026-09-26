@@ -114,6 +114,9 @@ if ($nodeCommand) {
 Step "[1/7] Restore and Release build"
 & dotnet restore app/MyOnlineTV.Web.csproj
 Assert-Exit "dotnet restore failed."
+& dotnet build tests/ReleaseTests/ReleaseTests.csproj -c Release
+Assert-Exit "ReleaseTests compile preflight failed. Fix tests/ReleaseTests before continuing."
+Write-Host 'PASS: ReleaseTests compile preflight.'
 & dotnet build app/MyOnlineTV.Web.csproj -c Release --no-restore
 Assert-Exit "Release build failed."
 

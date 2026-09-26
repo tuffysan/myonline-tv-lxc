@@ -2126,15 +2126,6 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
 .unifiedVideoPlayer:fullscreen,.unifiedVideoPlayer.isFullscreen{width:100vw!important;height:100vh!important;border-radius:0!important;background:#000}.unifiedVideoPlayer:fullscreen .mediaPlayerStage,.unifiedVideoPlayer.isFullscreen .mediaPlayerStage{width:100%;height:100%;aspect-ratio:auto;border-radius:0}.unifiedVideoPlayer:fullscreen .mediaPlayerChrome{padding:0 28px 22px}
 @media(max-width:719px){.unifiedVideoPlayer{border-radius:0}.unifiedVideoPlayer .mediaPlayerChrome{padding:0 10px 8px}.unifiedVideoPlayer .mediaNowPlaying{display:none}.unifiedVideoPlayer .mediaOverlayStatus{left:10px;bottom:50px}.unifiedVideoPlayer .mediaControlButton{width:34px;height:34px}}
 
-/* v40.5.1 — Contained Player Layout. Desktop VOD stays a bounded player card; fullscreen is explicit. */
-#playerWrap,#mediaPlayer{width:100%;}
-.unifiedVideoPlayer{width:min(100%,1120px)!important;max-width:1120px!important;margin:14px auto!important;align-self:center;box-sizing:border-box}
-.unifiedVideoPlayer .mediaPlayerStage{width:100%!important;aspect-ratio:16/9!important;max-height:min(70vh,630px)}
-.unifiedVideoPlayer:fullscreen,.unifiedVideoPlayer.isFullscreen{width:100vw!important;max-width:none!important;height:100vh!important;margin:0!important}
-.unifiedVideoPlayer:fullscreen .mediaPlayerStage,.unifiedVideoPlayer.isFullscreen .mediaPlayerStage{max-height:none!important;aspect-ratio:auto!important}
-@media(max-width:1199px){.unifiedVideoPlayer{width:min(100%,960px)!important;max-width:960px!important}}
-@media(max-width:719px){.unifiedVideoPlayer{width:100%!important;max-width:none!important;margin:8px 0!important;border-radius:10px}.unifiedVideoPlayer .mediaPlayerStage{max-height:62dvh}}
-
 /* v40.6.1 Smart VOD Buffering */
 .unifiedVideoPlayer .mediaSeekBar{--buffered-percent:0%;background:linear-gradient(to right,currentColor 0 var(--buffered-percent),rgba(255,255,255,.28) var(--buffered-percent) 100%)}
 
@@ -2157,12 +2148,6 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
 @media(max-width:719px){.unifiedVideoPlayer .mediaResumeChoice{place-items:end center;padding:12px;background:rgba(0,0,0,.28)}.unifiedVideoPlayer .mediaResumeCard{width:100%;box-sizing:border-box;border-radius:16px;padding:16px}.unifiedVideoPlayer .mediaResumeActions{width:100%}.unifiedVideoPlayer .mediaResumeActions .btn{flex:1}.nextEpisodeCountdown>div{width:100%}.nextEpisodeCountdown>div .btn{flex:1}}
 
 
-/* v41.0.2 — VOD Playback Recovery & Layout Fix */
-.dynamicMediaPlayer,#mediaPlayer,#playerWrap.dynamicMediaPlayer{grid-column:1 / -1!important;min-width:0!important;width:100%!important;justify-self:stretch!important}
-.dynamicMediaPlayer .unifiedVideoPlayer,#playerWrap.dynamicMediaPlayer .unifiedVideoPlayer{width:min(calc(100% - 28px),1120px)!important;max-width:1120px!important;margin:14px auto!important}
-@media(max-width:719px){.dynamicMediaPlayer .unifiedVideoPlayer{width:100%!important;margin:8px 0!important}}
-
-
 /* v41.0.5 — Fullscreen Controls Auto-Hide Fix.
    In fullscreen, focus remains inside the player after clicking the fullscreen button.
    Do not let :focus-within pin the chrome open forever; controlsVisible/paused own visibility. */
@@ -2175,24 +2160,57 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
 .unifiedVideoPlayer:fullscreen.controlsVisible,
 .unifiedVideoPlayer.isFullscreen.controlsVisible{cursor:default}
 
-/* v41.0.8 — VOD Player Layout Root Fix
-   Playback is mounted directly under <main>, outside Home/collection grids.
-   This prevents launcher layouts from positioning the player in a side column. */
+
+
+/* v41.0.12 — Player Layout Consolidation.
+   This is the single authoritative inline/fullscreen sizing policy.
+   Do not add competing width/max-width/aspect-ratio rules elsewhere. */
 main > .mediaPlaybackSurface{
   display:block!important;
   width:100%!important;
   min-width:0!important;
-  padding:18px 28px 28px!important;
+  box-sizing:border-box!important;
+  padding:18px 24px 28px!important;
   margin:0!important;
 }
 main > .mediaPlaybackSurface > .unifiedVideoPlayer{
   display:block!important;
-  width:min(1120px,100%)!important;
-  max-width:1120px!important;
+  box-sizing:border-box!important;
+  width:min(calc(100% - 24px),960px)!important;
+  max-width:960px!important;
   margin:0 auto!important;
 }
+main > .mediaPlaybackSurface > .unifiedVideoPlayer .mediaPlayerStage{
+  width:100%!important;
+  aspect-ratio:16 / 9!important;
+  max-height:min(62vh,540px)!important;
+}
+main > .mediaPlaybackSurface > .unifiedVideoPlayer .mediaPlayerVideo{
+  position:absolute!important;
+  inset:0!important;
+  width:100%!important;
+  height:100%!important;
+  object-fit:contain!important;
+  object-position:center center!important;
+}
 html.mediaPlaybackActive #content{display:none!important}
+main > .mediaPlaybackSurface > .unifiedVideoPlayer:fullscreen,
+main > .mediaPlaybackSurface > .unifiedVideoPlayer.isFullscreen{
+  width:100vw!important;
+  max-width:none!important;
+  height:100vh!important;
+  max-height:none!important;
+  margin:0!important;
+}
+main > .mediaPlaybackSurface > .unifiedVideoPlayer:fullscreen .mediaPlayerStage,
+main > .mediaPlaybackSurface > .unifiedVideoPlayer.isFullscreen .mediaPlayerStage{
+  width:100%!important;
+  height:100%!important;
+  max-height:none!important;
+  aspect-ratio:auto!important;
+}
 @media(max-width:719px){
   main > .mediaPlaybackSurface{padding:0!important}
-  main > .mediaPlaybackSurface > .unifiedVideoPlayer{width:100%!important;max-width:none!important;margin:0!important}
+  main > .mediaPlaybackSurface > .unifiedVideoPlayer{width:100%!important;max-width:none!important;margin:0!important;border-radius:0!important}
+  main > .mediaPlaybackSurface > .unifiedVideoPlayer .mediaPlayerStage{max-height:62dvh!important}
 }

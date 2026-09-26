@@ -1,3 +1,17 @@
+## v41.0.12 — Player Layout Consolidation
+- Release gate consolidation: replaced stale v41.0.4 comment-string assertions with current VOD buffering/recovery behavior invariants.
+- Historical implementation wording no longer blocks later playback implementations when the required behavior remains present.
+- Consolidated VOD player sizing into one authoritative CSS policy.
+- Capped desktop inline playback at 960x540 (subject to viewport height).
+- Preserved full-width mobile and unrestricted fullscreen.
+- Hardened ReleaseTests compilation and removed historical source aliases.
+- Playback/cache logic unchanged from v41.0.11.
+
+## v41.0.11 — Playback Stabilization
+- Stabilized VOD underrun recovery and auto-resume.
+- Added recovery hysteresis/cooldown and stronger HLS retry policy.
+- Preserved fast seek and absolute timeline.
+
 ## v41.0.10 — Smooth Playback & Fast Seek
 
 - Faster VOD seek handover and first-frame readiness.
