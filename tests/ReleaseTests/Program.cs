@@ -78,7 +78,7 @@ internal static class Program
         foreach(var x in new[]{"int? minSegments","requiredSegments","bufferedSegments = segmentCount","bufferedSeconds = segmentCount * 2","-hls_time", "\"2\""}) Has(programCs,x,"Smart VOD server buffer: "+x);
 
         // v40.6.0 Continuous VOD Playback Engine.
-        foreach(var x in new[]{"CONTINUOUS_VOD_ENGINE_VERSION=","Prepare the replacement stream while the current frame remains visible","Seek failed · continuing current playback","oldSession&&oldSession!==replacement.sessionId"}) Has(appJs,x,"Continuous VOD: "+x);
+        foreach(var x in new[]{"CONTINUOUS_VOD_ENGINE_VERSION=","const oldSession=activeMediaSession","const replacement=await api('/api/media/start/'","replacementState.status==='ready'","activeMediaSession=replacement.sessionId","oldSession&&oldSession!==replacement.sessionId","Seek failed · continuing current playback"}) Has(appJs,x,"Continuous VOD capability: "+x);
         T.Assert(programCs.Contains("Keep the current VOD session alive while a replacement is prebuffered") &&
                  programCs.Contains("liveSessions[sessionId] = session") &&
                  programCs.Contains("app.MapDelete(\"/api/live/session/{sessionId}\"") &&
@@ -93,6 +93,10 @@ internal static class Program
         // v40.3.0 Streaming Engine 2.0.
         foreach(var x in new[]{"STREAMING_ENGINE_VERSION=","tryDirectVodPlayback","/api/media/capabilities/","Direct play · preparing timeline…","maxBufferLength:","maxMaxBufferLength:","setTimeout(async()=>"}) Has(appJs,x,"Streaming Engine 2.0: "+x);
         foreach(var x in new[]{"/api/media/capabilities/{token}","streaming-engine-2.0","directUrl","range = true"}) Has(programCs,x,"Streaming Engine 2.0 server: "+x);
+
+        // v40.8.0 Instant Seek.
+        foreach(var x in new[]{"INSTANT_SEEK_VERSION=","SEEK_DEBOUNCE_MS=220","vodSeekGeneration","requestInstantSeek","generation!==vodSeekGeneration","video.buffered.start(i)","Keep the current frame/session visible until ready","SEEK_READY_TIMEOUT_MS"}) Has(appJs,x,"Instant Seek: "+x);
+        T.Assert(!appJs.Contains("seekBar.disabled=true"),"Instant Seek never locks the timeline during background seek");T.Pass("Instant Seek keeps timeline interactive");
 
         // v40.7.0 Playback Reliability.
         foreach(var x in new[]{"PLAYBACK_RELIABILITY_VERSION=","PLAYBACK_STATES","installPlaybackReliability","progress-watchdog","unexpected-pause","bufferUnderruns","timeToFirstFrameMs","lastRecoveryReason","myOnlineTvPlaybackDiagnostics"}) Has(appJs,x,"Playback Reliability: "+x);

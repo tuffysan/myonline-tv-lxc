@@ -1,3 +1,14 @@
+## v40.8.1 – Instant Seek Release Gate Fix
+- Harden Continuous VOD regression tests to validate handover capabilities rather than exact comment text.
+- No playback behavior rollback.
+
+# v40.8.0 - Instant Seek
+
+- Buffered seeks are immediate.
+- Debounced/cancellable background seek for unbuffered positions.
+- Current frame remains visible until atomic session handover.
+- Timeline remains interactive while seeking.
+
 # v40.7.0 - Playback Reliability
 
 - Adds a central VOD playback reliability state machine.

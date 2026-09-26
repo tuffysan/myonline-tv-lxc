@@ -1223,15 +1223,21 @@ function ensureMediaPlayerHost(){
 // v40.2.1 — Playback Resilience & Resume Fix
 const PLAYBACK_RESILIENCE_VERSION='40.7.0';
 const STREAMING_ENGINE_VERSION='40.7.0';
-const VOD_SEEK_ENGINE_VERSION='40.7.0';
+const VOD_SEEK_ENGINE_VERSION='40.8.0';
 const UNIFIED_VIDEO_PLAYER_VERSION='40.7.0';
-const CONTINUOUS_VOD_ENGINE_VERSION='40.7.0';
-const SMART_VOD_BUFFER_VERSION='40.7.0';
+const CONTINUOUS_VOD_ENGINE_VERSION='40.8.0';
+const SMART_VOD_BUFFER_VERSION='40.8.0';
 const VOD_STARTUP_SEGMENTS=3;
 const VOD_SEEK_SEGMENTS=4;
 
+// v40.8.0 — Instant Seek
+const INSTANT_SEEK_VERSION='40.8.1';
+const SEEK_DEBOUNCE_MS=220;
+const SEEK_READY_TIMEOUT_MS=30000;
+let vodSeekGeneration=0;
+
 // v40.7.0 — Playback Reliability
-const PLAYBACK_RELIABILITY_VERSION='40.7.0';
+const PLAYBACK_RELIABILITY_VERSION='40.8.0';
 const PLAYBACK_STATES=Object.freeze({IDLE:'Idle',PREPARING:'Preparing',BUFFERING:'Buffering',PLAYING:'Playing',SEEKING:'Seeking',RECOVERING:'Recovering',PAUSED:'Paused',ENDED:'Ended',ERROR:'Error'});
 const playbackReliabilitySessions=new WeakMap();
 window.myOnlineTvPlaybackDiagnostics=()=>{
@@ -1490,45 +1496,59 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
     if(seekBar&&mediaDurationSeconds>0){
       seekBar.max=String(Math.floor(mediaDurationSeconds));
       seekBar.value=String(Math.floor(initialResume));
-      seekBar.addEventListener('input',()=>{const c=$('#mediaCurrentTime');if(c)c.textContent=formatMediaTime(Number(seekBar.value)||0)});
-      seekBar.addEventListener('change',async()=>{
-        const target=Math.max(0,Math.min(Number(seekBar.value)||0,Math.max(0,mediaDurationSeconds-1)));
-        savePlaybackPosition?.(true);
-        const oldSession=activeMediaSession;
-        const st=$('#mediaPlaybackStatus');
-        seekBar.disabled=true;
-        if(st)st.textContent='Seeking…';
-        try{
-          // Prepare the replacement stream while the current frame remains visible.
-          const q=new URLSearchParams({transcode:'true',startSeconds:String(target)});
-          const replacement=await api('/api/media/start/'+encodeURIComponent(token)+'?'+q.toString(),{method:'POST'});
-          let replacementState=null;
-          const seekDeadline=Date.now()+30000;
-          while(Date.now()<seekDeadline){
-            replacementState=await api(vodStatusUrl(replacement.statusUrl||('/api/live/status/'+encodeURIComponent(replacement.sessionId)),VOD_SEEK_SEGMENTS));
-            if(replacementState.status==='ready')break;
-            if(replacementState.status==='failed')throw new Error(replacementState.error||'Seek stream failed.');
-            await new Promise(r=>setTimeout(r,250));
+      let seekTimer=0;
+      const requestInstantSeek=(target)=>{
+        clearTimeout(seekTimer);
+        const generation=++vodSeekGeneration;
+        seekTimer=setTimeout(async()=>{
+          if(generation!==vodSeekGeneration)return;
+          target=Math.max(0,Math.min(Number(target)||0,Math.max(0,mediaDurationSeconds-1)));
+          const st=$('#mediaPlaybackStatus');
+          const absoluteNow=(Number(video.dataset.timelineOffset)||0)+(Number(video.currentTime)||0);
+          // Instant path: seeking inside the browser's current buffered timeline never restarts FFmpeg.
+          try{
+            const relativeTarget=target-(Number(video.dataset.timelineOffset)||0);
+            for(let i=0;i<video.buffered.length;i++){
+              if(relativeTarget>=video.buffered.start(i)&&relativeTarget<=video.buffered.end(i)){
+                video.currentTime=relativeTarget;
+                if(st){st.textContent='Playing';st.className='livePlaybackStatus ready'}
+                return;
+              }
+            }
+          }catch{}
+          savePlaybackPosition?.(true);
+          const oldSession=activeMediaSession;
+          if(st)st.textContent='Seeking…';
+          try{
+            // Prepare replacement in the background. Keep the current frame/session visible until ready.
+            const q=new URLSearchParams({transcode:'true',startSeconds:String(target)});
+            const replacement=await api('/api/media/start/'+encodeURIComponent(token)+'?'+q.toString(),{method:'POST'});
+            if(generation!==vodSeekGeneration){fetch('/api/live/session/'+encodeURIComponent(replacement.sessionId),{method:'DELETE',keepalive:true}).catch(()=>{});return}
+            let replacementState=null;
+            const seekDeadline=Date.now()+SEEK_READY_TIMEOUT_MS;
+            while(Date.now()<seekDeadline&&generation===vodSeekGeneration){
+              replacementState=await api(vodStatusUrl(replacement.statusUrl||('/api/live/status/'+encodeURIComponent(replacement.sessionId)),VOD_SEEK_SEGMENTS));
+              if(replacementState.status==='ready')break;
+              if(replacementState.status==='failed')throw new Error(replacementState.error||'Seek stream failed.');
+              await new Promise(r=>setTimeout(r,180));
+            }
+            if(generation!==vodSeekGeneration){fetch('/api/live/session/'+encodeURIComponent(replacement.sessionId),{method:'DELETE',keepalive:true}).catch(()=>{});return}
+            if(!replacementState||replacementState.status!=='ready')throw new Error('Seek timed out.');
+            const nextUrl=replacementState.playbackUrl||replacement.playbackUrl;
+            activeMediaSession=replacement.sessionId;activeLiveSession=replacement.sessionId;
+            video.dataset.timelineOffset=String(Number(replacement.startSeconds??replacementState.startSeconds??target)||target);
+            if(hls){hls.stopLoad();hls.loadSource(nextUrl);hls.startLoad(-1)}else{video.src=nextUrl;video.load()}
+            await video.play().catch(()=>{});
+            if(oldSession&&oldSession!==replacement.sessionId)fetch('/api/live/session/'+encodeURIComponent(oldSession),{method:'DELETE',keepalive:true}).catch(()=>{});
+            if(st){st.textContent='Playing';st.className='livePlaybackStatus ready'}
+          }catch(e){
+            if(generation===vodSeekGeneration&&st){st.textContent='Seek failed · continuing current playback';st.className='livePlaybackStatus error'}
+            if(Math.abs(absoluteNow-target)>1)await video.play().catch(()=>{});
           }
-          if(!replacementState||replacementState.status!=='ready')throw new Error('Seek timed out.');
-          const nextUrl=replacementState.playbackUrl||replacement.playbackUrl;
-          activeMediaSession=replacement.sessionId;activeLiveSession=replacement.sessionId;
-          video.dataset.timelineOffset=String(Number(replacement.startSeconds??replacementState.startSeconds??target)||target);
-          if(hls){
-            hls.stopLoad();
-            hls.loadSource(nextUrl);
-            hls.startLoad(-1);
-          }else{
-            video.src=nextUrl;video.load();
-          }
-          await video.play().catch(()=>{});
-          if(oldSession&&oldSession!==replacement.sessionId)fetch('/api/live/session/'+encodeURIComponent(oldSession),{method:'DELETE',keepalive:true}).catch(()=>{});
-          if(st){st.textContent='Playing';st.className='livePlaybackStatus ready'}
-        }catch(e){
-          if(st){st.textContent='Seek failed · continuing current playback';st.className='livePlaybackStatus error'}
-          await video.play().catch(()=>{});
-        }finally{seekBar.disabled=false}
-      });
+        },SEEK_DEBOUNCE_MS);
+      };
+      seekBar.addEventListener('input',()=>{const target=Number(seekBar.value)||0,c=$('#mediaCurrentTime');if(c)c.textContent=formatMediaTime(target);requestInstantSeek(target)});
+      seekBar.addEventListener('change',()=>requestInstantSeek(Number(seekBar.value)||0));
     }
 
     const requestedResume=initialResume;
