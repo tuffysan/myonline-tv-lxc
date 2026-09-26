@@ -1218,7 +1218,8 @@ function ensureMediaPlayerHost(){
 }
 
 // v40.2.1 — Playback Resilience & Resume Fix
-const PLAYBACK_RESILIENCE_VERSION='40.2.1';
+const PLAYBACK_RESILIENCE_VERSION='40.3.0';
+const STREAMING_ENGINE_VERSION='40.3.0';
 function safeMediaPosition(video){
   const n=Number(video?.currentTime);return Number.isFinite(n)&&n>0?n:0;
 }
@@ -1266,20 +1267,50 @@ function installResilientContinueTracking(video,{mediaId,name,url='',poster='',d
 function installVodRecovery(video,getHls,savePosition){
   if(!video||video.dataset.vodRecoveryInstalled)return;
   video.dataset.vodRecoveryInstalled='1';
-  let recovering=false,lastRecovery=0;
+  let stallTimer=null,lastBufferedEnd=0,recoveryStage=0;
   const status=text=>{const el=$('#mediaPlaybackStatus');if(el&&!el.classList.contains('error'))el.textContent=text};
-  const recover=async()=>{
-    if(recovering||video.ended||video.paused||Date.now()-lastRecovery<4000)return;
-    recovering=true;lastRecovery=Date.now();savePosition?.(true);status('Buffering…');
-    try{
-      const instance=getHls?.();
-      if(instance){try{instance.startLoad(-1)}catch{};try{instance.recoverMediaError()}catch{}}
-      await video.play().catch(()=>{});
-    }finally{setTimeout(()=>{recovering=false},1200)}
+  const bufferedEnd=()=>{try{const b=video.buffered;return b&&b.length?b.end(b.length-1):0}catch{return 0}};
+  const clear=()=>{if(stallTimer){clearTimeout(stallTimer);stallTimer=null}recoveryStage=0;status('Playing')};
+  const arm=()=>{
+    if(video.ended||video.paused||stallTimer)return;
+    savePosition?.(true);status('Buffering…');lastBufferedEnd=bufferedEnd();
+    // Browser/HLS gets time to fill its buffer. Do not restart on ordinary waiting events.
+    stallTimer=setTimeout(async()=>{
+      stallTimer=null;if(video.ended||video.paused)return;
+      const now=bufferedEnd();
+      if(now>lastBufferedEnd+.5){status('Buffering…');arm();return}
+      const instance=getHls?.();recoveryStage++;
+      try{
+        if(instance&&recoveryStage===1){status('Buffering · reconnecting…');instance.startLoad(-1);return arm()}
+        if(instance&&recoveryStage===2){status('Buffering · recovering media…');instance.recoverMediaError();return arm()}
+        status('Stream stalled · retrying playback…');await video.play().catch(()=>{});
+      }catch{}
+    },12000);
   };
-  video.addEventListener('waiting',recover);
-  video.addEventListener('stalled',recover);
-  video.addEventListener('playing',()=>status('Playing'));
+  video.addEventListener('waiting',arm);
+  video.addEventListener('stalled',arm);
+  video.addEventListener('playing',clear);
+  video.addEventListener('canplay',()=>{if(bufferedEnd()>safeMediaPosition(video)+2)clear()});
+}
+
+async function tryDirectVodPlayback(token,name,mediaId,poster,requestedResume){
+  let caps=null;try{caps=await api('/api/media/capabilities/'+encodeURIComponent(token))}catch{return false}
+  if(!caps?.direct||!caps?.directUrl)return false;
+  const video=$('#video');if(!video)return false;
+  const st=$('#mediaPlaybackStatus');if(st)st.textContent='Direct play · preparing timeline…';
+  video.preload='auto';video.src=caps.directUrl;
+  installMediaDurationDisplay(video,0);applyPendingResume(video,requestedResume);
+  const save=installResilientContinueTracking(video,{mediaId,name,url:caps.directUrl,poster});
+  installVodRecovery(video,()=>null,save);
+  return await new Promise(resolve=>{
+    let settled=false;
+    const ok=()=>{if(settled)return;settled=true;cleanup();if(st){st.textContent='Direct play';st.className='livePlaybackStatus ready'}video.play().catch(()=>{});resolve(true)};
+    const bad=()=>{if(settled)return;settled=true;cleanup();video.removeAttribute('src');video.load();resolve(false)};
+    const cleanup=()=>{clearTimeout(timer);video.removeEventListener('loadedmetadata',ok);video.removeEventListener('error',bad)};
+    const timer=setTimeout(()=>{if(video.readyState>=1)ok();else bad()},8000);
+    video.addEventListener('loadedmetadata',ok,{once:true});video.addEventListener('error',bad,{once:true});
+    video.load();
+  });
 }
 
 async function playServerMedia(token,name,mediaId=null,forceTranscode=false,poster=''){
@@ -1288,6 +1319,12 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
   const wrap=ensureMediaPlayerHost();
   wrap.innerHTML=`<div class=playerCard><video id=video controls autoplay playsinline></video><div class=mediaTimeBar><span id=mediaCurrentTime>00:00</span><span>/</span><span id=mediaTotalTime>--:--</span></div><div id=mediaPlaybackStatus class=livePlaybackStatus>Preparing video…</div><div class=nowPlaying>${esc(name)}</div></div>`;
   wrap.scrollIntoView({behavior:'smooth',block:'start'});
+
+  const initialResume=Math.max(0,Number(pendingResumeSeconds)||0);
+  pendingResumeSeconds=0;
+  if(!forceTranscode){
+    try{if(await tryDirectVodPlayback(token,name,mediaId,poster,initialResume))return}catch(e){console.warn('Direct VOD fallback to HLS',e)}
+  }
 
   try{
     const info=await api('/api/media/start/'+encodeURIComponent(token)+(forceTranscode?'?transcode=true':''),{method:'POST'});
@@ -1310,8 +1347,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
     const mediaDurationSeconds=Number(state.durationSeconds||info.durationSeconds)||0;
     installMediaDurationDisplay(video,mediaDurationSeconds);
 
-    const requestedResume=Math.max(0,Number(pendingResumeSeconds)||0);
-    pendingResumeSeconds=0;
+    const requestedResume=initialResume;
     applyPendingResume(video,requestedResume);
     let savePlaybackPosition=()=>{};
     const installResumeTracking=()=>{
@@ -1339,7 +1375,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
     });
 
     if(window.Hls&&Hls.isSupported()){
-      hls=new Hls({enableWorker:true,backBufferLength:60});
+      hls=new Hls({enableWorker:true,lowLatencyMode:false,backBufferLength:60,maxBufferLength:90,maxMaxBufferLength:180,maxBufferHole:0.5});
       hls.loadSource(playbackUrl);hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED,()=>{installResumeTracking();video.play().catch(()=>{})});
       hls.on(Hls.Events.ERROR,async(_,d)=>{

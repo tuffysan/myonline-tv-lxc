@@ -61,8 +61,12 @@ internal static class Program
         T.Assert(mobileJs.Contains("collectionProgressText") && mobileJs.Contains("% watched"),"collection progress");T.Pass("collection progress");
         Has(mobileJs,"openContinueActions(item.id,actions)","collection actions");
 
+        // v40.3.0 Streaming Engine 2.0.
+        foreach(var x in new[]{"STREAMING_ENGINE_VERSION='40.3.0'","tryDirectVodPlayback","/api/media/capabilities/","Direct play · preparing timeline…","maxBufferLength:90","maxMaxBufferLength:180","setTimeout(async()=>"}) Has(appJs,x,"Streaming Engine 2.0: "+x);
+        foreach(var x in new[]{"/api/media/capabilities/{token}","streaming-engine-2.0","directUrl","range = true"}) Has(programCs,x,"Streaming Engine 2.0 server: "+x);
+
         // v40.2.1 Playback Resilience & Resume Fix.
-        foreach(var x in new[]{"PLAYBACK_RESILIENCE_VERSION='40.2.1'","installResilientContinueTracking","applyPendingResume","installVodRecovery","Buffering · reconnecting…","Hls.ErrorTypes.NETWORK_ERROR","Hls.ErrorTypes.MEDIA_ERROR","pendingResumeSeconds=safeMediaPosition(video)||requestedResume"}) Has(appJs,x,"Playback resilience: "+x);
+        foreach(var x in new[]{"PLAYBACK_RESILIENCE_VERSION='40.3.0'","installResilientContinueTracking","applyPendingResume","installVodRecovery","Buffering · reconnecting…","Hls.ErrorTypes.NETWORK_ERROR","Hls.ErrorTypes.MEDIA_ERROR","pendingResumeSeconds=safeMediaPosition(video)||requestedResume"}) Has(appJs,x,"Playback resilience: "+x);
         T.Assert(appJs.Contains("['pause','waiting','stalled','seeking','seeked','error']"),"Resume position persists on interruption events");T.Pass("Resume position persists on interruption events");
         T.Assert(appJs.Contains("window.addEventListener('pagehide',pageSave"),"Resume position persists on page exit");T.Pass("Resume position persists on page exit");
 

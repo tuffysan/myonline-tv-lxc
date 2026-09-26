@@ -3361,6 +3361,26 @@ app.MapGet("/api/proxy/{token}", async (string token, HttpContext ctx) =>
 
 
 
+// v40.3.0 - Streaming Engine 2.0. Prefer native browser byte-range playback for
+// browser-compatible VOD containers. This preserves provider Content-Length/Content-Range,
+// lets the browser build a real seekable timeline, and avoids unnecessary FFmpeg/HLS latency.
+app.MapGet("/api/media/capabilities/{token}", (string token) =>
+{
+    if (!proxyTokens.TryGetValue(token, out var target) || target.Kind != "media") return Results.NotFound();
+    if (!Uri.TryCreate(target.Url, UriKind.Absolute, out var uri)) return Results.BadRequest();
+    var ext = Path.GetExtension(uri.AbsolutePath).TrimStart('.').ToLowerInvariant();
+    var direct = ext is "mp4" or "m4v" or "webm" or "mov";
+    return Results.Ok(new
+    {
+        engine = "streaming-engine-2.0",
+        direct,
+        extension = ext,
+        directUrl = direct ? $"/api/proxy/{token}" : null,
+        fallback = "hls",
+        range = true
+    });
+}).RequireAuthorization();
+
 // Browser-compatible Movies / Series playback.
 // Raw provider files can be MKV/TS/HEVC/AC3 and are not reliably playable by HTML5 video.
 // Convert/remux them server-side to HLS, with an optional H.264/AAC compatibility transcode.

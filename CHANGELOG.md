@@ -1,3 +1,14 @@
+# v40.3.0 – Streaming Engine 2.0
+
+- Direct byte-range playback for browser-compatible VOD (MP4/M4V/WebM/MOV).
+- Preserves HTTP 206, Content-Range and Content-Length through the media proxy.
+- Browser-native duration/seek timeline for direct VOD.
+- HLS retained as compatibility fallback for MKV/TS/unsupported codecs.
+- VOD HLS buffer increased and low-latency mode disabled.
+- Waiting/stalled no longer triggers immediate recovery; 12-second progressive recovery gate added.
+- Resume tracking remains independent from buffering/recovery.
+- Streaming Engine 2.0 capability endpoint added.
+
 # v40.2.1 — Playback Resilience & Resume Fix
 
 - Saves VOD resume position every few seconds and on pause, buffering, stalls, seeks, errors, page hide and page exit.
