@@ -1317,7 +1317,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
   if(!forceTranscode)mediaFallbackTried=false;
   destroyPlayer();
   const wrap=ensureMediaPlayerHost();
-  wrap.innerHTML=`<div class="playerCard mediaPlayerCard"><video id=video class=mediaPlayerVideo controls autoplay playsinline></video><div class=mediaTimeBar><span id=mediaCurrentTime>00:00</span><span>/</span><span id=mediaTotalTime>--:--</span></div><div id=mediaPlaybackStatus class=livePlaybackStatus>Preparing video…</div><div class=nowPlaying>${esc(name)}</div></div>`;
+  wrap.innerHTML=`<div class="playerCard mediaPlayerCard"><div class=mediaPlayerStage><video id=video class=mediaPlayerVideo controls autoplay playsinline></video></div><div class=mediaTimeBar><span id=mediaCurrentTime>00:00</span><span>/</span><span id=mediaTotalTime>--:--</span></div><div id=mediaPlaybackStatus class=livePlaybackStatus>Preparing video…</div><div class=nowPlaying>${esc(name)}</div></div>`;
   wrap.scrollIntoView({behavior:'smooth',block:'start'});
 
   const initialResume=Math.max(0,Number(pendingResumeSeconds)||0);
@@ -1413,7 +1413,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
 function playMedia(url,name,mediaId=null){
   destroyPlayer();
   const wrap=ensureMediaPlayerHost();
-  wrap.innerHTML=`<div class="playerCard mediaPlayerCard"><video id=video class=mediaPlayerVideo controls autoplay playsinline></video><div class=mediaTimeBar><span id=mediaCurrentTime>00:00</span><span>/</span><span id=mediaTotalTime>--:--</span></div><div class=nowPlaying>${esc(name)}</div></div>`;
+  wrap.innerHTML=`<div class="playerCard mediaPlayerCard"><div class=mediaPlayerStage><video id=video class=mediaPlayerVideo controls autoplay playsinline></video></div><div class=mediaTimeBar><span id=mediaCurrentTime>00:00</span><span>/</span><span id=mediaTotalTime>--:--</span></div><div class=nowPlaying>${esc(name)}</div></div>`;
   const video=$('#video');
   installMediaDurationDisplay(video,0);
   const requestedResume=Math.max(0,Number(pendingResumeSeconds)||0);

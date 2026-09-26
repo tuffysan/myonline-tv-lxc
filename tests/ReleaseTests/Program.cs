@@ -68,9 +68,10 @@ internal static class Program
         T.Assert(mobileJs.Contains("collectionProgressText") && mobileJs.Contains("% watched"),"collection progress");T.Pass("collection progress");
         Has(mobileJs,"openContinueActions(item.id,actions)","collection actions");
 
-        // v40.3.1 Player Layout Fix.
-        foreach(var x in new[]{"mediaPlayerCard","mediaPlayerVideo"}) Has(appJs,x,"Player layout markup: "+x);
-        foreach(var x in new[]{".mediaPlayerCard .mediaPlayerVideo","aspect-ratio:16/9","object-fit:contain!important","object-position:center center!important",".mediaPlayerCard:fullscreen .mediaPlayerVideo"}) Has(stylesCss,x,"Player layout CSS: "+x);
+        // v40.3.2 Inline Player Stage Fix.
+        foreach(var x in new[]{"mediaPlayerCard","mediaPlayerStage","mediaPlayerVideo"}) Has(appJs,x,"Player stage markup: "+x);
+        foreach(var x in new[]{".mediaPlayerCard .mediaPlayerStage","position:relative","aspect-ratio:16/9",".mediaPlayerStage>.mediaPlayerVideo","position:absolute!important","inset:0!important","width:100%!important","height:100%!important","max-width:none!important","max-height:none!important","object-fit:contain!important","object-position:50% 50%!important",".mediaPlayerCard:fullscreen .mediaPlayerStage"}) Has(stylesCss,x,"Player stage CSS: "+x);
+        T.Assert(appJs.Split("mediaPlayerStage").Length-1 >= 2,"Both VOD player creation paths use the stage wrapper");T.Pass("Both VOD player creation paths use the stage wrapper");
 
         // v40.3.0 Streaming Engine 2.0.
         foreach(var x in new[]{"STREAMING_ENGINE_VERSION='40.3.0'","tryDirectVodPlayback","/api/media/capabilities/","Direct play · preparing timeline…","maxBufferLength:90","maxMaxBufferLength:180","setTimeout(async()=>"}) Has(appJs,x,"Streaming Engine 2.0: "+x);

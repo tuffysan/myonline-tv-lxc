@@ -2089,3 +2089,15 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
 .mediaPlayerCard:fullscreen{display:flex;flex-direction:column;justify-content:center;background:#000}
 .mediaPlayerCard:fullscreen .mediaPlayerVideo{width:100%!important;height:100%!important;max-height:100vh!important;aspect-ratio:auto;object-fit:contain!important;object-position:center center!important}
 @media(max-width:719px){.mediaPlayerCard{padding:0;border-radius:0}.mediaPlayerCard .mediaPlayerVideo{max-height:62dvh;border-radius:0}}
+
+
+/* v40.3.2 - Inline Player Stage Fix.
+   The stage owns the 16:9 geometry; the video fills that stage. This avoids
+   replaced-element intrinsic sizing leaving the decoded picture on one side. */
+.mediaPlayerCard{width:100%;min-width:0;overflow:hidden}
+.mediaPlayerCard .mediaPlayerStage{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:#000;border-radius:12px}
+.mediaPlayerCard .mediaPlayerStage>.mediaPlayerVideo{position:absolute!important;inset:0!important;display:block!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;margin:0!important;aspect-ratio:auto!important;object-fit:contain!important;object-position:50% 50%!important;background:#000}
+.mediaPlayerCard:fullscreen{width:100vw!important;height:100vh!important;padding:0!important;border:0!important;border-radius:0!important;display:flex!important;flex-direction:column!important;justify-content:center!important;background:#000}
+.mediaPlayerCard:fullscreen .mediaPlayerStage{width:100%!important;height:100%!important;aspect-ratio:auto!important;border-radius:0!important}
+.mediaPlayerCard:fullscreen .mediaPlayerStage>.mediaPlayerVideo{width:100%!important;height:100%!important;object-fit:contain!important}
+@media(max-width:719px){.mediaPlayerCard .mediaPlayerStage{border-radius:0}}
