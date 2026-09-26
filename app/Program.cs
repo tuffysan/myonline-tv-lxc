@@ -3638,7 +3638,12 @@ app.MapGet("/api/live/status/{sessionId}", async (string sessionId, int? minSegm
             playbackUrl = $"/api/live/hls/{sessionId}/index.m3u8",
             durationSeconds = session.DurationSeconds,
             bufferedSegments = segmentCount,
-            bufferedSeconds = segmentCount * 2
+            bufferedSeconds = segmentCount * 2,
+            processRunning = !session.Process.HasExited,
+            newestSegmentAgeMs = Directory.EnumerateFiles(session.Directory, "*.ts")
+                .Select(x => DateTimeOffset.UtcNow - File.GetLastWriteTimeUtc(x))
+                .Select(x => Math.Max(0L, (long)x.TotalMilliseconds))
+                .DefaultIfEmpty(-1L).Min()
         });
 
     if (session.Process.HasExited)
@@ -3673,7 +3678,7 @@ app.MapGet("/api/live/status/{sessionId}", async (string sessionId, int? minSegm
     return Results.Ok(new { sessionId, status = "starting", durationSeconds = session.DurationSeconds });
 }).RequireAuthorization();
 
-app.MapGet("/api/live/hls/{sessionId}/{fileName}", (string sessionId, string fileName) =>
+app.MapGet("/api/live/hls/{sessionId}/{fileName}", (string sessionId, string fileName, HttpContext ctx) =>
 {
     if (!liveSessions.TryGetValue(sessionId, out var session)) return Results.NotFound();
     if (string.IsNullOrWhiteSpace(fileName) || fileName.Contains("..", StringComparison.Ordinal) ||
@@ -3681,8 +3686,23 @@ app.MapGet("/api/live/hls/{sessionId}/{fileName}", (string sessionId, string fil
 
     var path = Path.Combine(session.Directory, fileName);
     if (!File.Exists(path)) return Results.NotFound();
-    var contentType = fileName.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase)
-        ? "application/vnd.apple.mpegurl" : "video/mp2t";
+    var isManifest = fileName.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase);
+    if (isManifest)
+    {
+        // v41.0.13: an HLS media playlist is a live view of FFmpeg output while VOD is
+        // being prepared. Never let the browser/proxy cache the startup playlist, or
+        // playback can stop after the first few 2-second segments even though FFmpeg
+        // continues producing data.
+        ctx.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate, max-age=0";
+        ctx.Response.Headers.Pragma = "no-cache";
+        ctx.Response.Headers.Expires = "0";
+    }
+    else
+    {
+        // Segment files never change after publication and may be cached briefly.
+        ctx.Response.Headers.CacheControl = "private, max-age=300, immutable";
+    }
+    var contentType = isManifest ? "application/vnd.apple.mpegurl" : "video/mp2t";
     return Results.File(path, contentType, enableRangeProcessing: true);
 }).RequireAuthorization();
 

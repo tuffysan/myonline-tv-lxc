@@ -88,8 +88,13 @@ internal static class Program
         T.Assert(!appJs.Contains("status.textContent=ahead<3?'Buffering · replenishing…':'Playing · building buffer…'"),"current buffer telemetry does not fake playback state"); T.Pass("current buffer telemetry does not fake playback state");
 
         // v40.6.1 Smart VOD Buffering.
-        foreach(var x in new[]{"SMART_VOD_BUFFER_VERSION=","VOD_STARTUP_SEGMENTS=1","VOD_SEEK_SEGMENTS=1","VOD_BUFFER_FLOOR_SECONDS=15","VOD_BUFFER_TARGET_SECONDS=60","vodStatusUrl","bufferedAheadSeconds","installVodBufferMonitor","startFragPrefetch:true","maxMaxBufferLength:240"}) Has(appJs,x,"Smart VOD Buffer: "+x);
+        foreach(var x in new[]{"SMART_VOD_BUFFER_VERSION=","VOD_STARTUP_SEGMENTS=6","VOD_SEEK_SEGMENTS=3","VOD_BUFFER_FLOOR_SECONDS=15","VOD_BUFFER_TARGET_SECONDS=60","vodStatusUrl","bufferedAheadSeconds","installVodBufferMonitor","startFragPrefetch:true","maxMaxBufferLength:240"}) Has(appJs,x,"Smart VOD Buffer: "+x);
         foreach(var x in new[]{"int? minSegments","requiredSegments","bufferedSegments = segmentCount","bufferedSeconds = segmentCount * 2","-hls_time", "\"2\""}) Has(programCs,x,"Smart VOD server buffer: "+x);
+
+
+        // v41.0.13 VOD streaming pipeline: growing HLS manifests must never be cached.
+        foreach(var x in new[]{"VOD_STREAMING_PIPELINE_VERSION='41.0.13'","VOD_STARTUP_SEGMENTS=6","VOD_SEEK_SEGMENTS=3","maxBufferLength:90","fragLoadingTimeOut:20000"}) Has(appJs,x,"v41.0.13 VOD pipeline: "+x);
+        foreach(var x in new[]{"no-store, no-cache, must-revalidate, max-age=0","Pragma = \"no-cache\"","processRunning = !session.Process.HasExited","newestSegmentAgeMs"}) Has(programCs,x,"v41.0.13 HLS delivery: "+x);
 
         // v41.0.12 CURRENT PLAYBACK CONTRACT.
         // Historical playback implementation strings from v40.x/v41.0.x must not gate current releases.

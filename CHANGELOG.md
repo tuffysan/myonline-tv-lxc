@@ -1,3 +1,12 @@
+## v41.0.13 — VOD Streaming Pipeline Fix
+
+- Prevents the growing HLS VOD playlist from being cached while FFmpeg is still producing segments.
+- Requires a 12-second startup cushion (6 x 2-second segments) before playback begins.
+- Uses 3 segments for seek replacement readiness instead of switching after a single segment.
+- Raises the client VOD forward-buffer target and fragment timeout.
+- Adds VOD pipeline diagnostics for FFmpeg process state and newest segment age.
+- Keeps the v41.0.12 consolidated player layout unchanged.
+
 ## v41.0.12 — Player Layout Consolidation
 - Release gate consolidation: replaced stale v41.0.4 comment-string assertions with current VOD buffering/recovery behavior invariants.
 - Historical implementation wording no longer blocks later playback implementations when the required behavior remains present.

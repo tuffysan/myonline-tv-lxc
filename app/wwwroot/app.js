@@ -1268,10 +1268,13 @@ const VOD_SEEK_ENGINE_VERSION='40.8.0';
 const UNIFIED_VIDEO_PLAYER_VERSION='40.7.0';
 const CONTINUOUS_VOD_ENGINE_VERSION='40.8.0';
 const SMART_VOD_BUFFER_VERSION='40.9.0';
-const VOD_STARTUP_SEGMENTS=1;
+// v41.0.13 — VOD Streaming Pipeline Fix. Start with a real cushion; the HLS manifest is
+// served no-cache by the backend so hls.js always sees newly produced segments.
+const VOD_STREAMING_PIPELINE_VERSION='41.0.13';
+const VOD_STARTUP_SEGMENTS=6;
 const VOD_BUFFER_FLOOR_SECONDS=15;
 const VOD_BUFFER_TARGET_SECONDS=60;
-const VOD_SEEK_SEGMENTS=1;
+const VOD_SEEK_SEGMENTS=3;
 
 // v40.9.0 — Adaptive Buffer Engine
 const ADAPTIVE_BUFFER_VERSION='40.9.0';
@@ -1762,7 +1765,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
     });
 
     if(window.Hls&&Hls.isSupported()){
-      hls=new Hls({enableWorker:true,lowLatencyMode:false,backBufferLength:120,maxBufferLength:VOD_BUFFER_TARGET_SECONDS,maxMaxBufferLength:240,maxBufferSize:160*1000*1000,maxBufferHole:0.8,startFragPrefetch:true,fragLoadingTimeOut:12000,fragLoadingMaxRetry:10,fragLoadingRetryDelay:500,fragLoadingMaxRetryTimeout:8000,manifestLoadingTimeOut:10000,manifestLoadingMaxRetry:8,levelLoadingMaxRetry:8});
+      hls=new Hls({enableWorker:true,lowLatencyMode:false,backBufferLength:120,maxBufferLength:90,maxMaxBufferLength:240,maxBufferSize:192*1000*1000,maxBufferHole:0.8,startFragPrefetch:true,fragLoadingTimeOut:20000,fragLoadingMaxRetry:12,fragLoadingRetryDelay:500,fragLoadingMaxRetryTimeout:8000,manifestLoadingTimeOut:10000,manifestLoadingMaxRetry:8,levelLoadingMaxRetry:8});
       hls.loadSource(playbackUrl);hls.attachMedia(video);
       installAdaptiveVodBuffer(video,hls);
       hls.on(Hls.Events.MANIFEST_PARSED,()=>{installResumeTracking();video.play().catch(()=>{})});
