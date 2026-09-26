@@ -1244,7 +1244,7 @@ function installMediaDurationDisplay(video,totalSeconds){
 
 function ensureMediaPlayerHost(){
   let wrap=$('#playerWrap')||$('#mediaPlayer');
-  if(wrap)return wrap;
+  if(wrap){wrap.classList.add('dynamicMediaPlayer');return wrap;}
   // Home surfaces (notably the desktop v36+ layout) historically rendered
   // Continue Watching/Favourites without a player host. A click then resolved
   // a valid token but playServerMedia returned silently. Always provide a
@@ -1597,7 +1597,7 @@ function installResumeStartOverChoice({token,name,mediaId,poster,resumeSeconds})
   const seconds=Math.floor(Number(resumeSeconds)||0);
   if(!host||seconds<30)return;
   host.hidden=false;
-  host.innerHTML=`<span>Resume from <b>${formatMediaTime(seconds)}</b>?</span><button class="btn primaryBtn" id=resumePlaybackChoice>Resume</button><button class=btn id=startOverPlaybackChoice>Start over</button>`;
+  host.innerHTML=`<div class="mediaResumeCard" role="dialog" aria-modal="true" aria-label="Continue watching"><strong>Continue watching</strong><span>Resume from <b>${formatMediaTime(seconds)}</b></span><div class="mediaResumeActions"><button class="btn primaryBtn" id=resumePlaybackChoice>Resume</button><button class=btn id=startOverPlaybackChoice>Start over</button></div></div>`;
   $('#resumePlaybackChoice').onclick=()=>{host.hidden=true};
   $('#startOverPlaybackChoice').onclick=async()=>{host.hidden=true;pendingResumeSeconds=0;await playServerMedia(token,name,mediaId,false,poster,0)};
 }

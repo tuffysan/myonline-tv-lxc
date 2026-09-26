@@ -1,3 +1,10 @@
+## v41.0.7 – Continue Watching Release Gate Fix
+- Updated the contained VOD layout regression test to validate the v41.0.6 centered player contract.
+- No runtime playback behavior changed.
+
+## v41.0.6 — Continue Watching UX Fix
+- Centered Continue Watching overlay and corrected reused player host alignment.
+
 ## v41.0.5 — Fullscreen Controls Auto-Hide Fix
 - Fixed fullscreen controls remaining permanently visible due to player focus.
 - Added 3-second inactivity auto-hide and fullscreen cursor hiding.

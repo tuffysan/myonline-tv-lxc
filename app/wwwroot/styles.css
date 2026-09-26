@@ -2148,16 +2148,18 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
 @media(max-width:719px){.unifiedVideoPlayer .mediaVolume{display:none}.unifiedVideoPlayer .mediaPlaybackRate{max-width:58px;padding:0 4px}.unifiedVideoPlayer .mediaControlRow{gap:5px}.unifiedVideoPlayer .mediaSkipButton{display:none}}
 
 
-/* v40.11.0 — Movies & Series UX */
-.unifiedVideoPlayer .mediaResumeChoice{position:absolute;z-index:8;left:50%;top:18%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid rgba(255,255,255,.22);border-radius:12px;background:rgba(8,10,14,.86);backdrop-filter:blur(10px);color:#fff;box-shadow:0 12px 34px rgba(0,0,0,.35)}
-.unifiedVideoPlayer .mediaResumeChoice[hidden]{display:none!important}.unifiedVideoPlayer .mediaResumeChoice span{white-space:nowrap}.unifiedVideoPlayer .mediaResumeChoice .btn{margin:0}
+/* v40.11.0 — Movies & Series UX; v41.0.6 Continue Watching UX */
+.unifiedVideoPlayer .mediaResumeChoice{position:absolute;z-index:8;inset:0;display:grid;place-items:center;padding:24px;box-sizing:border-box;background:rgba(0,0,0,.38);backdrop-filter:blur(2px);color:#fff}
+.unifiedVideoPlayer .mediaResumeChoice[hidden]{display:none!important}
+.unifiedVideoPlayer .mediaResumeCard{display:grid;gap:10px;width:min(420px,calc(100% - 32px));padding:20px 22px;border:1px solid rgba(255,255,255,.22);border-radius:16px;background:rgba(8,10,14,.94);backdrop-filter:blur(14px);box-shadow:0 18px 50px rgba(0,0,0,.48);text-align:center}
+.unifiedVideoPlayer .mediaResumeCard strong{font-size:1.18rem}.unifiedVideoPlayer .mediaResumeCard span{opacity:.88}.unifiedVideoPlayer .mediaResumeActions{display:flex;justify-content:center;gap:10px;margin-top:4px}.unifiedVideoPlayer .mediaResumeActions .btn{margin:0;min-width:112px}
 .nextEpisodeBar.nextEpisodeCountdown{gap:18px}.nextEpisodeCountdown>span{display:grid;gap:2px}.nextEpisodeCountdown small{letter-spacing:.12em;opacity:.7}.nextEpisodeCountdown em{font-style:normal;opacity:.75;font-size:.85rem}.nextEpisodeCountdown>div{display:flex;gap:8px}
-@media(max-width:719px){.unifiedVideoPlayer .mediaResumeChoice{top:10%;width:calc(100% - 24px);box-sizing:border-box;flex-wrap:wrap;justify-content:center}.unifiedVideoPlayer .mediaResumeChoice span{width:100%;text-align:center}.nextEpisodeCountdown>div{width:100%}.nextEpisodeCountdown>div .btn{flex:1}}
+@media(max-width:719px){.unifiedVideoPlayer .mediaResumeChoice{place-items:end center;padding:12px;background:rgba(0,0,0,.28)}.unifiedVideoPlayer .mediaResumeCard{width:100%;box-sizing:border-box;border-radius:16px;padding:16px}.unifiedVideoPlayer .mediaResumeActions{width:100%}.unifiedVideoPlayer .mediaResumeActions .btn{flex:1}.nextEpisodeCountdown>div{width:100%}.nextEpisodeCountdown>div .btn{flex:1}}
 
 
 /* v41.0.2 — VOD Playback Recovery & Layout Fix */
-.dynamicMediaPlayer,#mediaPlayer{grid-column:1 / -1!important;min-width:0!important;width:100%!important;justify-self:stretch!important}
-.dynamicMediaPlayer .unifiedVideoPlayer{width:min(calc(100% - 28px),1120px)!important;max-width:1120px!important;margin:14px auto!important}
+.dynamicMediaPlayer,#mediaPlayer,#playerWrap.dynamicMediaPlayer{grid-column:1 / -1!important;min-width:0!important;width:100%!important;justify-self:stretch!important}
+.dynamicMediaPlayer .unifiedVideoPlayer,#playerWrap.dynamicMediaPlayer .unifiedVideoPlayer{width:min(calc(100% - 28px),1120px)!important;max-width:1120px!important;margin:14px auto!important}
 @media(max-width:719px){.dynamicMediaPlayer .unifiedVideoPlayer{width:100%!important;margin:8px 0!important}}
 
 
