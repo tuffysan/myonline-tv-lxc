@@ -1271,7 +1271,7 @@ const SMART_VOD_BUFFER_VERSION='40.9.0';
 const VOD_STARTUP_SEGMENTS=1;
 const VOD_BUFFER_FLOOR_SECONDS=15;
 const VOD_BUFFER_TARGET_SECONDS=60;
-const VOD_SEEK_SEGMENTS=4;
+const VOD_SEEK_SEGMENTS=1;
 
 // v40.9.0 — Adaptive Buffer Engine
 const ADAPTIVE_BUFFER_VERSION='40.9.0';
@@ -1329,9 +1329,9 @@ function installAdaptiveVodBuffer(video,hls){
 }
 
 // v40.8.0 — Instant Seek
-const INSTANT_SEEK_VERSION='40.8.1';
-const SEEK_DEBOUNCE_MS=220;
-const SEEK_READY_TIMEOUT_MS=30000;
+const INSTANT_SEEK_VERSION='41.0.10';
+const SEEK_DEBOUNCE_MS=80;
+const SEEK_READY_TIMEOUT_MS=15000;
 let vodSeekGeneration=0;
 
 // v40.7.0 — Playback Reliability
@@ -1686,7 +1686,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
               replacementState=await api(vodStatusUrl(replacement.statusUrl||('/api/live/status/'+encodeURIComponent(replacement.sessionId)),VOD_SEEK_SEGMENTS));
               if(replacementState.status==='ready')break;
               if(replacementState.status==='failed')throw new Error(replacementState.error||'Seek stream failed.');
-              await new Promise(r=>setTimeout(r,180));
+              await new Promise(r=>setTimeout(r,75));
             }
             if(generation!==vodSeekGeneration){fetch('/api/live/session/'+encodeURIComponent(replacement.sessionId),{method:'DELETE',keepalive:true}).catch(()=>{});return}
             if(!replacementState||replacementState.status!=='ready')throw new Error('Seek timed out.');

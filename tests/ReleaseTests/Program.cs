@@ -88,7 +88,7 @@ internal static class Program
         T.Assert(!appJs.Contains("status.textContent=ahead<3?'Buffering · replenishing…':'Playing · building buffer…'"),"v41.0.4 buffer telemetry does not fake playback state"); T.Pass("v41.0.4 buffer telemetry does not fake playback state");
 
         // v40.6.1 Smart VOD Buffering.
-        foreach(var x in new[]{"SMART_VOD_BUFFER_VERSION=","VOD_STARTUP_SEGMENTS=1","VOD_SEEK_SEGMENTS=4","VOD_BUFFER_FLOOR_SECONDS=15","VOD_BUFFER_TARGET_SECONDS=60","vodStatusUrl","bufferedAheadSeconds","installVodBufferMonitor","startFragPrefetch:true","maxMaxBufferLength:240"}) Has(appJs,x,"Smart VOD Buffer: "+x);
+        foreach(var x in new[]{"SMART_VOD_BUFFER_VERSION=","VOD_STARTUP_SEGMENTS=1","VOD_SEEK_SEGMENTS=1","VOD_BUFFER_FLOOR_SECONDS=15","VOD_BUFFER_TARGET_SECONDS=60","vodStatusUrl","bufferedAheadSeconds","installVodBufferMonitor","startFragPrefetch:true","maxMaxBufferLength:240"}) Has(appJs,x,"Smart VOD Buffer: "+x);
         foreach(var x in new[]{"int? minSegments","requiredSegments","bufferedSegments = segmentCount","bufferedSeconds = segmentCount * 2","-hls_time", "\"2\""}) Has(programCs,x,"Smart VOD server buffer: "+x);
 
         foreach(var x in new[]{"Only the player UI marks an intentional user pause","video.dataset.userPaused='1';video.pause()","fragLoadingMaxRetry:8","manifestLoadingMaxRetry:6"}) Has(appJs,x,"v41.0.2 VOD recovery: "+x);
@@ -148,7 +148,9 @@ internal static class Program
         T.Assert(appJs.Contains("else if(e.key==='ArrowRight'){e.preventDefault();skip(10)}") && appJs.Contains("else if(e.key==='ArrowLeft'){e.preventDefault();skip(-10)}"),"v41.0.8 keyboard seek uses absolute timeline");T.Pass("v41.0.8 keyboard seek uses absolute timeline");
 
         // v40.8.0 Instant Seek.
-        foreach(var x in new[]{"INSTANT_SEEK_VERSION=","SEEK_DEBOUNCE_MS=220","vodSeekGeneration","requestInstantSeek","generation!==vodSeekGeneration","video.buffered.start(i)","Keep the current frame/session visible until ready","SEEK_READY_TIMEOUT_MS"}) Has(appJs,x,"Instant Seek: "+x);
+        foreach(var x in new[]{"INSTANT_SEEK_VERSION=","SEEK_DEBOUNCE_MS=80","vodSeekGeneration","requestInstantSeek","generation!==vodSeekGeneration","video.buffered.start(i)","Keep the current frame/session visible until ready","SEEK_READY_TIMEOUT_MS"}) Has(appJs,x,"Instant Seek: "+x);
+        foreach(var x in new[]{"VOD_SEEK_SEGMENTS=1","SEEK_READY_TIMEOUT_MS=15000","setTimeout(r,75)"}) Has(appJs,x,"v41.0.10 fast seek: "+x);
+        Has(programCs,"seekStartSeconds > 0 ? \"ultrafast\" : \"veryfast\"","v41.0.10 seek transcode startup preset");
         T.Assert(!appJs.Contains("seekBar.disabled=true"),"Instant Seek never locks the timeline during background seek");T.Pass("Instant Seek keeps timeline interactive");
 
         // v40.7.0 Playback Reliability.

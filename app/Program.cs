@@ -3432,7 +3432,7 @@ app.MapPost("/api/media/start/{token}", async (string token, bool? transcode, do
     {
         args.AddRange(new[]
         {
-            "-c:v", "libx264", "-preset", "veryfast",
+            "-c:v", "libx264", "-preset", seekStartSeconds > 0 ? "ultrafast" : "veryfast",
             "-pix_fmt", "yuv420p", "-force_key_frames", "expr:gte(t,n_forced*2)",
             "-c:a", "aac", "-b:a", "160k", "-af", "aresample=async=1:first_pts=0"
         });

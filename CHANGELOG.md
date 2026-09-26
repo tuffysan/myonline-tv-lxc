@@ -1,3 +1,9 @@
+## v41.0.10 — Smooth Playback & Fast Seek
+
+- Faster VOD seek handover and first-frame readiness.
+- Preserve absolute VOD timeline and centered player layout.
+- Prefer browser-local seek whenever the target is already buffered.
+
 ## v41.0.9 — VOD Seek Root Fix
 - Fixes VOD seeking against replacement HLS sessions by keeping one absolute episode/movie timeline in the UI.
 - Preserves the real VOD duration across HLS handovers so the player no longer shows values such as `11:52 / 0:02`.
