@@ -94,6 +94,11 @@ internal static class Program
         foreach(var x in new[]{"STREAMING_ENGINE_VERSION=","tryDirectVodPlayback","/api/media/capabilities/","Direct play · preparing timeline…","maxBufferLength:","maxMaxBufferLength:","setTimeout(async()=>"}) Has(appJs,x,"Streaming Engine 2.0: "+x);
         foreach(var x in new[]{"/api/media/capabilities/{token}","streaming-engine-2.0","directUrl","range = true"}) Has(programCs,x,"Streaming Engine 2.0 server: "+x);
 
+        // v40.9.0 Adaptive Buffer Engine.
+        foreach(var x in new[]{"ADAPTIVE_BUFFER_VERSION=","ADAPTIVE_BUFFER_MIN_SECONDS=30","ADAPTIVE_BUFFER_DEFAULT_SECONDS=120","ADAPTIVE_BUFFER_MAX_SECONDS=240","installAdaptiveVodBuffer","Hls.Events.FRAG_LOADED","throughputMbps","segmentMbps","low-buffer-or-stalls","limited-bandwidth","high-bandwidth","myOnlineTvAdaptiveBufferDiagnostics"}) Has(appJs,x,"Adaptive Buffer: "+x);
+        T.Assert(appJs.Contains("hls.config.maxBufferLength=target") && appJs.Contains("hls.config.maxMaxBufferLength=max"),"Adaptive Buffer changes HLS targets at runtime");T.Pass("Adaptive Buffer changes HLS targets at runtime");
+        T.Assert(appJs.Contains("installAdaptiveVodBuffer(video,hls)"),"Adaptive Buffer installed on VOD HLS path");T.Pass("Adaptive Buffer installed on VOD HLS path");
+
         // v40.8.0 Instant Seek.
         foreach(var x in new[]{"INSTANT_SEEK_VERSION=","SEEK_DEBOUNCE_MS=220","vodSeekGeneration","requestInstantSeek","generation!==vodSeekGeneration","video.buffered.start(i)","Keep the current frame/session visible until ready","SEEK_READY_TIMEOUT_MS"}) Has(appJs,x,"Instant Seek: "+x);
         T.Assert(!appJs.Contains("seekBar.disabled=true"),"Instant Seek never locks the timeline during background seek");T.Pass("Instant Seek keeps timeline interactive");

@@ -1,3 +1,10 @@
+## v40.9.0 – Adaptive Buffer Engine
+- Dynamically tunes VOD HLS buffer targets from 30–240 seconds.
+- Samples real segment throughput and estimated media bitrate.
+- Expands buffer after stalls/low-buffer conditions and constrains it on healthy fast connections.
+- Adds adaptive-buffer diagnostics for target, throughput, media bitrate, buffer health and tuning reason.
+- Preserves Instant Seek, Playback Reliability and Continuous VOD handover.
+
 ## v40.8.1 – Instant Seek Release Gate Fix
 - Harden Continuous VOD regression tests to validate handover capabilities rather than exact comment text.
 - No playback behavior rollback.

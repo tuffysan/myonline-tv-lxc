@@ -1226,9 +1226,60 @@ const STREAMING_ENGINE_VERSION='40.7.0';
 const VOD_SEEK_ENGINE_VERSION='40.8.0';
 const UNIFIED_VIDEO_PLAYER_VERSION='40.7.0';
 const CONTINUOUS_VOD_ENGINE_VERSION='40.8.0';
-const SMART_VOD_BUFFER_VERSION='40.8.0';
+const SMART_VOD_BUFFER_VERSION='40.9.0';
 const VOD_STARTUP_SEGMENTS=3;
 const VOD_SEEK_SEGMENTS=4;
+
+// v40.9.0 — Adaptive Buffer Engine
+const ADAPTIVE_BUFFER_VERSION='40.9.0';
+const ADAPTIVE_BUFFER_MIN_SECONDS=30;
+const ADAPTIVE_BUFFER_DEFAULT_SECONDS=120;
+const ADAPTIVE_BUFFER_MAX_SECONDS=240;
+const adaptiveBufferSessions=new WeakMap();
+window.myOnlineTvAdaptiveBufferDiagnostics=()=>{
+  const video=$('#video'),a=video&&adaptiveBufferSessions.get(video);
+  return a?a.snapshot():{version:ADAPTIVE_BUFFER_VERSION,state:'inactive'};
+};
+function installAdaptiveVodBuffer(video,hls){
+  if(!video||!hls)return null;
+  const existing=adaptiveBufferSessions.get(video);if(existing)return existing;
+  const d={targetSeconds:ADAPTIVE_BUFFER_DEFAULT_SECONDS,maxSeconds:ADAPTIVE_BUFFER_MAX_SECONDS,throughputMbps:0,segmentMbps:0,samples:0,stalls:0,lastReason:'startup',lastChangedAt:Date.now()};
+  const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
+  const apply=(target,reason)=>{
+    target=Math.round(clamp(target,ADAPTIVE_BUFFER_MIN_SECONDS,ADAPTIVE_BUFFER_MAX_SECONDS));
+    const max=Math.round(clamp(Math.max(target*2,target+60),120,ADAPTIVE_BUFFER_MAX_SECONDS));
+    if(Math.abs(target-d.targetSeconds)<10&&max===d.maxSeconds)return;
+    d.targetSeconds=target;d.maxSeconds=max;d.lastReason=reason;d.lastChangedAt=Date.now();
+    hls.config.maxBufferLength=target;hls.config.maxMaxBufferLength=max;
+  };
+  const adapt=(reason='sample')=>{
+    const ahead=bufferedAheadSeconds(video);
+    if(d.stalls>=2||ahead<5)return apply(180,'low-buffer-or-stalls');
+    if(d.throughputMbps>0&&d.segmentMbps>0){
+      const headroom=d.throughputMbps/d.segmentMbps;
+      if(headroom<1.5)return apply(210,'limited-bandwidth');
+      if(headroom<2.5)return apply(150,'moderate-bandwidth');
+      if(headroom>5&&ahead>45)return apply(60,'high-bandwidth');
+    }
+    if(ahead>90)return apply(90,reason);
+    apply(120,reason);
+  };
+  hls.on(Hls.Events.FRAG_LOADED,(_,data)=>{
+    try{
+      const st=data?.stats||{},bytes=Number(st.loaded||st.total)||0;
+      const start=Number(st.loading?.start||st.trequest||0),end=Number(st.loading?.end||st.tload||0);
+      const ms=end-start;
+      if(bytes>0&&ms>0){const mbps=(bytes*8/ms)/1000;d.throughputMbps=d.samples?d.throughputMbps*.75+mbps*.25:mbps;d.samples++;}
+      const duration=Number(data?.frag?.duration)||0;if(bytes>0&&duration>0)d.segmentMbps=(bytes*8/duration)/1000000;
+      adapt('segment-sample');
+    }catch{}
+  });
+  const onStall=()=>{d.stalls++;adapt('stall')};
+  video.addEventListener('waiting',onStall);video.addEventListener('stalled',onStall);
+  const timer=setInterval(()=>{if(!video.isConnected){clearInterval(timer);return}adapt('health-check')},5000);
+  const snapshot=()=>({version:ADAPTIVE_BUFFER_VERSION,targetSeconds:d.targetSeconds,maxSeconds:d.maxSeconds,bufferedAheadSeconds:Number(bufferedAheadSeconds(video).toFixed(2)),throughputMbps:Number(d.throughputMbps.toFixed(2)),segmentMbps:Number(d.segmentMbps.toFixed(2)),samples:d.samples,stalls:d.stalls,lastReason:d.lastReason,lastChangedAt:d.lastChangedAt});
+  const api={snapshot,adapt};adaptiveBufferSessions.set(video,api);return api;
+}
 
 // v40.8.0 — Instant Seek
 const INSTANT_SEEK_VERSION='40.8.1';
@@ -1237,7 +1288,7 @@ const SEEK_READY_TIMEOUT_MS=30000;
 let vodSeekGeneration=0;
 
 // v40.7.0 — Playback Reliability
-const PLAYBACK_RELIABILITY_VERSION='40.8.0';
+const PLAYBACK_RELIABILITY_VERSION='40.9.0';
 const PLAYBACK_STATES=Object.freeze({IDLE:'Idle',PREPARING:'Preparing',BUFFERING:'Buffering',PLAYING:'Playing',SEEKING:'Seeking',RECOVERING:'Recovering',PAUSED:'Paused',ENDED:'Ended',ERROR:'Error'});
 const playbackReliabilitySessions=new WeakMap();
 window.myOnlineTvPlaybackDiagnostics=()=>{
@@ -1583,6 +1634,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
     if(window.Hls&&Hls.isSupported()){
       hls=new Hls({enableWorker:true,lowLatencyMode:false,backBufferLength:120,maxBufferLength:120,maxMaxBufferLength:240,maxBufferSize:120*1000*1000,maxBufferHole:0.5,startFragPrefetch:true});
       hls.loadSource(playbackUrl);hls.attachMedia(video);
+      installAdaptiveVodBuffer(video,hls);
       hls.on(Hls.Events.MANIFEST_PARSED,()=>{installResumeTracking();video.play().catch(()=>{})});
       hls.on(Hls.Events.ERROR,async(_,d)=>{
         if(!d.fatal)return;
