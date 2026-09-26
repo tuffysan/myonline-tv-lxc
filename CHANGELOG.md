@@ -1,3 +1,11 @@
+# v40.3.1 – Player Layout Fix
+
+- Fixes inline VOD video rendering only on the right side of a large black player surface.
+- Adds a dedicated responsive 16:9 VOD stage with centered `object-fit: contain` rendering.
+- Keeps fullscreen behavior intact and centered.
+- Adds release regression checks for VOD player markup and CSS.
+- Streaming Engine 2.0 remains unchanged from v40.3.0.
+
 # v40.3.0 – Streaming Engine 2.0
 
 - Direct byte-range playback for browser-compatible VOD (MP4/M4V/WebM/MOV).

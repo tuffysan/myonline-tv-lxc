@@ -2082,3 +2082,10 @@ html.tvProductExperience .tv361Home button:focus-visible{outline:4px solid white
 
 /* v40.2.0 Home Experience 3.1 */
 .hx3ContinueEmpty{padding:4px 0 8px}.hx3ContinueEmpty p{margin:0;opacity:.68}.homeExperience3>.hx3Section:first-of-type{margin-top:-4px}
+
+/* v40.3.1 - Player Layout Fix. Keep inline VOD centered in a stable 16:9 stage. */
+.mediaPlayerCard{width:100%;min-width:0;overflow:hidden}
+.mediaPlayerCard .mediaPlayerVideo{display:block;width:100%!important;height:auto!important;aspect-ratio:16/9;max-height:min(72vh,900px);margin:0 auto;background:#000;object-fit:contain!important;object-position:center center!important}
+.mediaPlayerCard:fullscreen{display:flex;flex-direction:column;justify-content:center;background:#000}
+.mediaPlayerCard:fullscreen .mediaPlayerVideo{width:100%!important;height:100%!important;max-height:100vh!important;aspect-ratio:auto;object-fit:contain!important;object-position:center center!important}
+@media(max-width:719px){.mediaPlayerCard{padding:0;border-radius:0}.mediaPlayerCard .mediaPlayerVideo{max-height:62dvh;border-radius:0}}

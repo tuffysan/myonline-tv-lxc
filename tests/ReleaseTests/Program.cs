@@ -23,6 +23,13 @@ internal static class Program
         var updateLocalSh = File.ReadAllText(Path.Combine(root,"scripts/update-local.sh"));
         var versionGuardPs1 = File.ReadAllText(Path.Combine(root,"scripts/Release-VersionGuard.ps1"));
 
+        // Stable source aliases for release-gate checks. Keep these aliases so new regression
+        // checks cannot accidentally reintroduce the historical program/styles/updateLocal
+        // compile failures when copied from older release tests.
+        var program = programCs;
+        var styles = stylesCss;
+        var updateLocal = updateLocalSh;
+
         static void Has(string text,string token,string name){T.Assert(text.Contains(token,StringComparison.Ordinal),name);T.Pass(name);}
 
         // Downloads 2.0 source-regression checks
@@ -60,6 +67,10 @@ internal static class Program
         T.Assert(mobileJs.Contains("collectionSearch") && mobileJs.Contains("Search Continue Watching"),"collection search");T.Pass("collection search");
         T.Assert(mobileJs.Contains("collectionProgressText") && mobileJs.Contains("% watched"),"collection progress");T.Pass("collection progress");
         Has(mobileJs,"openContinueActions(item.id,actions)","collection actions");
+
+        // v40.3.1 Player Layout Fix.
+        foreach(var x in new[]{"mediaPlayerCard","mediaPlayerVideo"}) Has(appJs,x,"Player layout markup: "+x);
+        foreach(var x in new[]{".mediaPlayerCard .mediaPlayerVideo","aspect-ratio:16/9","object-fit:contain!important","object-position:center center!important",".mediaPlayerCard:fullscreen .mediaPlayerVideo"}) Has(stylesCss,x,"Player layout CSS: "+x);
 
         // v40.3.0 Streaming Engine 2.0.
         foreach(var x in new[]{"STREAMING_ENGINE_VERSION='40.3.0'","tryDirectVodPlayback","/api/media/capabilities/","Direct play · preparing timeline…","maxBufferLength:90","maxMaxBufferLength:180","setTimeout(async()=>"}) Has(appJs,x,"Streaming Engine 2.0: "+x);
