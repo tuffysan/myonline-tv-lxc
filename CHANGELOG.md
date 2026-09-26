@@ -1,3 +1,12 @@
+# v40.7.0 - Playback Reliability
+
+- Adds a central VOD playback reliability state machine.
+- Adds a one-second progress watchdog with automatic recovery for unexpected stalls and pauses.
+- Protects intentional user pause from automatic recovery.
+- Adds playback diagnostics: state, buffer ahead, stalls, recoveries, underruns, seeks, time-to-first-frame, progress age, recovery reason and media errors.
+- Keeps Smart VOD Buffering, Continuous VOD handover and the contained Unified Player from v40.6.3.
+- Adds release-gate regression coverage for the reliability engine.
+
 # v40.6.3 - Smart Buffer Release Gate Fix
 
 - Keeps Smart VOD Buffering at 120 s target / 240 s maximum.

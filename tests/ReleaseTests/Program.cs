@@ -94,6 +94,11 @@ internal static class Program
         foreach(var x in new[]{"STREAMING_ENGINE_VERSION=","tryDirectVodPlayback","/api/media/capabilities/","Direct play · preparing timeline…","maxBufferLength:","maxMaxBufferLength:","setTimeout(async()=>"}) Has(appJs,x,"Streaming Engine 2.0: "+x);
         foreach(var x in new[]{"/api/media/capabilities/{token}","streaming-engine-2.0","directUrl","range = true"}) Has(programCs,x,"Streaming Engine 2.0 server: "+x);
 
+        // v40.7.0 Playback Reliability.
+        foreach(var x in new[]{"PLAYBACK_RELIABILITY_VERSION=","PLAYBACK_STATES","installPlaybackReliability","progress-watchdog","unexpected-pause","bufferUnderruns","timeToFirstFrameMs","lastRecoveryReason","myOnlineTvPlaybackDiagnostics"}) Has(appJs,x,"Playback Reliability: "+x);
+        T.Assert(appJs.Split("installPlaybackReliability(video").Length-1 >= 3,"Playback Reliability installed for direct and HLS VOD paths");T.Pass("Playback Reliability installed for direct and HLS VOD paths");
+        T.Assert(appJs.Contains("video.dataset.userPaused==='1'") && appJs.Contains("PLAYBACK_STATES.PAUSED"),"Playback Reliability protects intentional pause");T.Pass("Playback Reliability protects intentional pause");
+
         // v40.2.1 Playback Resilience & Resume Fix.
         foreach(var x in new[]{"PLAYBACK_RESILIENCE_VERSION=","installResilientContinueTracking","applyPendingResume","installVodRecovery","Buffering · reconnecting…","Hls.ErrorTypes.NETWORK_ERROR","Hls.ErrorTypes.MEDIA_ERROR","pendingResumeSeconds=safeMediaPosition(video)||requestedResume"}) Has(appJs,x,"Playback resilience: "+x);
         T.Assert(appJs.Contains("['pause','waiting','stalled','seeking','seeked','error']"),"Resume position persists on interruption events");T.Pass("Resume position persists on interruption events");

@@ -1221,14 +1221,62 @@ function ensureMediaPlayerHost(){
 }
 
 // v40.2.1 — Playback Resilience & Resume Fix
-const PLAYBACK_RESILIENCE_VERSION='40.6.3';
-const STREAMING_ENGINE_VERSION='40.6.3';
-const VOD_SEEK_ENGINE_VERSION='40.6.3';
-const UNIFIED_VIDEO_PLAYER_VERSION='40.6.3';
-const CONTINUOUS_VOD_ENGINE_VERSION='40.6.3';
-const SMART_VOD_BUFFER_VERSION='40.6.3';
+const PLAYBACK_RESILIENCE_VERSION='40.7.0';
+const STREAMING_ENGINE_VERSION='40.7.0';
+const VOD_SEEK_ENGINE_VERSION='40.7.0';
+const UNIFIED_VIDEO_PLAYER_VERSION='40.7.0';
+const CONTINUOUS_VOD_ENGINE_VERSION='40.7.0';
+const SMART_VOD_BUFFER_VERSION='40.7.0';
 const VOD_STARTUP_SEGMENTS=3;
 const VOD_SEEK_SEGMENTS=4;
+
+// v40.7.0 — Playback Reliability
+const PLAYBACK_RELIABILITY_VERSION='40.7.0';
+const PLAYBACK_STATES=Object.freeze({IDLE:'Idle',PREPARING:'Preparing',BUFFERING:'Buffering',PLAYING:'Playing',SEEKING:'Seeking',RECOVERING:'Recovering',PAUSED:'Paused',ENDED:'Ended',ERROR:'Error'});
+const playbackReliabilitySessions=new WeakMap();
+window.myOnlineTvPlaybackDiagnostics=()=>{
+  const video=$('#video'),r=video&&playbackReliabilitySessions.get(video);
+  return r?r.snapshot():{state:PLAYBACK_STATES.IDLE};
+};
+function installPlaybackReliability(video,getHls,savePosition){
+  if(!video)return null;
+  const existing=playbackReliabilitySessions.get(video);if(existing)return existing;
+  const d={state:PLAYBACK_STATES.PREPARING,stalls:0,recoveries:0,bufferUnderruns:0,seeks:0,startedAt:Date.now(),firstFrameAt:0,lastProgressAt:Date.now(),lastPosition:0,lastRecoveryReason:'',lastError:'',watchdogTicks:0};
+  let recoveryBusy=false,disposed=false;
+  const setState=(state,reason='')=>{d.state=state;if(reason&&state===PLAYBACK_STATES.RECOVERING)d.lastRecoveryReason=reason;video.dataset.playbackState=state};
+  const snapshot=()=>({version:PLAYBACK_RELIABILITY_VERSION,state:d.state,positionSeconds:Number(safeMediaPosition(video).toFixed(2)),bufferedAheadSeconds:Number(bufferedAheadSeconds(video).toFixed(2)),stalls:d.stalls,recoveries:d.recoveries,bufferUnderruns:d.bufferUnderruns,seeks:d.seeks,timeToFirstFrameMs:d.firstFrameAt?d.firstFrameAt-d.startedAt:null,lastProgressAgeMs:Date.now()-d.lastProgressAt,lastRecoveryReason:d.lastRecoveryReason,lastError:d.lastError,userPaused:video.dataset.userPaused==='1'});
+  const recover=async(reason)=>{
+    if(disposed||recoveryBusy||video.ended||video.dataset.userPaused==='1')return;
+    recoveryBusy=true;d.recoveries++;d.lastRecoveryReason=reason;setState(PLAYBACK_STATES.RECOVERING,reason);savePosition?.(true);
+    const status=$('#mediaPlaybackStatus');if(status)status.textContent='Recovering playback…';
+    try{
+      const h=getHls?.();
+      if(h){try{h.startLoad(-1)}catch{};if(video.readyState<2){try{h.recoverMediaError()}catch{}}}
+      await video.play().catch(()=>{});
+    }finally{recoveryBusy=false}
+  };
+  const onProgress=()=>{const pos=safeMediaPosition(video);if(pos>d.lastPosition+.15){d.lastPosition=pos;d.lastProgressAt=Date.now()}if(!d.firstFrameAt&&pos>.05)d.firstFrameAt=Date.now()};
+  video.addEventListener('loadstart',()=>setState(PLAYBACK_STATES.PREPARING));
+  video.addEventListener('playing',()=>{onProgress();setState(PLAYBACK_STATES.PLAYING)});
+  video.addEventListener('timeupdate',onProgress);
+  video.addEventListener('waiting',()=>{if(video.dataset.userPaused!=='1'){d.stalls++;if(bufferedAheadSeconds(video)<1)d.bufferUnderruns++;setState(PLAYBACK_STATES.BUFFERING)}});
+  video.addEventListener('stalled',()=>{if(video.dataset.userPaused!=='1'){d.stalls++;setState(PLAYBACK_STATES.BUFFERING)}});
+  video.addEventListener('seeking',()=>{d.seeks++;setState(PLAYBACK_STATES.SEEKING)});
+  video.addEventListener('seeked',()=>{d.lastProgressAt=Date.now();if(video.dataset.userPaused!=='1')setState(PLAYBACK_STATES.BUFFERING)});
+  video.addEventListener('pause',()=>{if(video.dataset.userPaused==='1')setState(PLAYBACK_STATES.PAUSED)});
+  video.addEventListener('ended',()=>setState(PLAYBACK_STATES.ENDED));
+  video.addEventListener('error',()=>{d.lastError=video.error?.message||('MediaError '+(video.error?.code||''));setState(PLAYBACK_STATES.ERROR)});
+  const watchdog=setInterval(()=>{
+    if(disposed||!video.isConnected){clearInterval(watchdog);disposed=true;return}
+    d.watchdogTicks++;onProgress();
+    if(video.ended||video.dataset.userPaused==='1'||video.seeking)return;
+    const noProgress=Date.now()-d.lastProgressAt;
+    if(!video.paused&&noProgress>7000){recover('progress-watchdog').catch(()=>{})}
+    else if(video.paused&&d.state!==PLAYBACK_STATES.PAUSED&&video.readyState>=2){recover('unexpected-pause').catch(()=>{})}
+  },1000);
+  const api={snapshot,recover,setState,dispose:()=>{disposed=true;clearInterval(watchdog)}};
+  playbackReliabilitySessions.set(video,api);return api;
+}
 function vodStatusUrl(url,minSegments){
   const sep=String(url).includes('?')?'&':'?';
   return String(url)+sep+'minSegments='+encodeURIComponent(String(minSegments));
@@ -1386,6 +1434,7 @@ async function tryDirectVodPlayback(token,name,mediaId,poster,requestedResume){
   installMediaDurationDisplay(video,0);installVodBufferMonitor(video);applyPendingResume(video,requestedResume);
   const save=installResilientContinueTracking(video,{mediaId,name,url:caps.directUrl,poster});
   installVodRecovery(video,()=>null,save);
+  installPlaybackReliability(video,()=>null,save);
   return await new Promise(resolve=>{
     let settled=false;
     const ok=()=>{if(settled)return;settled=true;cleanup();if(st){st.textContent='Direct play';st.className='livePlaybackStatus ready'}video.play().catch(()=>{});resolve(true)};
@@ -1489,6 +1538,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
     const installResumeTracking=()=>{
       savePlaybackPosition=installResilientContinueTracking(video,{mediaId,name,poster,durationSeconds:mediaDurationSeconds});
       installVodRecovery(video,()=>hls,savePlaybackPosition);
+      installPlaybackReliability(video,()=>hls,savePlaybackPosition);
     };
 
     video.addEventListener('ended',()=>{
