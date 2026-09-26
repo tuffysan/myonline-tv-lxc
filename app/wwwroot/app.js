@@ -976,7 +976,7 @@ async function toggleFav(id){fav=new Set(await api('/api/favourites/'+encodeURIC
 let activeLiveSession=null;
 let liveFallbackTried=false;
 const LIVE_TV_RELIABILITY_VERSION='40.12.0';
-const PLAYBACK_UX_QUALITY_VERSION='41.0.0';
+const PLAYBACK_UX_QUALITY_VERSION='41.0.1';
 const PLAYBACK_UX_QUALITY_TARGETS=Object.freeze({vodReliability:true,instantSeek:true,adaptiveBuffer:true,playerExperience:true,moviesSeriesUx:true,liveTvReliability:true});
 let livePlaybackGeneration=0;
 let liveRecoveryTimer=null;
@@ -1006,10 +1006,13 @@ function installLiveReliability(video,hlsRef,restart){
 
 
 async function playLive(channelKey,name,forceTranscode=false){
-  const generation=++livePlaybackGeneration;
+  // Tear down the previous player/session first. destroyPlayer() advances the
+  // generation to invalidate older async starts; capture our generation only
+  // after that teardown so this start is not invalidated by itself.
   stopLiveReliability();
   if(!forceTranscode)liveFallbackTried=false;
   destroyPlayer();
+  const generation=++livePlaybackGeneration;
   const wrap=$('#playerWrap')||$('#mediaPlayer');
   if(!wrap)return;
   const selected=channelByKey(channelKey)||{key:channelKey,name};liveCurrentChannel=selected;rememberLiveChannel(selected);

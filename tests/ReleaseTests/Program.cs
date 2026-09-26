@@ -32,8 +32,8 @@ internal static class Program
 
         static void Has(string text,string token,string name){T.Assert(text.Contains(token,StringComparison.Ordinal),name);T.Pass(name);}
 
-        // v41.0.0 Playback & UX Quality Release — integrated quality gate.
-        Has(appJs,"PLAYBACK_UX_QUALITY_VERSION='41.0.0'","v41 quality release marker");
+        // v41.0.1 Playback & UX Quality Release — integrated quality gate.
+        Has(appJs,"PLAYBACK_UX_QUALITY_VERSION='41.0.1'","v41 quality release marker");
         foreach(var x in new[]{"PLAYBACK_RELIABILITY_VERSION=","INSTANT_SEEK_VERSION=","ADAPTIVE_BUFFER_VERSION=","PLAYER_EXPERIENCE_VERSION=","MOVIES_SERIES_UX_VERSION=","LIVE_TV_RELIABILITY_VERSION="}) Has(appJs,x,"v41 integrated playback stack: "+x);
         T.Assert(appJs.Contains("installPlaybackReliability(video") && appJs.Contains("installAdaptiveVodBuffer(video,hls)"),"v41 VOD reliability and adaptive buffering are both installed"); T.Pass("v41 VOD reliability and adaptive buffering are both installed");
         T.Assert(appJs.Contains("requestInstantSeek") && !appJs.Contains("seekBar.disabled=true"),"v41 seek remains interactive and cancellable"); T.Pass("v41 seek remains interactive and cancellable");
@@ -106,6 +106,15 @@ internal static class Program
 
         // v40.12.0 Live TV Reliability.
         foreach(var x in new[]{"LIVE_TV_RELIABILITY_VERSION=","livePlaybackGeneration","installLiveReliability","LIVE_MAX_RECOVERY_ATTEMPTS=5","liveBufferAhead","Reconnecting live TV…","maxLiveSyncPlaybackRate:1.15","liveMaxLatencyDurationCount:8"}) Has(appJs,x,"Live TV Reliability: "+x);
+        // v41.0.1: playLive must capture its generation AFTER destroyPlayer(), otherwise
+        // destroyPlayer invalidates the same start request and Live TV exits before attaching HLS.
+        var playLiveStart = appJs.IndexOf("async function playLive(channelKey,name,forceTranscode=false)", StringComparison.Ordinal);
+        var playLiveEnd = playLiveStart >= 0 ? appJs.IndexOf("function friendlyError", playLiveStart, StringComparison.Ordinal) : -1;
+        T.Assert(playLiveStart >= 0 && playLiveEnd > playLiveStart, "Live TV generation guard: playLive function found");
+        var playLiveBody = appJs.Substring(playLiveStart, playLiveEnd - playLiveStart);
+        var destroyPos = playLiveBody.IndexOf("destroyPlayer();", StringComparison.Ordinal);
+        var generationPos = playLiveBody.IndexOf("const generation=++livePlaybackGeneration;", StringComparison.Ordinal);
+        T.Assert(destroyPos >= 0 && generationPos > destroyPos, "Live TV generation guard: generation captured after teardown");
         foreach(var x in new[]{"\"-hls_list_size\", \"12\"","delete_segments+append_list+omit_endlist+independent_segments"}) Has(programCs,x,"Live TV Reliability server: "+x);
         T.Assert(appJs.Contains("++livePlaybackGeneration;stopLiveReliability()"),"Live TV Reliability cancels stale playback and watchdogs");T.Pass("Live TV Reliability cancels stale playback and watchdogs");
 

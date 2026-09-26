@@ -1,3 +1,8 @@
+## v41.0.1 — Live Stream Generation Guard Fix
+- Fixes Live TV starts being invalidated by their own generation guard.
+- Adds a regression gate for the teardown/generation ordering.
+- Preserves v41.0.0 playback and UX quality features.
+
 ## v41.0.0 — Playback & UX Quality Release
 - Adds an integrated quality gate across the complete v40 playback stack.
 - Protects VOD reliability, Instant Seek, Adaptive Buffer, contained player UX, Movies/Series continuity and Live TV recovery together.
