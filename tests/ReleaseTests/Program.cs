@@ -87,14 +87,22 @@ internal static class Program
         T.Assert(appJs.Contains("video.addEventListener('pause',()=>") && appJs.Contains("video.dataset.userPaused!=='1'&&!video.ended"),"current VOD recovery distinguishes browser underrun pause from intentional user pause"); T.Pass("current VOD recovery distinguishes browser underrun pause from intentional user pause");
         T.Assert(!appJs.Contains("status.textContent=ahead<3?'Buffering · replenishing…':'Playing · building buffer…'"),"current buffer telemetry does not fake playback state"); T.Pass("current buffer telemetry does not fake playback state");
 
-        // v40.6.1 Smart VOD Buffering.
-        foreach(var x in new[]{"SMART_VOD_BUFFER_VERSION=","VOD_STARTUP_SEGMENTS=6","VOD_SEEK_SEGMENTS=3","VOD_BUFFER_FLOOR_SECONDS=15","VOD_BUFFER_TARGET_SECONDS=60","vodStatusUrl","bufferedAheadSeconds","installVodBufferMonitor","startFragPrefetch:true","maxMaxBufferLength:240"}) Has(appJs,x,"Smart VOD Buffer: "+x);
-        foreach(var x in new[]{"int? minSegments","requiredSegments","bufferedSegments = segmentCount","bufferedSeconds = segmentCount * 2","-hls_time", "\"2\""}) Has(programCs,x,"Smart VOD server buffer: "+x);
+        // v41.1.0 Playback Core supersedes the historical v40.6.1 Smart VOD buffer ceiling.
+        // Keep the useful buffer/status invariants, but validate the active 60s/120s policy instead of the obsolete 240s ceiling.
+        foreach(var x in new[]{"SMART_VOD_BUFFER_VERSION=","VOD_STARTUP_SEGMENTS=6","VOD_SEEK_SEGMENTS=3","VOD_BUFFER_FLOOR_SECONDS=15","VOD_BUFFER_TARGET_SECONDS=60","vodStatusUrl","bufferedAheadSeconds","installVodBufferMonitor","startFragPrefetch:true"}) Has(appJs,x,"Smart VOD compatibility: "+x);
+        T.Assert(appJs.Contains("backBufferLength:60,maxBufferLength:60,maxMaxBufferLength:120"),"Playback Core owns the active VOD buffer ceiling"); T.Pass("Playback Core owns the active VOD buffer ceiling");
+        T.Assert(!appJs.Contains("maxMaxBufferLength:240"),"obsolete 240 second VOD buffer ceiling is removed"); T.Pass("obsolete 240 second VOD buffer ceiling is removed");
+        foreach(var x in new[]{"int? minSegments","requiredSegments","bufferedSegments = segmentCount","bufferedSeconds = segmentCount * 2","-hls_time", "\"2\""}) Has(programCs,x,"Smart VOD server compatibility: "+x);
 
 
         // v41.0.13 VOD streaming pipeline: growing HLS manifests must never be cached.
-        foreach(var x in new[]{"VOD_STREAMING_PIPELINE_VERSION='41.0.13'","VOD_STARTUP_SEGMENTS=6","VOD_SEEK_SEGMENTS=3","maxBufferLength:90","fragLoadingTimeOut:20000"}) Has(appJs,x,"v41.0.13 VOD pipeline: "+x);
+        foreach(var x in new[]{"VOD_STREAMING_PIPELINE_VERSION='41.0.13'","VOD_STARTUP_SEGMENTS=6","VOD_SEEK_SEGMENTS=3","maxBufferLength:60","fragLoadingTimeOut:20000"}) Has(appJs,x,"v41.0.13 VOD pipeline: "+x);
         foreach(var x in new[]{"no-store, no-cache, must-revalidate, max-age=0","Pragma = \"no-cache\"","processRunning = !session.Process.HasExited","newestSegmentAgeMs"}) Has(programCs,x,"v41.0.13 HLS delivery: "+x);
+
+
+        // v41.1.0 Playback Core — Direct Play first, codec-aware fallback, atomic EVENT HLS.
+        foreach(var x in new[]{"PLAYBACK_CORE_VERSION='41.1.0'","tryDirectVodPlayback(token,name,mediaId,poster,initialResume)","Direct VOD fallback to compatibility HLS","backBufferLength:60,maxBufferLength:60,maxMaxBufferLength:120"}) Has(appJs,x,"v41.1 playback core: "+x);
+        foreach(var x in new[]{"playback-core-41.1","ProbeMediaProfile","hls-transcode","-reconnect_streamed","-hls_playlist_type", "independent_segments+temp_file"}) Has(programCs,x,"v41.1 server playback core: "+x);
 
         // v41.0.12 CURRENT PLAYBACK CONTRACT.
         // Historical playback implementation strings from v40.x/v41.0.x must not gate current releases.

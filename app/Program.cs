@@ -3364,19 +3364,27 @@ app.MapGet("/api/proxy/{token}", async (string token, HttpContext ctx) =>
 // v40.3.0 - Streaming Engine 2.0. Prefer native browser byte-range playback for
 // browser-compatible VOD containers. This preserves provider Content-Length/Content-Range,
 // lets the browser build a real seekable timeline, and avoids unnecessary FFmpeg/HLS latency.
-app.MapGet("/api/media/capabilities/{token}", (string token) =>
+app.MapGet("/api/media/capabilities/{token}", async (string token) =>
 {
     if (!proxyTokens.TryGetValue(token, out var target) || target.Kind != "media") return Results.NotFound();
     if (!Uri.TryCreate(target.Url, UriKind.Absolute, out var uri)) return Results.BadRequest();
     var ext = Path.GetExtension(uri.AbsolutePath).TrimStart('.').ToLowerInvariant();
-    var direct = ext is "mp4" or "m4v" or "webm" or "mov";
+    var probe = await ProbeMediaProfile(target.Url);
+    var containerDirect = ext is "mp4" or "m4v" or "webm" or "mov";
+    var codecsDirect = probe is null ||
+        ((probe.VideoCodec is null || probe.VideoCodec is "h264" or "av1" or "vp8" or "vp9") &&
+         (probe.AudioCodec is null || probe.AudioCodec is "aac" or "mp3" or "opus" or "vorbis"));
+    var direct = containerDirect && codecsDirect;
     return Results.Ok(new
     {
-        engine = "streaming-engine-2.0",
+        engine = "playback-core-41.1",
         direct,
         extension = ext,
+        videoCodec = probe?.VideoCodec,
+        audioCodec = probe?.AudioCodec,
+        durationSeconds = probe?.DurationSeconds,
         directUrl = direct ? $"/api/proxy/{token}" : null,
-        fallback = "hls",
+        fallback = "hls-transcode",
         range = true
     });
 }).RequireAuthorization();
@@ -3421,14 +3429,19 @@ app.MapPost("/api/media/start/{token}", async (string token, bool? transcode, do
     var args = new List<string>
     {
         "-hide_banner", "-loglevel", "warning", "-nostdin",
-        "-rw_timeout", "20000000"
+        "-rw_timeout", "20000000",
+        "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5"
     };
 
     if (seekStartSeconds > 0)
         args.AddRange(new[] { "-ss", seekStartSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) });
     args.AddRange(new[] { "-i", sourceUrl, "-map", "0:v:0?", "-map", "0:a:0?", "-fflags", "+genpts" });
 
-    if (transcode == true)
+    // v41.1.0 Playback Core: server-side HLS is the compatibility path. Always normalize
+    // to H.264/AAC so a stream cannot start successfully and then fail on an unsupported
+    // audio/video codec or irregular source keyframes. Browser-compatible media uses Direct Play.
+    var compatibilityTranscode = true;
+    if (compatibilityTranscode)
     {
         args.AddRange(new[]
         {
@@ -3447,7 +3460,8 @@ app.MapPost("/api/media/start/{token}", async (string token, bool? transcode, do
         "-f", "hls",
         "-hls_time", "2",
         "-hls_list_size", "0",
-        "-hls_flags", "independent_segments",
+        "-hls_playlist_type", "event",
+        "-hls_flags", "independent_segments+temp_file",
         "-hls_segment_filename", segmentPattern,
         playlistPath
     });
@@ -3495,7 +3509,7 @@ app.MapPost("/api/media/start/{token}", async (string token, bool? transcode, do
         status = "starting",
         statusUrl = $"/api/live/status/{sessionId}",
         playbackUrl = $"/api/live/hls/{sessionId}/index.m3u8",
-        mode = transcode == true ? "hls-transcode" : "hls-remux",
+        mode = "hls-transcode",
         sourceHost = sourceUri.Host,
         durationSeconds,
         startSeconds = seekStartSeconds
@@ -5453,6 +5467,52 @@ static string? FindExecutable(string name)
     return null;
 }
 
+static async Task<MediaProbeProfile?> ProbeMediaProfile(string sourceUrl)
+{
+    var ffprobe = FindExecutable("ffprobe");
+    if (ffprobe is null) return null;
+    var psi = new ProcessStartInfo
+    {
+        FileName = ffprobe, UseShellExecute = false, RedirectStandardOutput = true,
+        RedirectStandardError = true, CreateNoWindow = true
+    };
+    foreach (var arg in new[]
+    {
+        "-v", "error", "-rw_timeout", "8000000",
+        "-show_entries", "stream=codec_type,codec_name:format=duration",
+        "-of", "json", sourceUrl
+    }) psi.ArgumentList.Add(arg);
+    using var process = new Process { StartInfo = psi };
+    try
+    {
+        if (!process.Start()) return null;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync(cts.Token);
+        if (process.ExitCode != 0) return null;
+        using var doc = JsonDocument.Parse(await outputTask);
+        string? video = null, audio = null;
+        if (doc.RootElement.TryGetProperty("streams", out var streams))
+            foreach (var stream in streams.EnumerateArray())
+            {
+                var type = stream.TryGetProperty("codec_type", out var t) ? t.GetString() : null;
+                var codec = stream.TryGetProperty("codec_name", out var c) ? c.GetString() : null;
+                if (type == "video" && video is null) video = codec;
+                if (type == "audio" && audio is null) audio = codec;
+            }
+        double? duration = null;
+        if (doc.RootElement.TryGetProperty("format", out var format) && format.TryGetProperty("duration", out var d) &&
+            double.TryParse(d.GetString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var seconds) &&
+            double.IsFinite(seconds) && seconds > 0) duration = seconds;
+        return new MediaProbeProfile(video, audio, duration);
+    }
+    catch
+    {
+        try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+        return null;
+    }
+}
+
 static async Task<double?> ProbeDurationSeconds(string sourceUrl)
 {
     var ffprobe = FindExecutable("ffprobe");
@@ -5496,6 +5556,7 @@ static async Task<double?> ProbeDurationSeconds(string sourceUrl)
     return null;
 }
 
+record MediaProbeProfile(string? VideoCodec, string? AudioCodec, double? DurationSeconds);
 record ProviderStored(string Id, string Name, string Type, string EncryptedConnection, string? AccountOwnerUsername = null, string? OwnerUsername = null, string[]? SharedWithUsernames = null);
 record ProviderConnection(string? PlaylistUrl, string? EpgUrl, string? BaseUrl, string? Username, string? Password);
 record ProviderInput(string? Id, string Name, string Type, string? PlaylistUrl, string? EpgUrl, string? BaseUrl, string? Username, string? Password, bool KeepExistingConnection = false, bool KeepExistingPassword = false);

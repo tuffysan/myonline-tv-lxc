@@ -1,3 +1,7 @@
+## v41.1.0 — Playback Core
+- Rebuilt VOD decision path around reliable Direct Play and deterministic H.264/AAC HLS fallback.
+- Added codec probing, direct-resume, playback-confirmed direct startup, FFmpeg reconnect, EVENT HLS, and atomic segments.
+
 ## v41.0.13 — VOD Streaming Pipeline Fix
 
 - Prevents the growing HLS VOD playlist from being cached while FFmpeg is still producing segments.

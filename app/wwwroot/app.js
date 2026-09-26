@@ -1271,6 +1271,7 @@ const SMART_VOD_BUFFER_VERSION='40.9.0';
 // v41.0.13 — VOD Streaming Pipeline Fix. Start with a real cushion; the HLS manifest is
 // served no-cache by the backend so hls.js always sees newly produced segments.
 const VOD_STREAMING_PIPELINE_VERSION='41.0.13';
+const PLAYBACK_CORE_VERSION='41.1.0';
 const VOD_STARTUP_SEGMENTS=6;
 const VOD_BUFFER_FLOOR_SECONDS=15;
 const VOD_BUFFER_TARGET_SECONDS=60;
@@ -1593,12 +1594,14 @@ async function tryDirectVodPlayback(token,name,mediaId,poster,requestedResume){
   installVodRecovery(video,()=>null,save);
   installPlaybackReliability(video,()=>null,save);
   return await new Promise(resolve=>{
-    let settled=false;
-    const ok=()=>{if(settled)return;settled=true;cleanup();if(st){st.textContent='Direct play';st.className='livePlaybackStatus ready'}video.play().catch(()=>{});resolve(true)};
-    const bad=()=>{if(settled)return;settled=true;cleanup();video.removeAttribute('src');video.load();resolve(false)};
-    const cleanup=()=>{clearTimeout(timer);video.removeEventListener('loadedmetadata',ok);video.removeEventListener('error',bad)};
-    const timer=setTimeout(()=>{if(video.readyState>=1)ok();else bad()},8000);
-    video.addEventListener('loadedmetadata',ok,{once:true});video.addEventListener('error',bad,{once:true});
+    let settled=false,metadata=false;
+    const commit=()=>{if(settled)return;settled=true;cleanup();if(st){st.textContent='Direct play';st.className='livePlaybackStatus ready'}resolve(true)};
+    const bad=()=>{if(settled)return;settled=true;cleanup();video.pause();video.removeAttribute('src');video.load();resolve(false)};
+    const onMeta=()=>{metadata=true;applyPendingResume(video,requestedResume);video.play().catch(bad)};
+    const onPlaying=()=>{if(metadata)commit()};
+    const cleanup=()=>{clearTimeout(timer);video.removeEventListener('loadedmetadata',onMeta);video.removeEventListener('playing',onPlaying);video.removeEventListener('error',bad)};
+    const timer=setTimeout(()=>{if(video.readyState>=3&&!video.paused)commit();else bad()},12000);
+    video.addEventListener('loadedmetadata',onMeta,{once:true});video.addEventListener('playing',onPlaying,{once:true});video.addEventListener('error',bad,{once:true});
     video.load();
   });
 }
@@ -1623,14 +1626,16 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
   const initialResume=Math.max(0,Number(startAtSeconds)||Number(pendingResumeSeconds)||0);
   pendingResumeSeconds=0;
   installResumeStartOverChoice({token,name,mediaId,poster,resumeSeconds:initialResume,durationSeconds:knownDurationSeconds});
-  if(!forceTranscode&&initialResume<=0){
-    try{if(await tryDirectVodPlayback(token,name,mediaId,poster,initialResume))return}catch(e){console.warn('Direct VOD fallback to HLS',e)}
+  // v41.1.0: Direct Play is also the preferred resume path. Byte-range playback lets the
+  // browser seek to the saved position without creating a new FFmpeg session.
+  if(!forceTranscode){
+    try{if(await tryDirectVodPlayback(token,name,mediaId,poster,initialResume))return}catch(e){console.warn('Direct VOD fallback to compatibility HLS',e)}
   }
 
   try{
     const seekStart=Math.max(0,Number(initialResume)||0);
     const qs=new URLSearchParams();
-    if(forceTranscode||seekStart>0)qs.set('transcode','true');
+    qs.set('transcode','true');
     if(seekStart>0)qs.set('startSeconds',String(seekStart));
     const info=await api('/api/media/start/'+encodeURIComponent(token)+(qs.size?'?'+qs.toString():''),{method:'POST'});
     activeMediaSession=info.sessionId;
@@ -1765,7 +1770,7 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
     });
 
     if(window.Hls&&Hls.isSupported()){
-      hls=new Hls({enableWorker:true,lowLatencyMode:false,backBufferLength:120,maxBufferLength:90,maxMaxBufferLength:240,maxBufferSize:192*1000*1000,maxBufferHole:0.8,startFragPrefetch:true,fragLoadingTimeOut:20000,fragLoadingMaxRetry:12,fragLoadingRetryDelay:500,fragLoadingMaxRetryTimeout:8000,manifestLoadingTimeOut:10000,manifestLoadingMaxRetry:8,levelLoadingMaxRetry:8});
+      hls=new Hls({enableWorker:true,lowLatencyMode:false,backBufferLength:60,maxBufferLength:60,maxMaxBufferLength:120,maxBufferSize:128*1000*1000,maxBufferHole:0.5,startFragPrefetch:true,fragLoadingTimeOut:20000,fragLoadingMaxRetry:12,fragLoadingRetryDelay:500,fragLoadingMaxRetryTimeout:8000,manifestLoadingTimeOut:10000,manifestLoadingMaxRetry:8,levelLoadingMaxRetry:8});
       hls.loadSource(playbackUrl);hls.attachMedia(video);
       installAdaptiveVodBuffer(video,hls);
       hls.on(Hls.Events.MANIFEST_PARSED,()=>{installResumeTracking();video.play().catch(()=>{})});
