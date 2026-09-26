@@ -61,6 +61,11 @@ internal static class Program
         T.Assert(mobileJs.Contains("collectionProgressText") && mobileJs.Contains("% watched"),"collection progress");T.Pass("collection progress");
         Has(mobileJs,"openContinueActions(item.id,actions)","collection actions");
 
+        // v40.2.1 Playback Resilience & Resume Fix.
+        foreach(var x in new[]{"PLAYBACK_RESILIENCE_VERSION='40.2.1'","installResilientContinueTracking","applyPendingResume","installVodRecovery","Buffering · reconnecting…","Hls.ErrorTypes.NETWORK_ERROR","Hls.ErrorTypes.MEDIA_ERROR","pendingResumeSeconds=safeMediaPosition(video)||requestedResume"}) Has(appJs,x,"Playback resilience: "+x);
+        T.Assert(appJs.Contains("['pause','waiting','stalled','seeking','seeked','error']"),"Resume position persists on interruption events");T.Pass("Resume position persists on interruption events");
+        T.Assert(appJs.Contains("window.addEventListener('pagehide',pageSave"),"Resume position persists on page exit");T.Pass("Resume position persists on page exit");
+
         // v40.1.0 Home Experience 3.0.
         foreach(var x in new[]{"HOME_EXPERIENCE_3_VERSION='40.2.0'","renderHomeExperience3","homeExperience3Hero","homeExperience3Rail","homeExperience3Card","homeExperience3Capabilities"}) Has(appJs,x,"Home Experience 3.0: "+x);
         foreach(var x in new[]{"Continue Watching","Live Now","Favorites","Recently Added","Movies","Series","Downloads"}) Has(appJs,x,"Home Experience 3.0 surface: "+x);

@@ -1,3 +1,11 @@
+# v40.2.1 — Playback Resilience & Resume Fix
+
+- Saves VOD resume position every few seconds and on pause, buffering, stalls, seeks, errors, page hide and page exit.
+- Restores Continue Watching position after media metadata is ready.
+- Recovers HLS network/media errors in place before falling back to transcoding.
+- Preserves the current playback position when compatibility fallback restarts the stream.
+- Removes nearly completed items from Continue Watching at 95%.
+
 ## v40.2.0 — Home Experience 3.1
 - Reduced Home hero height and typography on desktop.
 - Restored Continue Watching as the first content rail.

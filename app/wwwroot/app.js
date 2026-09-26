@@ -1217,6 +1217,71 @@ function ensureMediaPlayerHost(){
   return wrap;
 }
 
+// v40.2.1 — Playback Resilience & Resume Fix
+const PLAYBACK_RESILIENCE_VERSION='40.2.1';
+function safeMediaPosition(video){
+  const n=Number(video?.currentTime);return Number.isFinite(n)&&n>0?n:0;
+}
+function applyPendingResume(video,seconds){
+  const target=Math.max(0,Number(seconds)||0);if(target<=2)return;
+  let applied=false;
+  const seek=()=>{
+    if(applied||video.readyState<1)return;
+    try{
+      const duration=Number.isFinite(video.duration)&&video.duration>0?video.duration:0;
+      video.currentTime=duration?Math.min(target,Math.max(0,duration-2)):target;
+      applied=true;
+    }catch{}
+  };
+  video.addEventListener('loadedmetadata',seek,{once:true});
+  video.addEventListener('durationchange',seek,{once:true});
+  if(video.readyState>=1)seek();
+}
+function installResilientContinueTracking(video,{mediaId,name,url='',poster='',durationSeconds=0}){
+  if(!mediaId)return ()=>{};
+  video.dataset.continueId=String(mediaId);
+  let lastSavedSecond=-1,lastSaveAt=0;
+  const save=(force=false)=>{
+    if(video.dataset.continueRemoved==='true')return;
+    const sec=Math.floor(safeMediaPosition(video));
+    const dur=Number(durationSeconds)>0?Number(durationSeconds):(Number.isFinite(video.duration)?video.duration:0);
+    if(sec<3)return;
+    if(dur>0&&sec/dur>=.95){
+      video.dataset.continueRemoved='true';
+      api('/api/continue/'+encodeURIComponent(String(mediaId)),{method:'DELETE'}).catch(()=>{});return;
+    }
+    const now=Date.now();
+    if(!force&&(sec===lastSavedSecond||now-lastSaveAt<5000))return;
+    lastSavedSecond=sec;lastSaveAt=now;
+    jpost('/api/continue',{id:String(mediaId),title:name,url,positionSeconds:sec,updated:new Date().toISOString(),poster:poster||'',durationSeconds:dur>0?dur:null}).catch(()=>{});
+  };
+  video.addEventListener('timeupdate',()=>save(false));
+  for(const event of ['pause','waiting','stalled','seeking','seeked','error'])video.addEventListener(event,()=>save(true));
+  video.addEventListener('ended',()=>{video.dataset.continueRemoved='true';api('/api/continue/'+encodeURIComponent(String(mediaId)),{method:'DELETE'}).catch(()=>{})});
+  const pageSave=()=>save(true);
+  window.addEventListener('pagehide',pageSave,{once:true});
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)save(true)});
+  return save;
+}
+function installVodRecovery(video,getHls,savePosition){
+  if(!video||video.dataset.vodRecoveryInstalled)return;
+  video.dataset.vodRecoveryInstalled='1';
+  let recovering=false,lastRecovery=0;
+  const status=text=>{const el=$('#mediaPlaybackStatus');if(el&&!el.classList.contains('error'))el.textContent=text};
+  const recover=async()=>{
+    if(recovering||video.ended||video.paused||Date.now()-lastRecovery<4000)return;
+    recovering=true;lastRecovery=Date.now();savePosition?.(true);status('Buffering…');
+    try{
+      const instance=getHls?.();
+      if(instance){try{instance.startLoad(-1)}catch{};try{instance.recoverMediaError()}catch{}}
+      await video.play().catch(()=>{});
+    }finally{setTimeout(()=>{recovering=false},1200)}
+  };
+  video.addEventListener('waiting',recover);
+  video.addEventListener('stalled',recover);
+  video.addEventListener('playing',()=>status('Playing'));
+}
+
 async function playServerMedia(token,name,mediaId=null,forceTranscode=false,poster=''){
   if(!forceTranscode)mediaFallbackTried=false;
   destroyPlayer();
@@ -1247,42 +1312,11 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
 
     const requestedResume=Math.max(0,Number(pendingResumeSeconds)||0);
     pendingResumeSeconds=0;
-    if(requestedResume>2){
-      const seek=()=>{
-        try{
-          if(Number.isFinite(video.duration)&&video.duration>0)
-            video.currentTime=Math.min(requestedResume,Math.max(0,video.duration-2));
-          else video.currentTime=requestedResume;
-        }catch{}
-      };
-      video.addEventListener('loadedmetadata',seek,{once:true});
-    }
-
+    applyPendingResume(video,requestedResume);
+    let savePlaybackPosition=()=>{};
     const installResumeTracking=()=>{
-      if(!mediaId)return;
-      video.dataset.continueId=String(mediaId);
-      let last=-1;
-      const save=()=>{
-        if(video.dataset.continueRemoved==='true')return;
-        const sec=Math.floor(video.currentTime||0);
-        const dur=mediaDurationSeconds>0?mediaDurationSeconds:(Number.isFinite(video.duration)?video.duration:0);
-        if(sec<5)return;
-        if(dur>0&&sec/dur>=.92){
-          api('/api/continue/'+encodeURIComponent(String(mediaId)),{method:'DELETE'}).catch(()=>{});
-          return;
-        }
-        if(sec===last)return;
-        last=sec;
-        jpost('/api/continue',{
-          id:String(mediaId),title:name,url:'',positionSeconds:sec,
-          updated:new Date().toISOString(),poster:poster||'',durationSeconds:dur>0?dur:null
-        }).catch(()=>{});
-      };
-      video.addEventListener('timeupdate',()=>{if(Math.floor(video.currentTime)%15===0)save()});
-      video.addEventListener('pause',save);
-      video.addEventListener('ended',()=>{
-        api('/api/continue/'+encodeURIComponent(String(mediaId)),{method:'DELETE'}).catch(()=>{});
-      });
+      savePlaybackPosition=installResilientContinueTracking(video,{mediaId,name,poster,durationSeconds:mediaDurationSeconds});
+      installVodRecovery(video,()=>hls,savePlaybackPosition);
     };
 
     video.addEventListener('ended',()=>{
@@ -1311,8 +1345,17 @@ async function playServerMedia(token,name,mediaId=null,forceTranscode=false,post
       hls.on(Hls.Events.ERROR,async(_,d)=>{
         if(!d.fatal)return;
         console.warn('Media HLS fatal',d);
+        savePlaybackPosition(true);
+        if(d.type===Hls.ErrorTypes.NETWORK_ERROR){
+          const st=$('#mediaPlaybackStatus');if(st)st.textContent='Buffering · reconnecting…';
+          try{hls.startLoad(-1);await video.play().catch(()=>{});return}catch{}
+        }
+        if(d.type===Hls.ErrorTypes.MEDIA_ERROR){
+          try{hls.recoverMediaError();await video.play().catch(()=>{});return}catch{}
+        }
         if(!forceTranscode&&!mediaFallbackTried){
           mediaFallbackTried=true;
+          pendingResumeSeconds=safeMediaPosition(video)||requestedResume;
           const st=$('#mediaPlaybackStatus');if(st)st.textContent='Codec not browser-compatible · retrying with H.264/AAC…';
           await playServerMedia(token,name,mediaId,true,poster);
           return;
@@ -1337,24 +1380,21 @@ function playMedia(url,name,mediaId=null){
   wrap.innerHTML=`<div class=playerCard><video id=video controls autoplay playsinline></video><div class=mediaTimeBar><span id=mediaCurrentTime>00:00</span><span>/</span><span id=mediaTotalTime>--:--</span></div><div class=nowPlaying>${esc(name)}</div></div>`;
   const video=$('#video');
   installMediaDurationDisplay(video,0);
-  if(mediaId){
-    video.dataset.continueId=String(mediaId);
-    let last=-1;
-    const save=()=>{
-      if(video.dataset.continueRemoved==='true')return;
-      const sec=Math.floor(video.currentTime||0);
-      if(sec===last)return;
-      last=sec;
-      jpost('/api/continue',{id:String(mediaId),title:name,url,positionSeconds:sec,updated:new Date().toISOString()}).catch(()=>{});
-    };
-    video.addEventListener('timeupdate',()=>{if(Math.floor(video.currentTime)%15===0)save()});
-    video.addEventListener('pause',save);
-    video.addEventListener('ended',save);
-  }
+  const requestedResume=Math.max(0,Number(pendingResumeSeconds)||0);
+  pendingResumeSeconds=0;
+  applyPendingResume(video,requestedResume);
+  const savePlaybackPosition=installResilientContinueTracking(video,{mediaId,name,url});
+  installVodRecovery(video,()=>hls,savePlaybackPosition);
   if(window.Hls&&Hls.isSupported()){
-    hls=new Hls({enableWorker:true,lowLatencyMode:true});
+    hls=new Hls({enableWorker:true,lowLatencyMode:false,backBufferLength:90,maxBufferLength:60,maxMaxBufferLength:120});
     hls.loadSource(url);hls.attachMedia(video);
-    hls.on(Hls.Events.ERROR,(_,d)=>{if(d.fatal)console.warn('HLS fatal',d)});
+    hls.on(Hls.Events.ERROR,(_,d)=>{
+      if(!d.fatal)return;
+      savePlaybackPosition(true);
+      if(d.type===Hls.ErrorTypes.NETWORK_ERROR){try{hls.startLoad(-1);return}catch{}}
+      if(d.type===Hls.ErrorTypes.MEDIA_ERROR){try{hls.recoverMediaError();return}catch{}}
+      console.warn('HLS fatal',d);
+    });
   }else if(video.canPlayType('application/vnd.apple.mpegurl')) video.src=url;
   else video.src=url;
   wrap.scrollIntoView({behavior:'smooth',block:'start'});
