@@ -3,6 +3,11 @@ let continueHomeSnapshot=null;
 function continueCardActions(markup,item){
   return `<div class="continueManagedCard" data-continue-id="${escAttr(item.id)}">${markup}<button class="btn continueMenuButton" aria-haspopup="dialog" aria-label="Actions for ${escAttr(item.title||item.name||'Continue Watching')}" onclick="openContinueActions(this.closest('[data-continue-id]').dataset.continueId,this)">•••</button></div>`;
 }
+// Home Experience 3 is the default layout and must expose the same actions.
+const continueExperience3Card=homeExperience3Card;
+homeExperience3Card=(item,kind)=>kind==='continue'
+  ?continueCardActions(continueExperience3Card(item,kind),item)
+  :continueExperience3Card(item,kind);
 const continueMobileCard=mobile364ContinueCard;
 mobile364ContinueCard=item=>continueCardActions(continueMobileCard(item),item);
 const continueTabletCard=tablet365ContinueCard;
@@ -17,8 +22,8 @@ renderHomeContent=function(data){
   continueRenderHome(data);
   const section=content.querySelector('[data-continue-id]')?.closest('section');
   if(section){
-    const header=section.querySelector('header');
-    if(header){const button=document.createElement('button');button.className='btn continueClearButton';button.textContent='Clear Continue Watching';button.onclick=clearContinueWatching;header.append(button);}
+    const header=section.querySelector('header, .hx3SectionHead');
+    if(header && !header.querySelector('.continueClearButton')){const button=document.createElement('button');button.className='btn continueClearButton';button.textContent='Clear Continue Watching';button.onclick=clearContinueWatching;header.append(button);}
   }
 };
 function continueDialog(title,actions,trigger){
