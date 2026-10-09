@@ -46,7 +46,7 @@ class MainActivity : AppCompatActivity() {
         binding.guideButton.setOnClickListener { open("guide") }
         binding.moviesButton.setOnClickListener { open("movies") }
         binding.seriesButton.setOnClickListener { open("series") }
-        binding.youtubeButton.setOnClickListener { startActivity(Intent(this, YouTubeActivity::class.java)) }
+        binding.youtubeButton.setOnClickListener { startActivity(Intent(this, YouTubeActivity::class.java).putExtra("server", binding.serverUrl.text.toString().trim())) }
     }
 
     private fun open(mode:String) {
