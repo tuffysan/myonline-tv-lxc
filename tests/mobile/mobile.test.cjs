@@ -75,6 +75,12 @@ const server = http.createServer(async (req, res) => {
     assert.equal(await page.locator('#mobileMoreSheet button').filter({hasText:'Admin'}).count(),0);
     assert.equal(await page.locator('#mobileBottomNav [data-mobile-view="movies"]').count(),0);
     await page.keyboard.press('Escape');
+    // YouTube must be present in the responsive navigation and render in-app.
+    assert.equal(await page.locator('#app > aside nav button[data-view="youtube"]').count(),1);
+    await page.evaluate(()=>show('youtube'));
+    await page.waitForSelector('#content iframe[src="/youtube.html"]');
+    assert.equal(await page.locator('#title').innerText(),'YouTube');
+    await page.evaluate(()=>show('home'));
     console.log('PASS navigation and menu dismissal');
 
     // Movie details -> Back restores catalogue filters and selection.
