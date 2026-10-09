@@ -2,58 +2,68 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>YouTube | MyOnline TV</title>
 <style>
-:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#0b1622;color:#f4f7fb}
-*{box-sizing:border-box}body{margin:0 auto;padding:clamp(12px,3vw,30px);max-width:1100px}
-header{display:flex;gap:16px;align-items:center;flex-wrap:wrap}h1{margin:0}a{color:#9ed9ff}
-p{line-height:1.5;color:#c6d5e4}form{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}
-input{flex:1;min-width:190px;background:#192b3d;border:1px solid #53728c;border-radius:9px;color:white;padding:13px;font-size:16px}
-button,.action{display:inline-block;background:#c62828;color:white;border:0;border-radius:9px;padding:13px 18px;font-size:16px;text-decoration:none;cursor:pointer}
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#0b1622;color:#f4f7fb}*{box-sizing:border-box}
+body{margin:0 auto;padding:clamp(12px,3vw,30px);max-width:1150px}header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{margin:0}h2{margin-top:0}a{color:#9ed9ff}p{line-height:1.5;color:#c6d5e4}
+form,.actions{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}
+input{flex:1;min-width:190px;background:#192b3d;border:1px solid #53728c;border-radius:9px;color:white;padding:12px;font-size:16px}
+button,.action{display:inline-block;background:#c62828;color:white;border:0;border-radius:9px;padding:12px 16px;font-size:15px;text-decoration:none;cursor:pointer}
 .secondary{background:#24445f}button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #7dd3fc;outline-offset:3px}
 .panel{background:#14283a;border:1px solid #34516c;border-radius:14px;padding:clamp(14px,2vw,24px);margin:18px 0}
 .note{font-size:14px}.player{width:100%;aspect-ratio:16/9;border:0;border-radius:10px;background:#000}
-.hidden{display:none}#error{color:#ffb4b4}h2{margin-top:0}
+.hidden{display:none}#error{color:#ffb4b4}.history{display:flex;gap:8px;flex-wrap:wrap}.history button{max-width:100%;overflow-wrap:anywhere}
 </style></head><body>
-<header><a href="/" target="_top" aria-label="Back to MyOnline TV">← MyOnline TV</a><h1>YouTube</h1></header>
-<section class="panel"><h2>Play a video in MyOnline TV</h2>
-<form id="videoForm"><input id="videoUrl" type="text" required placeholder="Paste a YouTube video, Shorts or youtu.be link" aria-label="YouTube video URL"><button type="submit">Play</button></form>
+<header><h1>YouTube</h1><a class="action secondary" href="https://www.youtube.com/" target="_blank" rel="noopener noreferrer">Full YouTube experience ↗</a></header>
+<section class="panel"><h2>Watch inside MyOnline TV</h2>
+<form id="videoForm"><input id="videoUrl" type="text" required placeholder="Paste YouTube video, Shorts or playlist link" aria-label="YouTube URL"><button type="submit">Play</button></form>
 <p id="error" role="alert" class="hidden"></p>
-<div id="playerHost" class="hidden"><iframe id="videoPlayer" class="player" title="YouTube video player" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" allowfullscreen></iframe>
-<p><a id="externalVideo" target="_blank" rel="noopener noreferrer">Open video on YouTube ↗</a> · <button id="stopPlayer" type="button" class="secondary">Stop</button></p></div>
-<p class="note">Playback uses YouTube's official embedded player. Some videos prohibit embedding or require opening YouTube. Ads may appear.</p></section>
-<section class="panel"><h2>Search YouTube</h2>
-<form id="searchForm"><input id="searchQuery" type="search" required maxlength="120" placeholder="Search YouTube" aria-label="Search YouTube"><button type="submit" class="secondary">Search ↗</button></form>
-<p class="note">Search opens YouTube in a new tab. No API key, Google Cloud project or paid quota is required.</p></section>
-<section class="panel"><h2>Your Google account</h2>
-<p>Sign in on the official YouTube website to use subscriptions, history and recommendations. Embedded playback cannot share all browser sign-in features. MyOnline TV does not collect your Google credentials.</p>
-<a class="action secondary" href="https://www.youtube.com/" target="_blank" rel="noopener noreferrer">Open YouTube / Sign in ↗</a></section>
+<div id="playerHost" class="hidden"><iframe id="videoPlayer" class="player" title="YouTube player" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe>
+<div class="actions"><a id="externalVideo" class="action secondary" target="_blank" rel="noopener noreferrer">Open on YouTube ↗</a><button id="stopPlayer" type="button" class="secondary">Stop</button></div></div>
+<p class="note">Official YouTube embedded player. Some videos disable embedding; ads may appear. Google sign-in and account features work on YouTube's own site.</p>
+</section>
+<section class="panel"><h2>Search</h2><form id="searchForm"><input id="searchQuery" type="search" required maxlength="120" placeholder="Search videos on YouTube" aria-label="Search YouTube"><button type="submit">Search ↗</button></form>
+<p class="note">Search opens official YouTube. No YouTube API key or billable Google Cloud project required.</p></section>
+<section class="panel"><h2>Recently opened here</h2><div id="recent" class="history"></div><button type="button" id="clearHistory" class="secondary">Clear local history</button>
+<p class="note">Only video links opened here are saved locally in this browser. This is not your Google watch history.</p></section>
+<section class="panel"><h2>Subscriptions, recommendations and Brave Shields</h2>
+<p>For your subscriptions, recommendations, comments and account history, open YouTube in your browser and sign in there. On devices with Brave installed, use Brave to access its Shields protection. MyOnline TV cannot enable Brave Shields inside another browser or guarantee ad-free playback.</p>
+<div class="actions"><a class="action secondary" href="https://www.youtube.com/feed/subscriptions" target="_blank" rel="noopener noreferrer">Subscriptions ↗</a><a class="action secondary" href="https://www.youtube.com/feed/history" target="_blank" rel="noopener noreferrer">Watch history ↗</a><a class="action secondary" href="https://www.youtube.com/playlist?list=WL" target="_blank" rel="noopener noreferrer">Watch later ↗</a></div></section>
 <script>
 'use strict';
-const $=id=>document.getElementById(id);
-function videoId(raw){
- let u;
- try{u=new URL(raw.trim());}catch{return null;}
+const $=id=>document.getElementById(id), historyKey='myonlinetv.youtube.recent.v1';
+function parseLink(raw){
+ let u;try{u=new URL(raw.trim())}catch{return null}
  if(u.protocol!=='https:')return null;
- const host=u.hostname.toLowerCase();
- let id=null;
- if(host==='youtu.be')id=u.pathname.split('/')[1];
- else if(['youtube.com','www.youtube.com','m.youtube.com','music.youtube.com','www.youtube-nocookie.com'].includes(host)){
+ const h=u.hostname.toLowerCase();let id=null;
+ if(h==='youtu.be')id=u.pathname.split('/')[1];
+ else if(['youtube.com','www.youtube.com','m.youtube.com','music.youtube.com','www.youtube-nocookie.com'].includes(h)){
   if(u.pathname==='/watch')id=u.searchParams.get('v');
   else if(/^\/(shorts|live|embed)\//.test(u.pathname))id=u.pathname.split('/')[2];
  }
- return id&&/^[A-Za-z0-9_-]{11}$/.test(id)?id:null;
+ const list=u.searchParams.get('list');
+ if(id&&!/^[A-Za-z0-9_-]{11}$/.test(id))return null;
+ if(list&&!/^[A-Za-z0-9_-]{10,100}$/.test(list))return null;
+ if(!id&&!list)return null;
+ if(!id&&!['youtube.com','www.youtube.com','m.youtube.com','music.youtube.com'].includes(h))return null;
+ const params=new URLSearchParams({autoplay:'1',playsinline:'1'});
+ if(list)params.set('list',list);
+ const embed=id?'https://www.youtube-nocookie.com/embed/'+encodeURIComponent(id):'https://www.youtube-nocookie.com/embed/videoseries';
+ if(!id)params.set('list',list);
+ const external=id?'https://www.youtube.com/watch?v='+encodeURIComponent(id)+(list?'&list='+encodeURIComponent(list):''):'https://www.youtube.com/playlist?list='+encodeURIComponent(list);
+ return {embed:embed+'?'+params.toString(),external};
 }
-$('videoForm').addEventListener('submit',e=>{
- e.preventDefault();
- const id=videoId($('videoUrl').value);
- $('error').classList.toggle('hidden',!!id);
- if(!id){$('error').textContent='Enter a valid HTTPS YouTube video link.';return;}
- $('videoPlayer').src='https://www.youtube-nocookie.com/embed/'+encodeURIComponent(id)+'?autoplay=1&playsinline=1';
- $('externalVideo').href='https://www.youtube.com/watch?v='+encodeURIComponent(id);
- $('playerHost').classList.remove('hidden');
-});
-$('stopPlayer').addEventListener('click',()=>{$('videoPlayer').removeAttribute('src');$('playerHost').classList.add('hidden');});
-$('searchForm').addEventListener('submit',e=>{
- e.preventDefault();const q=$('searchQuery').value.trim();
- if(q)window.open('https://www.youtube.com/results?search_query='+encodeURIComponent(q),'_blank','noopener,noreferrer');
-});
+function loadHistory(){try{const a=JSON.parse(localStorage.getItem(historyKey)||'[]');return Array.isArray(a)?a.filter(x=>typeof x==='string').slice(0,12):[]}catch{return []}}
+function renderHistory(){const host=$('recent');host.replaceChildren();const items=loadHistory();if(!items.length){const p=document.createElement('p');p.textContent='No videos opened yet.';host.append(p)}else for(const link of items){const b=document.createElement('button');b.className='secondary';b.type='button';b.textContent=link;b.addEventListener('click',()=>{$('videoUrl').value=link;play(link)});host.append(b)}}
+function play(raw){
+ const link=parseLink(raw);$('error').classList.toggle('hidden',!!link);
+ if(!link){$('error').textContent='Enter a valid HTTPS YouTube video or playlist link.';return}
+ $('videoPlayer').src=link.embed;$('externalVideo').href=link.external;$('playerHost').classList.remove('hidden');
+ try{localStorage.setItem(historyKey,JSON.stringify([link.external,...loadHistory().filter(x=>x!==link.external)].slice(0,12)))}catch{}
+ renderHistory();
+}
+$('videoForm').addEventListener('submit',e=>{e.preventDefault();play($('videoUrl').value)});
+$('stopPlayer').addEventListener('click',()=>{$('videoPlayer').removeAttribute('src');$('playerHost').classList.add('hidden')});
+$('clearHistory').addEventListener('click',()=>{try{localStorage.removeItem(historyKey)}catch{}renderHistory()});
+$('searchForm').addEventListener('submit',e=>{e.preventDefault();const q=$('searchQuery').value.trim();if(q)window.open('https://www.youtube.com/results?search_query='+encodeURIComponent(q),'_blank','noopener,noreferrer')});
+renderHistory();
 </script></body></html>
