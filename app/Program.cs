@@ -1028,6 +1028,36 @@ string RegisterProxy(string url, string kind = "media")
 
 string ProxyUrl(string url, string kind = "media") => $"/api/proxy/{RegisterProxy(url, kind)}";
 
+
+app.MapGet("/api/youtube/search", async (HttpContext ctx, string? q, int? maxResults) =>
+{
+    var key = Environment.GetEnvironmentVariable("MYONLINE_YOUTUBE_API_KEY");
+    if (string.IsNullOrWhiteSpace(key))
+        return Results.Json(new { error = "YouTube search requires MYONLINE_YOUTUBE_API_KEY on the server." }, statusCode: 503);
+    if (string.IsNullOrWhiteSpace(q) || q.Trim().Length > 120)
+        return Results.BadRequest(new { error = "Search query must be 1-120 characters." });
+    var count = Math.Clamp(maxResults ?? 12, 1, 25);
+    var url = "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&safeSearch=moderate&maxResults="
+        + count + "&q=" + Uri.EscapeDataString(q.Trim()) + "&key=" + Uri.EscapeDataString(key);
+    try
+    {
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(12) };
+        using var response = await http.GetAsync(url, ctx.RequestAborted);
+        if (!response.IsSuccessStatusCode)
+            return Results.Json(new { error = "YouTube search failed. Check API key, quota and API permissions." }, statusCode: 502);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ctx.RequestAborted));
+        var items = json.RootElement.GetProperty("items").EnumerateArray().Select(item => new {
+            id = item.GetProperty("id").GetProperty("videoId").GetString(),
+            title = item.GetProperty("snippet").GetProperty("title").GetString(),
+            channel = item.GetProperty("snippet").GetProperty("channelTitle").GetString(),
+            thumbnail = item.GetProperty("snippet").GetProperty("thumbnails").GetProperty("default").GetProperty("url").GetString()
+        }).ToArray();
+        return Results.Ok(new { items });
+    }
+    catch (OperationCanceledException) when (ctx.RequestAborted.IsCancellationRequested) { return Results.StatusCode(499); }
+    catch (Exception) { return Results.Json(new { error = "YouTube search temporarily unavailable." }, statusCode: 502); }
+}).RequireAuthorization();
+
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseAuthentication();
