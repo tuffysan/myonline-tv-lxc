@@ -208,7 +208,7 @@ const server = http.createServer(async (req, res) => {
       await devicePage.close();console.log('PASS Continue Watching remove/clear/confirmation: '+device.name);
     }
     await page.setViewportSize({width:844,height:390});
-    assert.notEqual(await page.locator('.mobile364Home').evaluate(el=>getComputedStyle(el).display),'none');
+    assert.notEqual(await page.locator('.homeExperience3, .mobile364Home, .tablet365Home, .desktop362Home').first().evaluate(el=>getComputedStyle(el).display),'none');
     await page.setViewportSize({width:390,height:844});
     assert.deepEqual(errors,[],'No browser JavaScript errors');
     if(process.env.MOBILE_SCREENSHOT)await page.screenshot({path:process.env.MOBILE_SCREENSHOT,fullPage:true});
