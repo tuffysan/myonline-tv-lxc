@@ -14,6 +14,11 @@ button,.action{display:inline-block;background:#c62828;color:white;border:0;bord
 .note{font-size:14px}
 </style></head><body>
 <header><a href="/" aria-label="Back to MyOnline TV">← MyOnline TV</a><h1>YouTube</h1></header>
+<div class="panel"><h2>YouTube with ad blocking</h2>
+<p>For an experience like Brave with Shields enabled, open MyOnline TV in Brave, then use the YouTube links below. Your Google sign-in and ad-blocking settings are managed by Brave, not MyOnline TV.</p>
+<p class="note">On Android TV, the MyOnline TV YouTube shortcut prefers SmartTube if installed, then falls back to YouTube. SmartTube is third-party software; install only from its official source.</p>
+<p><a href="https://brave.com/download/" target="_blank" rel="noopener noreferrer">Get Brave ↗</a> · <a href="https://github.com/yuliskov/SmartTube" target="_blank" rel="noopener noreferrer">SmartTube official project ↗</a></p>
+</div>
 <div class="panel"><h2>Your own YouTube account</h2>
 <p>Open the official YouTube website and sign in with your Google account there. Your subscriptions, watch history and recommendations stay with YouTube. MyOnline TV never asks for or stores your Google password or API key.</p>
 <a class="action" href="https://www.youtube.com/" target="_blank" rel="noopener noreferrer">Open YouTube / Sign in ↗</a>
@@ -24,7 +29,7 @@ button,.action{display:inline-block;background:#c62828;color:white;border:0;bord
 </div>
 <div class="panel"><h2>Play a YouTube link</h2>
 <form id="videoForm"><input id="videoUrl" type="url" required placeholder="https://www.youtube.com/watch?v=…" aria-label="YouTube video or playlist URL"><button type="submit">Open ↗</button></form>
-<p class="note">Videos open on the official YouTube site or app, where Google account sign-in is supported. YouTube may show advertisements.</p>
+<p class="note">Videos open on YouTube. Brave Shields or SmartTube may reduce ads, but ad-free playback cannot be guaranteed.</p>
 </div>
 <script>
 document.getElementById('searchForm').addEventListener('submit',e=>{
