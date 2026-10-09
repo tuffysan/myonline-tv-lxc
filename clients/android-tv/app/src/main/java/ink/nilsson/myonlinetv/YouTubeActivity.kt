@@ -30,9 +30,21 @@ class YouTubeActivity : AppCompatActivity() {
                 launched = true
                 break
             } catch (_: ActivityNotFoundException) {
-                // Try next installed application.
+                // Fall back to the app launcher below.
             } catch (_: SecurityException) {
-                // This package cannot accept external launches.
+                // Fall back to the app launcher below.
+            }
+            if (!launched) {
+                try {
+                    val launch = packageManager.getLaunchIntentForPackage(packageName)
+                    if (launch != null) {
+                        startActivity(launch)
+                        launched = true
+                        break
+                    }
+                } catch (_: Exception) {
+                    // Continue with the next candidate.
+                }
             }
         }
         if (!launched) {
