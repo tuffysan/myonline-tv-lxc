@@ -150,12 +150,20 @@ const server = http.createServer(async (req, res) => {
     await page.waitForFunction(()=>getMediaFavs().length===0);
     console.log('PASS full collections and removal');
 
+    // The responsive Home experience renders partial content while catalogue calls fail.
+    // Verify the actual section state rather than obsolete error/retry copy.
     failCatalogue=true;
-    await page.evaluate(()=>{sessionStorage.clear();return show('home');});
-    await page.waitForFunction(()=>document.querySelector('#content').textContent.includes('Could not load this section'));
+    await page.evaluate(()=>{
+      sessionStorage.clear();
+      localStorage.removeItem('home-unifiedMovies');
+      localStorage.removeItem('home-unifiedSeries');
+      return show('home');
+    });
+    await page.waitForFunction(()=>homeSectionState.movies==='error'&&homeSectionState.series==='error');
+    assert.equal(await page.locator('#content').count(),1);
     failCatalogue=false;
-    await page.getByRole('button',{name:'Try again'}).first().click();
-    await page.waitForFunction(()=>document.querySelector('#content').textContent.includes('No items available from your sources.'));
+    await page.evaluate(()=>show('home'));
+    await page.waitForFunction(()=>homeSectionState.movies==='ready'&&homeSectionState.series==='ready');
     assert.equal(await page.locator('.mobileSkeleton').count(),0);
     for(const width of [320,390,430]){
       await page.setViewportSize({width,height:844});
