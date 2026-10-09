@@ -3,41 +3,57 @@
 <title>YouTube | MyOnline TV</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,sans-serif;background:#0b1622;color:#f4f7fb}
-*{box-sizing:border-box}body{margin:0 auto;padding:clamp(16px,4vw,48px);max-width:920px}
-header{display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin-bottom:32px}
-h1{margin:0}a{color:#9ed9ff}p{line-height:1.6;color:#c6d5e4}
-form{display:flex;gap:12px;flex-wrap:wrap;margin:24px 0}
-input{flex:1;min-width:220px;background:#192b3d;border:1px solid #53728c;border-radius:9px;color:white;padding:14px;font-size:17px}
-button,.action{display:inline-block;background:#c62828;color:white;border:0;border-radius:9px;padding:14px 20px;font-size:17px;text-decoration:none;cursor:pointer}
+*{box-sizing:border-box}body{margin:0 auto;padding:clamp(12px,3vw,30px);max-width:1100px}
+header{display:flex;gap:16px;align-items:center;flex-wrap:wrap}h1{margin:0}a{color:#9ed9ff}
+p{line-height:1.5;color:#c6d5e4}form{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}
+input{flex:1;min-width:190px;background:#192b3d;border:1px solid #53728c;border-radius:9px;color:white;padding:13px;font-size:16px}
+button,.action{display:inline-block;background:#c62828;color:white;border:0;border-radius:9px;padding:13px 18px;font-size:16px;text-decoration:none;cursor:pointer}
 .secondary{background:#24445f}button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #7dd3fc;outline-offset:3px}
-.panel{background:#14283a;border:1px solid #34516c;border-radius:14px;padding:clamp(18px,3vw,30px);margin:20px 0}
-.note{font-size:14px}
+.panel{background:#14283a;border:1px solid #34516c;border-radius:14px;padding:clamp(14px,2vw,24px);margin:18px 0}
+.note{font-size:14px}.player{width:100%;aspect-ratio:16/9;border:0;border-radius:10px;background:#000}
+.hidden{display:none}#error{color:#ffb4b4}h2{margin-top:0}
 </style></head><body>
-<header><a href="/" aria-label="Back to MyOnline TV">← MyOnline TV</a><h1>YouTube</h1></header>
-<div class="panel"><h2>Your own YouTube account</h2>
-<p>Open the official YouTube website and sign in with your Google account there. Your subscriptions, watch history and recommendations stay with YouTube. MyOnline TV never asks for or stores your Google password or API key.</p>
-<a class="action" href="https://www.youtube.com/" target="_blank" rel="noopener noreferrer">Open YouTube / Sign in ↗</a>
-</div>
-<div class="panel"><h2>Search YouTube</h2>
-<form id="searchForm"><input id="searchQuery" type="search" required maxlength="120" placeholder="Search YouTube" aria-label="Search YouTube"><button type="submit">Search ↗</button></form>
-<p class="note">Search opens on YouTube itself. No YouTube Data API, API key, or Google Cloud project is needed.</p>
-</div>
-<div class="panel"><h2>Play a YouTube link</h2>
-<form id="videoForm"><input id="videoUrl" type="url" required placeholder="https://www.youtube.com/watch?v=…" aria-label="YouTube video or playlist URL"><button type="submit">Open ↗</button></form>
-<p class="note">Videos open on the official YouTube site or app, where Google account sign-in is supported. YouTube may show advertisements.</p>
-</div>
+<header><a href="/" target="_top" aria-label="Back to MyOnline TV">← MyOnline TV</a><h1>YouTube</h1></header>
+<section class="panel"><h2>Play a video in MyOnline TV</h2>
+<form id="videoForm"><input id="videoUrl" type="text" required placeholder="Paste a YouTube video, Shorts or youtu.be link" aria-label="YouTube video URL"><button type="submit">Play</button></form>
+<p id="error" role="alert" class="hidden"></p>
+<div id="playerHost" class="hidden"><iframe id="videoPlayer" class="player" title="YouTube video player" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" allowfullscreen></iframe>
+<p><a id="externalVideo" target="_blank" rel="noopener noreferrer">Open video on YouTube ↗</a> · <button id="stopPlayer" type="button" class="secondary">Stop</button></p></div>
+<p class="note">Playback uses YouTube's official embedded player. Some videos prohibit embedding or require opening YouTube. Ads may appear.</p></section>
+<section class="panel"><h2>Search YouTube</h2>
+<form id="searchForm"><input id="searchQuery" type="search" required maxlength="120" placeholder="Search YouTube" aria-label="Search YouTube"><button type="submit" class="secondary">Search ↗</button></form>
+<p class="note">Search opens YouTube in a new tab. No API key, Google Cloud project or paid quota is required.</p></section>
+<section class="panel"><h2>Your Google account</h2>
+<p>Sign in on the official YouTube website to use subscriptions, history and recommendations. Embedded playback cannot share all browser sign-in features. MyOnline TV does not collect your Google credentials.</p>
+<a class="action secondary" href="https://www.youtube.com/" target="_blank" rel="noopener noreferrer">Open YouTube / Sign in ↗</a></section>
 <script>
-document.getElementById('searchForm').addEventListener('submit',e=>{
+'use strict';
+const $=id=>document.getElementById(id);
+function videoId(raw){
+ let u;
+ try{u=new URL(raw.trim());}catch{return null;}
+ if(u.protocol!=='https:')return null;
+ const host=u.hostname.toLowerCase();
+ let id=null;
+ if(host==='youtu.be')id=u.pathname.split('/')[1];
+ else if(['youtube.com','www.youtube.com','m.youtube.com','music.youtube.com','www.youtube-nocookie.com'].includes(host)){
+  if(u.pathname==='/watch')id=u.searchParams.get('v');
+  else if(/^\/(shorts|live|embed)\//.test(u.pathname))id=u.pathname.split('/')[2];
+ }
+ return id&&/^[A-Za-z0-9_-]{11}$/.test(id)?id:null;
+}
+$('videoForm').addEventListener('submit',e=>{
  e.preventDefault();
- const q=document.getElementById('searchQuery').value.trim();
- if(q)window.open('https://www.youtube.com/results?search_query='+encodeURIComponent(q),'_blank','noopener,noreferrer');
+ const id=videoId($('videoUrl').value);
+ $('error').classList.toggle('hidden',!!id);
+ if(!id){$('error').textContent='Enter a valid HTTPS YouTube video link.';return;}
+ $('videoPlayer').src='https://www.youtube-nocookie.com/embed/'+encodeURIComponent(id)+'?autoplay=1&playsinline=1';
+ $('externalVideo').href='https://www.youtube.com/watch?v='+encodeURIComponent(id);
+ $('playerHost').classList.remove('hidden');
 });
-document.getElementById('videoForm').addEventListener('submit',e=>{
- e.preventDefault();
- try{
-  const url=new URL(document.getElementById('videoUrl').value);
-  if(!['youtube.com','www.youtube.com','m.youtube.com','music.youtube.com','youtu.be'].includes(url.hostname.toLowerCase())||url.protocol!=='https:')throw Error('Enter a valid HTTPS YouTube link');
-  window.open(url.href,'_blank','noopener,noreferrer');
- }catch{alert('Please enter a valid YouTube URL.');}
+$('stopPlayer').addEventListener('click',()=>{$('videoPlayer').removeAttribute('src');$('playerHost').classList.add('hidden');});
+$('searchForm').addEventListener('submit',e=>{
+ e.preventDefault();const q=$('searchQuery').value.trim();
+ if(q)window.open('https://www.youtube.com/results?search_query='+encodeURIComponent(q),'_blank','noopener,noreferrer');
 });
 </script></body></html>
