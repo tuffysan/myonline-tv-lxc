@@ -18,8 +18,8 @@ button,.action{display:inline-block;background:#c62828;color:white;border:0;bord
 <form id="videoForm"><input id="videoUrl" type="text" required placeholder="Paste YouTube video, Shorts or playlist link" aria-label="YouTube URL"><button type="submit">Play</button></form>
 <p id="error" role="alert" class="hidden"></p>
 <div id="playerHost" class="hidden"><iframe id="videoPlayer" class="player" title="YouTube player" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe>
-<div class="actions"><a id="externalVideo" class="action secondary" target="_blank" rel="noopener noreferrer">Open on YouTube ↗</a><button id="stopPlayer" type="button" class="secondary">Stop</button></div></div>
-<p class="note">Official YouTube embedded player. Some videos disable embedding; ads may appear. Google sign-in and account features work on YouTube's own site.</p>
+<div class="actions"><button id="directPlay" type="button" class="secondary">Try ad-reduced playback (experimental)</button><span id="directStatus" role="status"></span><a id="externalVideo" class="action secondary" target="_blank" rel="noopener noreferrer">Open on YouTube ↗</a><button id="stopPlayer" type="button" class="secondary">Stop</button></div></div>
+<p class="note">Choose experimental direct playback to try a stream without YouTube player ads. Availability, browser compatibility and ad reduction are not guaranteed. Official embedded playback remains the fallback. Google sign-in and account features work on YouTube's own site.</p>
 </section>
 <section class="panel"><h2>Search</h2><form id="searchForm"><input id="searchQuery" type="search" required maxlength="120" placeholder="Search videos on YouTube" aria-label="Search YouTube"><button type="submit">Search ↗</button></form>
 <p class="note">Search opens official YouTube. No YouTube API key or billable Google Cloud project required.</p></section>
@@ -54,15 +54,38 @@ function parseLink(raw){
 }
 function loadHistory(){try{const a=JSON.parse(localStorage.getItem(historyKey)||'[]');return Array.isArray(a)?a.filter(x=>typeof x==='string').slice(0,12):[]}catch{return []}}
 function renderHistory(){const host=$('recent');host.replaceChildren();const items=loadHistory();if(!items.length){const p=document.createElement('p');p.textContent='No videos opened yet.';host.append(p)}else for(const link of items){const b=document.createElement('button');b.className='secondary';b.type='button';b.textContent=link;b.addEventListener('click',()=>{$('videoUrl').value=link;play(link)});host.append(b)}}
+let currentVideoId=null;
 function play(raw){
  const link=parseLink(raw);$('error').classList.toggle('hidden',!!link);
  if(!link){$('error').textContent='Enter a valid HTTPS YouTube video or playlist link.';return}
- $('videoPlayer').src=link.embed;$('externalVideo').href=link.external;$('playerHost').classList.remove('hidden');
+ currentVideoId=new URL(link.external).searchParams.get('v');
+ $('directPlay').disabled=!currentVideoId;
+ $('directStatus').textContent='';
+ const previous=$('directVideo');if(previous){previous.pause();previous.removeAttribute('src');previous.load();previous.classList.add('hidden')}
+ $('videoPlayer').classList.remove('hidden');$('videoPlayer').src=link.embed;$('externalVideo').href=link.external;$('playerHost').classList.remove('hidden');
  try{localStorage.setItem(historyKey,JSON.stringify([link.external,...loadHistory().filter(x=>x!==link.external)].slice(0,12)))}catch{}
  renderHistory();
 }
 $('videoForm').addEventListener('submit',e=>{e.preventDefault();play($('videoUrl').value)});
-$('stopPlayer').addEventListener('click',()=>{$('videoPlayer').removeAttribute('src');$('playerHost').classList.add('hidden')});
+$('directPlay').addEventListener('click',async()=>{
+ if(!currentVideoId)return;
+ const id=currentVideoId, status=$('directStatus'), btn=$('directPlay');
+ btn.disabled=true;status.textContent='Resolving video…';
+ try{
+  const resp=await fetch('/api/youtube/resolve?id='+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store'});
+  if(!resp.ok)throw Error('Direct playback unavailable ('+resp.status+')');
+  const data=await resp.json();
+  if(!data.stream||!/^https:\/\//.test(data.stream))throw Error('No compatible stream');
+  const iframe=$('videoPlayer');
+  iframe.removeAttribute('src');
+  let video=$('directVideo');
+  if(!video){video=document.createElement('video');video.id='directVideo';video.className='player';video.controls=true;video.playsInline=true;iframe.insertAdjacentElement('afterend',video)}
+  iframe.classList.add('hidden');video.classList.remove('hidden');video.src=data.stream;
+  try{await video.play();status.textContent='Direct playback active'}catch{status.textContent='Press Play on the video to start'}
+ }catch(e){status.textContent=e.message+' — use the official player above';$('videoPlayer').classList.remove('hidden')}
+ finally{btn.disabled=false}
+});
+$('stopPlayer').addEventListener('click',()=>{$('videoPlayer').removeAttribute('src');const v=$('directVideo');if(v){v.pause();v.removeAttribute('src');v.load()}$('playerHost').classList.add('hidden')});
 $('clearHistory').addEventListener('click',()=>{try{localStorage.removeItem(historyKey)}catch{}renderHistory()});
 $('searchForm').addEventListener('submit',e=>{e.preventDefault();const q=$('searchQuery').value.trim();if(q)window.open('https://www.youtube.com/results?search_query='+encodeURIComponent(q),'_blank','noopener,noreferrer')});
 renderHistory();
