@@ -10,11 +10,14 @@ button{background:#c62828;border:0;color:white;border-radius:8px;padding:12px 20
 button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #7dd3fc;outline-offset:3px}
 .player{width:100%;aspect-ratio:16/9;background:#000;border-radius:12px;overflow:hidden}
 iframe{width:100%;height:100%;border:0}.hint{color:#c6d5e4;line-height:1.5}
+.results{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;margin:20px 0}.result{background:#172a3d;border:1px solid #34516c;border-radius:10px;text-align:left;padding:10px;cursor:pointer}.result img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:6px}.result strong,.result small{display:block;margin-top:8px}.result small{color:#bcd0e3}.player:empty{display:none} .privacy{font-size:13px;color:#9fb5c9}
 </style></head><body>
 <header><a href="/" aria-label="Back to MyOnline TV">← MyOnline TV</a><h1>YouTube</h1></header>
 <p class="hint">Play a YouTube video or playlist inside MyOnline TV. Paste a YouTube link below. YouTube may display video ads.</p>
 <form id="youtubeForm"><input id="youtubeUrl" type="url" required placeholder="https://www.youtube.com/watch?v=…" aria-label="YouTube video or playlist URL"><button type="submit">Play</button></form>
-<p id="message" role="status" class="hint"></p><div id="player" class="player"></div>
+<form id="searchForm"><input id="searchQuery" type="search" required maxlength="120" placeholder="Search YouTube videos" aria-label="Search YouTube"><button type="submit">Search</button></form>
+<p class="privacy">Privacy: YouTube embeds use youtube-nocookie.com. Video ads may still appear. Search requires a server API key.</p>
+<p id="message" role="status" class="hint"></p><div id="results" class="results" aria-live="polite"></div><div id="player" class="player"></div>
 <script>
 const form=document.getElementById('youtubeForm'), input=document.getElementById('youtubeUrl'), player=document.getElementById('player'), message=document.getElementById('message');
 function youtubeEmbed(raw){
@@ -32,6 +35,26 @@ function youtubeEmbed(raw){
  embed.searchParams.set('autoplay','1');
  return embed.href;
 }
+const results=document.getElementById('results');
+document.getElementById('searchForm').addEventListener('submit',async e=>{
+ e.preventDefault();message.textContent='Searching…';results.replaceChildren();
+ const q=document.getElementById('searchQuery').value.trim();if(!q)return;
+ try{
+ const response=await fetch('/api/youtube/search?q='+encodeURIComponent(q),{credentials:'same-origin'});
+ const data=await response.json();if(!response.ok)throw Error(data.error||'Search unavailable');
+ for(const item of data.items||[]){
+  if(!/^[a-zA-Z0-9_-]{11}$/.test(item.id||''))continue;
+  const card=document.createElement('button');card.type='button';card.className='result';
+  const img=document.createElement('img');img.src=item.thumbnail;img.alt='';img.loading='lazy';
+  const title=document.createElement('strong');title.textContent=item.title||'Video';
+  const channel=document.createElement('small');channel.textContent=item.channel||'';
+  card.append(img,title,channel);
+  card.onclick=()=>{input.value='https://www.youtube.com/watch?v='+item.id;form.requestSubmit();window.scrollTo({top:0,behavior:'smooth'});};
+  results.append(card);
+ }
+ message.textContent=results.children.length?results.children.length+' videos found':'No videos found';
+ }catch(err){message.textContent=err.message}
+});
 form.addEventListener('submit',e=>{e.preventDefault();try{
  const src=youtubeEmbed(input.value);const frame=document.createElement('iframe');
  frame.title='YouTube player';frame.allow='autoplay; encrypted-media; picture-in-picture; fullscreen';frame.allowFullscreen=true;frame.referrerPolicy='strict-origin-when-cross-origin';frame.src=src;player.replaceChildren(frame);message.textContent='';
