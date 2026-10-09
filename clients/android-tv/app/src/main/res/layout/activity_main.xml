@@ -9,5 +9,5 @@
 <Button android:id="@+id/liveButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Live TV"/>
 <Button android:id="@+id/guideButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Guide"/>
 <Button android:id="@+id/moviesButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Movies"/>
-<Button android:id="@+id/seriesButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Series"/>
+<Button android:id="@+id/seriesButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Series"/><Button android:id="@+id/youtubeButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="YouTube"/>
 </LinearLayout></LinearLayout>
