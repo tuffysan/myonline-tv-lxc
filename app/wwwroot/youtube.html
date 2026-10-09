@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>YouTube | MyOnline TV</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#0b1622;color:#f4f7fb}
+*{box-sizing:border-box}body{margin:0;padding:clamp(12px,3vw,36px)}header{display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin-bottom:20px}
+a{color:#9ed9ff}h1{margin:0;font-size:clamp(24px,4vw,36px)}form{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0}
+input{flex:1;min-width:190px;background:#192b3d;border:1px solid #53728c;border-radius:8px;color:white;padding:14px;font-size:17px}
+button{background:#c62828;border:0;color:white;border-radius:8px;padding:12px 20px;font-size:17px;cursor:pointer}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #7dd3fc;outline-offset:3px}
+.player{width:100%;aspect-ratio:16/9;background:#000;border-radius:12px;overflow:hidden}
+iframe{width:100%;height:100%;border:0}.hint{color:#c6d5e4;line-height:1.5}
+</style></head><body>
+<header><a href="/" aria-label="Back to MyOnline TV">← MyOnline TV</a><h1>YouTube</h1></header>
+<p class="hint">Play a YouTube video or playlist inside MyOnline TV. Paste a YouTube link below. YouTube may display video ads.</p>
+<form id="youtubeForm"><input id="youtubeUrl" type="url" required placeholder="https://www.youtube.com/watch?v=…" aria-label="YouTube video or playlist URL"><button type="submit">Play</button></form>
+<p id="message" role="status" class="hint"></p><div id="player" class="player"></div>
+<script>
+const form=document.getElementById('youtubeForm'), input=document.getElementById('youtubeUrl'), player=document.getElementById('player'), message=document.getElementById('message');
+function youtubeEmbed(raw){
+ const u=new URL(raw);const host=u.hostname.toLowerCase();
+ if(!['youtube.com','www.youtube.com','m.youtube.com','music.youtube.com','youtu.be'].includes(host))throw Error('Please enter a YouTube URL');
+ let id=host==='youtu.be'?u.pathname.slice(1):u.searchParams.get('v');
+ if(!id&&u.pathname.startsWith('/shorts/'))id=u.pathname.split('/')[2];
+ if(!id&&u.pathname.startsWith('/live/'))id=u.pathname.split('/')[2];
+ const list=u.searchParams.get('list');
+ if(id&&!/^[a-zA-Z0-9_-]{11}$/.test(id))throw Error('Invalid video ID');
+ if(list&&!/^[a-zA-Z0-9_-]{8,100}$/.test(list))throw Error('Invalid playlist ID');
+ if(!id&&!list)throw Error('No video or playlist found');
+ const embed=new URL('https://www.youtube-nocookie.com/embed/'+(id||'videoseries'));
+ if(list)embed.searchParams.set('list',list);
+ embed.searchParams.set('autoplay','1');
+ return embed.href;
+}
+form.addEventListener('submit',e=>{e.preventDefault();try{
+ const src=youtubeEmbed(input.value);const frame=document.createElement('iframe');
+ frame.title='YouTube player';frame.allow='autoplay; encrypted-media; picture-in-picture; fullscreen';frame.allowFullscreen=true;frame.referrerPolicy='strict-origin-when-cross-origin';frame.src=src;player.replaceChildren(frame);message.textContent='';
+ }catch(err){message.textContent=err.message}});
+</script></body></html>
