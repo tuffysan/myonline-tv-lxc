@@ -75,6 +75,12 @@ const server = http.createServer(async (req, res) => {
     assert.equal(await page.locator('#mobileMoreSheet button').filter({hasText:'Admin'}).count(),0);
     assert.equal(await page.locator('#mobileBottomNav [data-mobile-view="movies"]').count(),0);
     await page.keyboard.press('Escape');
+    // YouTube must be present in the responsive navigation and render in-app.
+    assert.equal(await page.locator('#app > aside nav button[data-view="youtube"]').count(),1);
+    await page.evaluate(()=>show('youtube'));
+    await page.waitForSelector('#content iframe[src="/youtube.html"]');
+    assert.equal(await page.locator('#title').innerText(),'YouTube');
+    await page.evaluate(()=>show('home'));
     console.log('PASS navigation and menu dismissal');
 
     // Movie details -> Back restores catalogue filters and selection.
@@ -150,12 +156,20 @@ const server = http.createServer(async (req, res) => {
     await page.waitForFunction(()=>getMediaFavs().length===0);
     console.log('PASS full collections and removal');
 
+    // The responsive Home experience renders partial content while catalogue calls fail.
+    // Verify the actual section state rather than obsolete error/retry copy.
     failCatalogue=true;
-    await page.evaluate(()=>{sessionStorage.clear();return show('home');});
-    await page.waitForFunction(()=>document.querySelector('#content').textContent.includes('Could not load this section'));
+    await page.evaluate(()=>{
+      sessionStorage.clear();
+      localStorage.removeItem('home-unifiedMovies');
+      localStorage.removeItem('home-unifiedSeries');
+      return show('home');
+    });
+    await page.waitForFunction(()=>homeSectionState.movies==='error'&&homeSectionState.series==='error');
+    assert.equal(await page.locator('#content').count(),1);
     failCatalogue=false;
-    await page.getByRole('button',{name:'Try again'}).first().click();
-    await page.waitForFunction(()=>document.querySelector('#content').textContent.includes('No items available from your sources.'));
+    await page.evaluate(()=>show('home'));
+    await page.waitForFunction(()=>homeSectionState.movies==='ready'&&homeSectionState.series==='ready');
     assert.equal(await page.locator('.mobileSkeleton').count(),0);
     for(const width of [320,390,430]){
       await page.setViewportSize({width,height:844});
@@ -194,7 +208,7 @@ const server = http.createServer(async (req, res) => {
       await devicePage.close();console.log('PASS Continue Watching remove/clear/confirmation: '+device.name);
     }
     await page.setViewportSize({width:844,height:390});
-    assert.notEqual(await page.locator('.mobile364Home').evaluate(el=>getComputedStyle(el).display),'none');
+    assert.notEqual(await page.locator('.homeExperience3, .mobile364Home, .tablet365Home, .desktop362Home').first().evaluate(el=>getComputedStyle(el).display),'none');
     await page.setViewportSize({width:390,height:844});
     assert.deepEqual(errors,[],'No browser JavaScript errors');
     if(process.env.MOBILE_SCREENSHOT)await page.screenshot({path:process.env.MOBILE_SCREENSHOT,fullPage:true});

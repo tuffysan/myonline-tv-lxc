@@ -366,7 +366,11 @@ async function show(v){
   document.querySelector('main > #mediaPlayer.mediaPlaybackSurface')?.remove();
   renderMobileNavigation();
   const moreSheet=$('#mobileMoreSheet');if(moreSheet){moreSheet.classList.add('hidden');moreSheet.setAttribute('aria-hidden','true');document.body.classList.remove('mobileSheetOpen')}
-  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'Recordings',platform:'Platform','profile-sync':'Profile Sync',diagnostics:'Diagnostics',appliance:'Appliance',notifications:'Notifications',rooms:'Rooms',library:'Library',search:'Search',sources:'My Sources',system:'System',completion:'Feature Completion',update:'System Update',admin:'Admin'})[v]||v;
+  title.textContent=({home:'Home',live:'Live TV',guide:'Guide',movies:'Movies',series:'Series',plex:'Plex',jellyfin:'Jellyfin',downloads:'Downloads',recordings:'Recordings',youtube:'YouTube',platform:'Platform','profile-sync':'Profile Sync',diagnostics:'Diagnostics',appliance:'Appliance',notifications:'Notifications',rooms:'Rooms',library:'Library',search:'Search',sources:'My Sources',system:'System',completion:'Feature Completion',update:'System Update',admin:'Admin'})[v]||v;
+  if(v==='youtube'){
+    content.innerHTML='<iframe title="YouTube" src="/youtube.html" loading="eager" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" style="display:block;width:100%;height:calc(100dvh - 130px);min-height:450px;border:0;background:#0b1622" allowfullscreen></iframe>';
+    return;
+  }
   if(v==='home')await home();
   if(v==='live')await live();
   if(v==='guide')await guide();

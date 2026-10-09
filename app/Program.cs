@@ -1028,6 +1028,92 @@ string RegisterProxy(string url, string kind = "media")
 
 string ProxyUrl(string url, string kind = "media") => $"/api/proxy/{RegisterProxy(url, kind)}";
 
+
+// A deliberately conservative, fail-closed budget: never increase automatically.
+// All instances sharing MYONLINE_DATA coordinate through an exclusive file lock.
+const int youtubeSearchDailyCap = 80;
+var youtubeSearchCache = new ConcurrentDictionary<string, (DateTimeOffset At, string Json)>();
+string YoutubeQuotaDay()
+{
+    // Google resets its daily YouTube quota at midnight Pacific Time.
+    var zone = TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles");
+    return TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, zone).ToString("yyyy-MM-dd");
+}
+app.MapGet("/api/youtube/quota", () =>
+{
+    try
+    {
+        var day = YoutubeQuotaDay();
+        var quotaPath = Path.Combine(dataDir, "youtube-search-quota.json");
+        using var stream = new FileStream(quotaPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
+        var stored = reader.ReadToEnd();
+        var state = string.IsNullOrWhiteSpace(stored) ? null : JsonSerializer.Deserialize<YoutubeSearchBudget>(stored);
+        var used = state?.Day == day ? state.Used : 0;
+        return Results.Ok(new { used, limit = youtubeSearchDailyCap, remaining = Math.Max(0, youtubeSearchDailyCap - used), day, cached = youtubeSearchCache.Count });
+    }
+    catch { return Results.Json(new { error = "Quota status unavailable; search is disabled for safety." }, statusCode: 503); }
+}).RequireAuthorization();
+
+app.MapGet("/api/youtube/search", async (HttpContext ctx, string? q, int? maxResults) =>
+{
+    var key = Environment.GetEnvironmentVariable("MYONLINE_YOUTUBE_API_KEY");
+    if (string.IsNullOrWhiteSpace(key))
+        return Results.Json(new { error = "YouTube search requires MYONLINE_YOUTUBE_API_KEY on the server." }, statusCode: 503);
+    if (string.IsNullOrWhiteSpace(q) || q.Trim().Length > 120)
+        return Results.BadRequest(new { error = "Search query must be 1-120 characters." });
+    var count = Math.Clamp(maxResults ?? 12, 1, 25);
+    var query = q.Trim();
+    var cacheKey = query.ToLowerInvariant() + "|" + count;
+    if (youtubeSearchCache.TryGetValue(cacheKey, out var cached) && DateTimeOffset.UtcNow - cached.At < TimeSpan.FromHours(12))
+        return Results.Content(cached.Json, "application/json");
+    // Reserve quota BEFORE the external request. Timeouts and API errors also count.
+    // An exclusive file lock prevents simultaneous processes from overspending.
+    try
+    {
+        var day = YoutubeQuotaDay();
+        var quotaPath = Path.Combine(dataDir, "youtube-search-quota.json");
+        using var stream = new FileStream(quotaPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
+        var stored = reader.ReadToEnd();
+        var state = string.IsNullOrWhiteSpace(stored) ? null : JsonSerializer.Deserialize<YoutubeSearchBudget>(stored);
+        var used = state?.Day == day ? state.Used : 0;
+        if (used >= youtubeSearchDailyCap)
+            return Results.Json(new { error = "Daily free search allowance reached. Try again tomorrow.", used, limit = youtubeSearchDailyCap }, statusCode: 429);
+        stream.Position = 0;
+        stream.SetLength(0);
+        using (var writer = new StreamWriter(stream, new UTF8Encoding(false), leaveOpen: true))
+        {
+            writer.Write(JsonSerializer.Serialize(new YoutubeSearchBudget(day, used + 1)));
+            writer.Flush();
+        }
+        stream.Flush(true);
+    }
+    catch (IOException) { return Results.Json(new { error = "Search quota lock unavailable. Search blocked to prevent excess usage." }, statusCode: 503); }
+    catch (Exception) { return Results.Json(new { error = "Search quota unavailable. Search blocked to prevent excess usage." }, statusCode: 503); }
+    var url = "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&safeSearch=moderate&maxResults="
+        + count + "&q=" + Uri.EscapeDataString(query) + "&key=" + Uri.EscapeDataString(key);
+    try
+    {
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(12) };
+        using var response = await http.GetAsync(url, ctx.RequestAborted);
+        if (!response.IsSuccessStatusCode)
+            return Results.Json(new { error = "YouTube search failed or its Google quota was exhausted. No retry was attempted." }, statusCode: 502);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ctx.RequestAborted));
+        var items = json.RootElement.GetProperty("items").EnumerateArray().Select(item => new {
+            id = item.GetProperty("id").GetProperty("videoId").GetString(),
+            title = item.GetProperty("snippet").GetProperty("title").GetString(),
+            channel = item.GetProperty("snippet").GetProperty("channelTitle").GetString(),
+            thumbnail = item.GetProperty("snippet").GetProperty("thumbnails").GetProperty("default").GetProperty("url").GetString()
+        }).ToArray();
+        var resultJson = JsonSerializer.Serialize(new { items });
+        youtubeSearchCache[cacheKey] = (DateTimeOffset.UtcNow, resultJson);
+        return Results.Content(resultJson, "application/json");
+    }
+    catch (OperationCanceledException) when (ctx.RequestAborted.IsCancellationRequested) { return Results.StatusCode(499); }
+    catch (Exception) { return Results.Json(new { error = "YouTube search temporarily unavailable. No retry was attempted." }, statusCode: 502); }
+}).RequireAuthorization();
+
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseAuthentication();
@@ -5821,3 +5907,5 @@ sealed class SecretBox
 }
 
 record TimedJsonCache(string Json, DateTimeOffset Loaded);
+
+record YoutubeSearchBudget(string Day, int Used);
