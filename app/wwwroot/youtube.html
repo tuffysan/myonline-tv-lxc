@@ -17,7 +17,7 @@ iframe{width:100%;height:100%;border:0}.hint{color:#c6d5e4;line-height:1.5}
 <form id="youtubeForm"><input id="youtubeUrl" type="url" required placeholder="https://www.youtube.com/watch?v=…" aria-label="YouTube video or playlist URL"><button type="submit">Play</button></form>
 <form id="searchForm"><input id="searchQuery" type="search" required maxlength="120" placeholder="Search YouTube videos" aria-label="Search YouTube"><button type="submit">Search</button></form>
 <p class="privacy">Privacy: YouTube embeds use youtube-nocookie.com. Video ads may still appear. Search requires a server API key.</p>
-<p id="message" role="status" class="hint"></p><div id="results" class="results" aria-live="polite"></div><div id="player" class="player"></div>
+<p id="quotaStatus" role="status" class="hint">Checking free search allowance…</p><p id="message" role="status" class="hint"></p><div id="results" class="results" aria-live="polite"></div><div id="player" class="player"></div>
 <script>
 const form=document.getElementById('youtubeForm'), input=document.getElementById('youtubeUrl'), player=document.getElementById('player'), message=document.getElementById('message');
 function youtubeEmbed(raw){
@@ -36,6 +36,17 @@ function youtubeEmbed(raw){
  return embed.href;
 }
 const results=document.getElementById('results');
+const quotaStatus=document.getElementById('quotaStatus');
+async function refreshQuota(){
+ try{
+  const r=await fetch('/api/youtube/quota',{credentials:'same-origin',cache:'no-store'});
+  if(!r.ok)throw Error('unavailable');
+  const q=await r.json();
+  quotaStatus.textContent='Free searches remaining today: '+q.remaining+' / '+q.limit+' (Pacific Time).';
+  document.querySelector('#searchForm button[type="submit"]').disabled=q.remaining===0;
+ }catch{quotaStatus.textContent='Quota status unavailable. New searches are blocked for safety.';document.querySelector('#searchForm button[type="submit"]').disabled=true;}
+}
+refreshQuota();
 document.getElementById('searchForm').addEventListener('submit',async e=>{
  e.preventDefault();message.textContent='Searching…';results.replaceChildren();
  const q=document.getElementById('searchQuery').value.trim();if(!q)return;
@@ -52,8 +63,8 @@ document.getElementById('searchForm').addEventListener('submit',async e=>{
   card.onclick=()=>{input.value='https://www.youtube.com/watch?v='+item.id;form.requestSubmit();window.scrollTo({top:0,behavior:'smooth'});};
   results.append(card);
  }
- message.textContent=results.children.length?results.children.length+' videos found':'No videos found';
- }catch(err){message.textContent=err.message}
+ message.textContent=results.children.length?results.children.length+' videos found':'No videos found';refreshQuota();
+ }catch(err){message.textContent=err.message;refreshQuota()}
 });
 form.addEventListener('submit',e=>{e.preventDefault();try{
  const src=youtubeEmbed(input.value);const frame=document.createElement('iframe');
