@@ -74,7 +74,9 @@ class YouTubeActivity : AppCompatActivity() {
         browser.isFocusable = true
         browser.isFocusableInTouchMode = true
         browser.requestFocus()
-        browser.loadUrl("https://www.youtube.com/tv")
+        val server = intent.getStringExtra("server")?.trim()?.trimEnd('/')
+        val url = if (!server.isNullOrBlank() && (server.startsWith("https://") || server.startsWith("http://"))) "$server/youtube.html" else "https://www.youtube.com"
+        browser.loadUrl(url)
     }
 
     @Deprecated("Use onBackPressedDispatcher")
