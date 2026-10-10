@@ -1030,6 +1030,33 @@ string ProxyUrl(string url, string kind = "media") => $"/api/proxy/{RegisterProx
 
 
 app.UseDefaultFiles();
+
+app.MapGet("/api/youtube/resolve", async (HttpContext ctx, string id) =>
+{
+    if (ctx.User.Identity?.IsAuthenticated != true) return Results.Unauthorized();
+    if (!Regex.IsMatch(id ?? "", "^[A-Za-z0-9_-]{11}$")) return Results.BadRequest(new { error = "Invalid video ID" });
+    var bridge = Environment.GetEnvironmentVariable("MYONLINE_YOUTUBE_BRIDGE_URL") ?? "http://127.0.0.1:5089";
+    if (!Uri.TryCreate(bridge, UriKind.Absolute, out var baseUri) ||
+        baseUri.Scheme != Uri.UriSchemeHttp ||
+        !IPAddress.TryParse(baseUri.Host, out var bridgeIp) ||
+        !IPAddress.IsLoopback(bridgeIp))
+        return Results.Problem("Bridge must use a loopback HTTP address", statusCode: 503);
+    try
+    {
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(45) };
+        using var response = await client.GetAsync(new Uri(baseUri, "/resolve?id=" + Uri.EscapeDataString(id)), ctx.RequestAborted);
+        if (!response.IsSuccessStatusCode) return Results.Problem("YouTube resolver unavailable or video unsupported", statusCode: 502);
+        var json = await response.Content.ReadAsStringAsync(ctx.RequestAborted);
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        if (!root.TryGetProperty("stream", out var media) || !Uri.TryCreate(media.GetString(), UriKind.Absolute, out var streamUri) || streamUri.Scheme != Uri.UriSchemeHttps)
+            return Results.Problem("No compatible stream", statusCode: 502);
+        return Results.Content(json, "application/json");
+    }
+    catch (OperationCanceledException) when (ctx.RequestAborted.IsCancellationRequested) { return Results.StatusCode(499); }
+    catch (Exception) { return Results.Problem("YouTube resolver not available", statusCode: 502); }
+}).RequireAuthorization();
+
 app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();

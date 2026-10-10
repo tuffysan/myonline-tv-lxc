@@ -313,3 +313,15 @@ echo " URL: http://${IP}/"
 echo " CT : ${CTID}"
 echo "============================================================"
 echo "Open the URL and create the administrator account."
+
+
+# Install/update the optional YouTube bridge inside the same LXC after web health checks.
+if [[ "${MYONLINE_YOUTUBE_BRIDGE:-1}" == "1" ]]; then
+  if [[ -f "${REPO_DIR}/scripts/youtube-bridge/install-in-ct.sh" ]]; then
+    if ! CTID="$CTID" bash "${REPO_DIR}/scripts/youtube-bridge/install-in-ct.sh" "$REPO_DIR"; then
+      echo "WARNING: YouTube bridge installation failed; MyOnline TV remains installed." >&2
+    fi
+  else
+    echo "WARNING: YouTube bridge source not present in release package." >&2
+  fi
+fi
