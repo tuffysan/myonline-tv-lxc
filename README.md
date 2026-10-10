@@ -129,3 +129,16 @@ Use:
 - `README.md` for current product documentation
 - `CHANGELOG.md` for release history
 - GitHub Releases for version-specific release notes
+
+## Experimental YouTube bridge (development branch)
+
+The Proxmox installer and updater automatically attempt to install the local YouTube bridge **after** the normal web health checks, when the release source contains `scripts/youtube-bridge/`. The bridge runs in the same CT on loopback port 5089 as a separate systemd service. The main TV installation remains operational if bridge setup fails; warnings are printed. Set `MYONLINE_YOUTUBE_BRIDGE=0` on the Proxmox host to skip it.
+
+On the Proxmox host, after installing a release that includes this feature:
+
+```bash
+pct exec 145 -- systemctl status myonlinetv-youtube-bridge --no-pager
+pct exec 145 -- curl -fsS http://127.0.0.1:5089/health
+```
+
+This is experimental. The bridge needs outbound access to YouTube, installs yt-dlp from PyPI and does not guarantee ad-free or browser-compatible playback. No external port is opened for the bridge. A new GitHub release containing both the updated web app and bridge scripts is required for the normal updater to deliver this feature; a draft PR is not a release.
