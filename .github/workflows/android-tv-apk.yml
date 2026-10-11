@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-apk:
@@ -48,3 +48,19 @@ jobs:
           path: clients/android-tv/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Prepare direct-download APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk MyOnlineTV-GoogleTV.apk
+      - name: Publish downloadable APK to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: google-tv-latest
+          name: MyOnline TV – Google TV APK (latest)
+          body: |
+            Direct APK download for Android TV / Google TV. This is a debug-signed test build, not a Google Play release.
+            Install using Downloader or another APK installer on your TV.
+          prerelease: true
+          make_latest: false
+          files: clients/android-tv/MyOnlineTV-GoogleTV.apk
+          fail_on_unmatched_files: true
+          overwrite_files: true
