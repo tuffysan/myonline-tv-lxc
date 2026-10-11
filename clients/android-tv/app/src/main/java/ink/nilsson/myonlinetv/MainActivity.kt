@@ -27,8 +27,16 @@ class MainActivity : AppCompatActivity() {
             binding.status.text = "Connecting…"
             thread {
                 try {
-                    api.health(server)
-                    val login=api.login(server,user,pass)
+                    try {
+                        api.health(server)
+                    } catch (e: Exception) {
+                        throw IllegalStateException("Server health check failed: ${e.message}", e)
+                    }
+                    val login = try {
+                        api.login(server, user, pass)
+                    } catch (e: Exception) {
+                        throw IllegalStateException("Login request failed: ${e.message}", e)
+                    }
                     runOnUiThread {
                         prefs.edit().putString("server",server).putString("username",user).apply()
                         binding.password.setText("")
